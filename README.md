@@ -85,8 +85,12 @@ A production-level Multi-Agent Prompt Engineering System that improves and optim
 
 ### 1. Clone and Setup
 ```bash
-git clone <repository-url>
-cd multi-agent-prompt-engineering
+# If you have a remote repository:
+git clone <your-repository-url>
+cd prompt-engineer-agent
+
+# Or if working locally (after initializing git):
+# The project is already set up locally
 ```
 
 ### 2. Install Dependencies
@@ -112,13 +116,19 @@ Navigate to `http://localhost:8000` in your browser.
 
 ### Local Development
 ```bash
-# Clone repository
-git clone <repository-url>
-cd multi-agent-prompt-engineering
+# Clone repository (if using remote)
+git clone <your-repository-url>
+cd prompt-engineer-agent
 
-# Create virtual environment
+# Or if working locally, navigate to your project directory
+cd prompt-engineer-agent
+
+# Create virtual environment (if not already created)
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# On Windows:
+venv\Scripts\activate
+# On Unix/Mac:
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -317,7 +327,7 @@ Ensure your `.env` file is in the project root (parent of docker directory).
 ### Project Structure
 
 ```
-multi-agent-prompt-engineering/
+prompt-engineer-agent/
 ├── agents/                 # Agent implementations
 │   ├── classifier.py      # Domain classification agent
 │   ├── base_expert.py     # Base expert agent framework
@@ -330,11 +340,21 @@ multi-agent-prompt-engineering/
 │   └── workflow.py       # LangGraph workflow
 ├── tests/                # Test suite
 │   └── test_agents.py    # Agent unit tests
+├── examples/             # Usage examples
+│   ├── basic_usage.py    # Basic usage examples
+│   └── advanced_integration.py # Advanced integration examples
 ├── docker/               # Docker configuration
 │   ├── Dockerfile        # Production container
 │   └── docker-compose.yml # Service orchestration
-├── docs/                 # Documentation
-└── README.md            # This file
+├── docs/                 # Documentation (empty)
+├── .env                  # Environment variables
+├── .env.example          # Environment template
+├── .gitignore           # Git ignore rules
+├── .langgraph_api/      # LangGraph API data
+├── requirements.txt     # Python dependencies
+├── langgraph.json       # LangGraph configuration
+├── README.md            # This file
+└── [various files]      # Test and utility files
 ```
 
 ### Development Setup
