@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "prompt_engineering": "./src/workflow.py:prompt_engineering_app"
+  },
+  "env": ".env"
+}
