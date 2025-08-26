@@ -1,0 +1,469 @@
+{
+  "version_prompt_1756195559_Customer_Support_Assistant_v1.0.0": {
+    "id": "version_prompt_1756195559_Customer_Support_Assistant_v1.0.0",
+    "prompt_id": "prompt_1756195559_Customer_Support_Assistant",
+    "version": "1.0.0",
+    "content": "You are a customer support assistant. friendly and empathetic\n\nYour main tasks:\nhelp customers with their issues and provide solutions\n\nGuidelines:\nlisten carefully, show empathy, provide clear solutions",
+    "metadata": {
+      "domain": "templates",
+      "strategy": "template_base",
+      "author": "test_user",
+      "tags": [
+        "template",
+        "base",
+        "reusable"
+      ],
+      "description": "Base template for assistants",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-26T16:05:59.858526",
+    "parent_version": null,
+    "commit_message": "Created from template template_1756195559_Assistant_Base_Template"
+  },
+  "version_prompt_1756195559_Customer_Support_Assistant_1.1.0": {
+    "id": "version_prompt_1756195559_Customer_Support_Assistant_1.1.0",
+    "prompt_id": "prompt_1756195559_Customer_Support_Assistant",
+    "version": "1.1.0",
+    "content": "You are an advanced customer support assistant with extensive knowledge. Always be polite, provide accurate information, and offer additional resources when relevant.",
+    "metadata": {
+      "domain": "customer_support",
+      "strategy": "helpful_assistant",
+      "author": "test_user",
+      "tags": [
+        "support",
+        "chatbot",
+        "helpful"
+      ],
+      "description": "A helpful customer support assistant",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-26T16:05:59.643139",
+    "parent_version": "1.0.0",
+    "commit_message": "Enhanced with more capabilities and resource suggestions"
+  },
+  "version_prompt_1756195559_Code_Review_Assistant_v1.0.0": {
+    "id": "version_prompt_1756195559_Code_Review_Assistant_v1.0.0",
+    "prompt_id": "prompt_1756195559_Code_Review_Assistant",
+    "version": "1.0.0",
+    "content": "You are a code review assistant. Focus on best practices, security, and performance.",
+    "metadata": {
+      "domain": "code_review",
+      "strategy": "technical_assistant",
+      "author": "test_user",
+      "tags": [
+        "coding",
+        "review",
+        "technical"
+      ],
+      "description": "A technical assistant for code review",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-26T16:05:59.666150",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756195559_Marketing_Copy_Assistant_V1_v1.0.0": {
+    "id": "version_prompt_1756195559_Marketing_Copy_Assistant_V1_v1.0.0",
+    "prompt_id": "prompt_1756195559_Marketing_Copy_Assistant_V1",
+    "version": "1.0.0",
+    "content": "You are a marketing copywriter. Create engaging content.",
+    "metadata": {
+      "domain": "marketing",
+      "strategy": "creative_writer",
+      "author": "test_user",
+      "tags": [
+        "marketing",
+        "creative",
+        "writing"
+      ],
+      "description": "Creative marketing copy writer",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-26T16:05:59.693920",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756195559_Marketing_Copy_Assistant_V2_v1.0.0": {
+    "id": "version_prompt_1756195559_Marketing_Copy_Assistant_V2_v1.0.0",
+    "prompt_id": "prompt_1756195559_Marketing_Copy_Assistant_V2",
+    "version": "1.0.0",
+    "content": "You are an advanced marketing copywriter with expertise in psychology and persuasion. Create highly engaging, conversion-optimized content.",
+    "metadata": {
+      "domain": "marketing",
+      "strategy": "creative_writer",
+      "author": "test_user",
+      "tags": [
+        "marketing",
+        "creative",
+        "writing"
+      ],
+      "description": "Creative marketing copy writer",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-26T16:05:59.695914",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756195559_Production_Assistant_v1.0.0": {
+    "id": "version_prompt_1756195559_Production_Assistant_v1.0.0",
+    "prompt_id": "prompt_1756195559_Production_Assistant",
+    "version": "1.0.0",
+    "content": "You are a production-ready assistant with stable responses.",
+    "metadata": {
+      "domain": "production",
+      "strategy": "reliable_assistant",
+      "author": "test_user",
+      "tags": [
+        "production",
+        "reliable",
+        "stable"
+      ],
+      "description": "Production-ready assistant",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-26T16:05:59.729307",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756195559_Analytics_Test_Prompt_v1.0.0": {
+    "id": "version_prompt_1756195559_Analytics_Test_Prompt_v1.0.0",
+    "prompt_id": "prompt_1756195559_Analytics_Test_Prompt",
+    "version": "1.0.0",
+    "content": "You are a test assistant for analytics demonstration.",
+    "metadata": {
+      "domain": "analytics",
+      "strategy": "performance_test",
+      "author": "test_user",
+      "tags": [
+        "analytics",
+        "performance",
+        "testing"
+      ],
+      "description": "Prompt for analytics testing",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-26T16:05:59.903365",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756200918_Performance_Tracked_Prompt_-_software_engineering_v1.0.0": {
+    "id": "version_prompt_1756200918_Performance_Tracked_Prompt_-_software_engineering_v1.0.0",
+    "prompt_id": "prompt_1756200918_Performance_Tracked_Prompt_-_software_engineering",
+    "version": "1.0.0",
+    "content": "As a Senior Software Engineer, your task is to implement a highly efficient function to calculate the Nth Fibonacci number.\n\n### Problem Statement\nImplement a function that computes the Nth Fibonacci number, F(N), based on the standard definition: F(0) = 0, F(1) = 1, and F(N) = F(N-1) + F(N-2) for N > 1.\n\n### Technical Requirements\n1.  **Programming Language:** Python 3.x\n2.  **Function Signature:** The function must be named `fibonacci` and accept a single integer argument `n`. It should return an integer.\n    ```python\n    def fibonacci(n: int) -> int:\n        # ... implementation ...\n    ```\n3.  **Efficiency:**\n    *   **Time Complexity:** The solution must achieve a time complexity of O(n) or better. Avoid naive recursive solutions with O(2^n) complexity.\n    *   **Space Complexity:** Aim for O(1) space complexity. If memoization or dynamic programming is used, O(n) space complexity is acceptable.\n4.  **Algorithm Choice:** Prefer an iterative approach or dynamic programming with memoization for the specified constraints.\n\n### Constraints and Edge Cases\n*   `n` will always be a non-negative integer.\n*   **Input Range:** `0 <= n <= 1000`.\n*   **Edge Cases:** The function must correctly handle `n=0` (F(0)=0) and `n=1` (F(1)=1).\n\n### Expected Deliverables\n1.  A complete Python function implementation for `fibonacci(n)`.\n2.  A clear, concise, and comprehensive docstring for the function, explaining its purpose, parameters, return value, and its time/space complexity.\n3.  An example of how to call the function and print its result for a few illustrative test cases (e.g., `n=0, 1, 5, 10, 50`).\n\n### Quality Criteria\n*   **Correctness:** The function must return the mathematically correct Fibonacci number for all valid inputs within the specified range.\n*   **Performance:** Strict adherence to the specified time and space complexity requirements.\n*   **Readability:** The code should be clean, well-structured, and follow Python's PEP 8 style guidelines.\n*   **Maintainability:** The code should be easy to understand and modify by other developers.\n*   **Documentation:** The docstring must be accurate and provide sufficient information for usage and understanding of the algorithm's characteristics.",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "performance_tracked",
+      "author": "system",
+      "tags": [
+        "performance_tracked"
+      ],
+      "description": "Automatically created for performance tracking",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "system",
+    "created_at": "2025-08-26T17:35:18.557523",
+    "parent_version": null,
+    "commit_message": "Created for performance tracking"
+  },
+  "version_prompt_1756201029_Performance_Tracked_Prompt_-_software_engineering_v1.0.0": {
+    "id": "version_prompt_1756201029_Performance_Tracked_Prompt_-_software_engineering_v1.0.0",
+    "prompt_id": "prompt_1756201029_Performance_Tracked_Prompt_-_software_engineering",
+    "version": "1.0.0",
+    "content": "As a Senior Software Engineer, your task is to implement a highly efficient function to calculate the Nth Fibonacci number.\n\n## Problem Statement\nThe Fibonacci sequence is a series of numbers where each number is the sum of the two preceding ones, typically starting with F(0) = 0 and F(1) = 1. Your goal is to write a function that, given a non-negative integer `n`, returns the Nth Fibonacci number, F(n).\n\n## Technical Requirements\n1.  **Programming Language:** Python 3.x\n2.  **Function Signature:** The function should be named `fibonacci` and accept a single integer argument `n`. It should return an integer.\n    ```python\n    def fibonacci(n: int) -> int:\n        # Implementation here\n    ```\n3.  **Algorithm:** Implement an iterative or dynamic programming approach. **Crucially, avoid the naive recursive solution due to its exponential time complexity (O(2^n)) and potential for stack overflow for larger inputs.**\n4.  **Efficiency Targets:**\n    *   **Time Complexity:** O(n)\n    *   **Space Complexity:** O(1) (for the iterative approach)\n\n## Constraints and Edge Cases\n1.  **Input Range:** `n` will always be a non-negative integer (`n >= 0`).\n2.  **Base Cases:**\n    *   For `n = 0`, the function should return `0`.\n    *   For `n = 1`, the function should return `1`.\n3.  **Large Inputs:** The solution should be robust enough to handle moderately large `n` values (e.g., up to `n=90`) without significant performance degradation or integer overflow (Python's arbitrary precision integers handle this automatically, but this is a critical consideration in other languages).\n\n## Expected Deliverables\n1.  **Python Function:** The complete `fibonacci(n)` function code.\n2.  **Docstrings and Comments:** The function must include a clear docstring explaining its purpose, parameters, return value, and complexity. Relevant inline comments should be used where necessary for clarity.\n3.  **Example Usage / Test Cases:** Provide at least three distinct example calls to the function with their expected outputs, demonstrating correctness for base cases and a larger `n`.\n    *   `fibonacci(0)` should return `0`\n    *   `fibonacci(1)` should return `1`\n    *   `fibonacci(10)` should return `55`\n    *   `fibonacci(20)` should return `6765`\n4.  **Complexity Analysis:** A brief explanation (1-2 sentences) of the chosen algorithm's time and space complexity, justifying how it meets the specified targets.\n\n## Quality Criteria\n1.  **Correctness:** The function must accurately calculate the Nth Fibonacci number for all valid inputs.\n2.  **Efficiency:** The solution must strictly adhere to the O(n) time and O(1) space complexity requirements.\n3.  **Readability & Maintainability:** The code should be clean, well-structured, easy to understand, and follow standard Python best practices (e.g., PEP 8).\n4.  **Robustness:** The function should handle all specified constraints and edge cases gracefully.",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "performance_tracked",
+      "author": "system",
+      "tags": [
+        "performance_tracked"
+      ],
+      "description": "Automatically created for performance tracking",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "system",
+    "created_at": "2025-08-26T17:37:09.167047",
+    "parent_version": null,
+    "commit_message": "Created for performance tracking"
+  },
+  "version_prompt_1756266274_Performance_Tracked_Prompt_-_software_engineering_v1.0.0": {
+    "id": "version_prompt_1756266274_Performance_Tracked_Prompt_-_software_engineering_v1.0.0",
+    "prompt_id": "prompt_1756266274_Performance_Tracked_Prompt_-_software_engineering",
+    "version": "1.0.0",
+    "content": "## Problem Statement\nDevelop a Python function that efficiently calculates the N-th Fibonacci number. The Fibonacci sequence is conventionally defined as F(0) = 0, F(1) = 1, and F(n) = F(n-1) + F(n-2) for n > 1.\n\n## Technical Requirements\n1.  **Language:** Python 3.x\n2.  **Function Signature:** The function should be named `calculate_fibonacci` and accept a single integer argument `n`. It must return an integer representing the N-th Fibonacci number.\n    ```python\n    def calculate_fibonacci(n: int) -> int:\n        # Function implementation goes here\n        pass\n    ```\n3.  **Efficiency:**\n    *   **Time Complexity:** The solution must achieve a time complexity of O(n) or better. Explicitly avoid the naive recursive approach due to its exponential time complexity (O(2^n)).\n    *   **Space Complexity:** The solution should aim for an O(1) space complexity. While memoization (dynamic programming) offers O(n) time, an iterative O(1) space solution is preferred.\n4.  **Error Handling:** The function should raise a `ValueError` with an appropriate message if `n` is a negative integer, as Fibonacci numbers are typically defined for non-negative integers.\n\n## Constraints & Edge Cases\n*   `n` will be an integer.\n*   Handle the base cases correctly: `n = 0` (returns 0) and `n = 1` (returns 1).\n*   Consider the potential for large `n` values. Python's arbitrary-precision integers will handle large results, but the algorithm's time complexity should remain efficient for such inputs.\n\n## Expected Deliverables\n1.  **Function Implementation:** The complete Python code for the `calculate_fibonacci` function.\n2.  **Algorithm Explanation:** A brief explanation (1-2 paragraphs) of the chosen algorithm, detailing its time and space complexity and why it meets the efficiency requirements.\n3.  **Test Cases:** Provide at least 3 example test cases, including:\n    *   An edge case (e.g., `n=0` or `n=1`).\n    *   A typical case (e.g., `n=5`).\n    *   A larger case (e.g., `n=10` or `n=20`).\n    For each test case, show the input and the expected output.\n\n## Quality Criteria\n*   **Correctness:** The function must produce the correct Fibonacci number for all valid inputs.\n*   **Performance:** Strict adherence to the specified O(n) time and O(1) space complexity.\n*   **Readability & Maintainability:** The code should be well-structured, easy to understand, and include appropriate comments and a docstring explaining its purpose, arguments, and return value.\n*   **Robustness:** Proper handling of invalid input (`n < 0`).",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "performance_tracked",
+      "author": "system",
+      "tags": [
+        "performance_tracked"
+      ],
+      "description": "Automatically created for performance tracking",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {
+      "quality_score": 0.96
+    },
+    "created_by": "system",
+    "created_at": "2025-08-27T11:44:34.415219",
+    "parent_version": null,
+    "commit_message": "Created for performance tracking"
+  },
+  "version_prompt_1756266274_Experiment_Variant_0_-_software_engineering_Optimization_Test_v1.0.0": {
+    "id": "version_prompt_1756266274_Experiment_Variant_0_-_software_engineering_Optimization_Test_v1.0.0",
+    "prompt_id": "prompt_1756266274_Experiment_Variant_0_-_software_engineering_Optimization_Test",
+    "version": "1.0.0",
+    "content": "## Problem Statement\nDevelop a Python function that efficiently calculates the N-th Fibonacci number. The Fibonacci sequence is conventionally defined as F(0) = 0, F(1) = 1, and F(n) = F(n-1) + F(n-2) for n > 1.\n\n## Technical Requirements\n1.  **Language:** Python 3.x\n2.  **Function Signature:** The function should be named `calculate_fibonacci` and accept a single integer argument `n`. It must return an integer representing the N-th Fibonacci number.\n    ```python\n    def calculate_fibonacci(n: int) -> int:\n        # Function implementation goes here\n        pass\n    ```\n3.  **Efficiency:**\n    *   **Time Complexity:** The solution must achieve a time complexity of O(n) or better. Explicitly avoid the naive recursive approach due to its exponential time complexity (O(2^n)).\n    *   **Space Complexity:** The solution should aim for an O(1) space complexity. While memoization (dynamic programming) offers O(n) time, an iterative O(1) space solution is preferred.\n4.  **Error Handling:** The function should raise a `ValueError` with an appropriate message if `n` is a negative integer, as Fibonacci numbers are typically defined for non-negative integers.\n\n## Constraints & Edge Cases\n*   `n` will be an integer.\n*   Handle the base cases correctly: `n = 0` (returns 0) and `n = 1` (returns 1).\n*   Consider the potential for large `n` values. Python's arbitrary-precision integers will handle large results, but the algorithm's time complexity should remain efficient for such inputs.\n\n## Expected Deliverables\n1.  **Function Implementation:** The complete Python code for the `calculate_fibonacci` function.\n2.  **Algorithm Explanation:** A brief explanation (1-2 paragraphs) of the chosen algorithm, detailing its time and space complexity and why it meets the efficiency requirements.\n3.  **Test Cases:** Provide at least 3 example test cases, including:\n    *   An edge case (e.g., `n=0` or `n=1`).\n    *   A typical case (e.g., `n=5`).\n    *   A larger case (e.g., `n=10` or `n=20`).\n    For each test case, show the input and the expected output.\n\n## Quality Criteria\n*   **Correctness:** The function must produce the correct Fibonacci number for all valid inputs.\n*   **Performance:** Strict adherence to the specified O(n) time and O(1) space complexity.\n*   **Readability & Maintainability:** The code should be well-structured, easy to understand, and include appropriate comments and a docstring explaining its purpose, arguments, and return value.\n*   **Robustness:** Proper handling of invalid input (`n < 0`).",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "experiment_variant",
+      "author": "coordinator",
+      "tags": [
+        "experiment",
+        "variant_0",
+        "software_engineering"
+      ],
+      "description": "Experiment variant 0 for software_engineering Optimization Test",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "coordinator",
+    "created_at": "2025-08-27T11:44:34.428851",
+    "parent_version": null,
+    "commit_message": "Created experiment variant 0 for software_engineering Optimization Test"
+  },
+  "version_prompt_1756266274_Experiment_Variant_1_-_software_engineering_Optimization_Test_v1.0.0": {
+    "id": "version_prompt_1756266274_Experiment_Variant_1_-_software_engineering_Optimization_Test_v1.0.0",
+    "prompt_id": "prompt_1756266274_Experiment_Variant_1_-_software_engineering_Optimization_Test",
+    "version": "1.0.0",
+    "content": "Write an optimized function for fibonacci sequence calculation with O(n) time complexity",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "experiment_variant",
+      "author": "coordinator",
+      "tags": [
+        "experiment",
+        "variant_1",
+        "software_engineering"
+      ],
+      "description": "Experiment variant 1 for software_engineering Optimization Test",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "coordinator",
+    "created_at": "2025-08-27T11:44:34.431370",
+    "parent_version": null,
+    "commit_message": "Created experiment variant 1 for software_engineering Optimization Test"
+  },
+  "version_prompt_1756268604_Experiment_Variant_0_-_Phase_2_Experiment_Test_v1.0.0": {
+    "id": "version_prompt_1756268604_Experiment_Variant_0_-_Phase_2_Experiment_Test_v1.0.0",
+    "prompt_id": "prompt_1756268604_Experiment_Variant_0_-_Phase_2_Experiment_Test",
+    "version": "1.0.0",
+    "content": "Write a function to sort an array using quicksort algorithm",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "experiment_variant",
+      "author": "coordinator",
+      "tags": [
+        "experiment",
+        "variant_0",
+        "software_engineering"
+      ],
+      "description": "Experiment variant 0 for Phase 2 Experiment Test",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "coordinator",
+    "created_at": "2025-08-27T12:23:24.854945",
+    "parent_version": null,
+    "commit_message": "Created experiment variant 0 for Phase 2 Experiment Test"
+  },
+  "version_prompt_1756268604_Experiment_Variant_1_-_Phase_2_Experiment_Test_v1.0.0": {
+    "id": "version_prompt_1756268604_Experiment_Variant_1_-_Phase_2_Experiment_Test_v1.0.0",
+    "prompt_id": "prompt_1756268604_Experiment_Variant_1_-_Phase_2_Experiment_Test",
+    "version": "1.0.0",
+    "content": "Write an efficient function to sort an array using mergesort algorithm",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "experiment_variant",
+      "author": "coordinator",
+      "tags": [
+        "experiment",
+        "variant_1",
+        "software_engineering"
+      ],
+      "description": "Experiment variant 1 for Phase 2 Experiment Test",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "coordinator",
+    "created_at": "2025-08-27T12:23:24.857942",
+    "parent_version": null,
+    "commit_message": "Created experiment variant 1 for Phase 2 Experiment Test"
+  },
+  "version_prompt_1756269312_Performance_Tracked_Prompt_-_software_engineering_v1.0.0": {
+    "id": "version_prompt_1756269312_Performance_Tracked_Prompt_-_software_engineering_v1.0.0",
+    "prompt_id": "prompt_1756269312_Performance_Tracked_Prompt_-_software_engineering",
+    "version": "1.0.0",
+    "content": "As a software engineer, your task is to develop a robust and efficient function in **Python** to validate email addresses according to common industry practices, balancing strictness with usability.\n\n**Problem Statement:**\nMany applications require reliable email validation to ensure data integrity, proper communication, and user experience. The goal is to create a function that accurately identifies valid email formats while rejecting common invalid patterns, considering both standard RFC guidelines and practical real-world usage.\n\n**Specific Technical Requirements:**\n\n1.  **Language:** Python 3.x\n2.  **Function Signature:**\n    ```python\n    def is_valid_email(email_address: str) -> bool:\n        # ... implementation ...\n    ```\n3.  **Validation Rules:**\n    *   The function should primarily adhere to a practical subset of RFC 5322/3696, focusing on common patterns rather than strict, exhaustive RFC compliance (which can be overly complex and restrictive for most applications).\n    *   **Must-have checks:**\n        *   Presence of exactly one `@` symbol.\n        *   The `@` symbol must not be the first or last character.\n        *   The domain part must contain at least one `.` (dot) after the `@` symbol.\n        *   The top-level domain (TLD) must be at least 2 characters long and consist only of letters (a-z, A-Z).\n        *   No consecutive dots (`..`) in the local or domain parts.\n        *   No leading or trailing dots in the local or domain parts.\n        *   Allowed characters:\n            *   **Local part:** Alphanumeric characters, `!#$%&'*+-/=?^_`{|}~`, and `.` (dot, not at start/end, not consecutive).\n            *   **Domain part:** Alphanumeric characters, `-` (hyphen, not at start/end), and `.` (dot, not at start/end, not consecutive).\n        *   The total length of the email address should not exceed 254 characters.\n    *   **Optional (but preferred) checks:**\n        *   Basic support for internationalized domain names (IDNs) is a plus (e.g., using `idna` library for domain part encoding), but not strictly required for the initial version. If not fully supported, clearly state this limitation in documentation.\n4.  **Return Value:** The function must return `True` if the email address is valid according to the specified rules, and `False` otherwise.\n5.  **Error Handling:** The function should gracefully handle `None` or non-string inputs by returning `False`.\n\n**Expected Deliverables and Format:**\n\n1.  A single Python file (`email_validator.py`) containing the `is_valid_email` function.\n2.  A separate Python file (`test_email_validator.py`) containing a comprehensive suite of unit tests using `unittest` or `pytest`.\n    *   Tests should cover valid email examples, common invalid patterns, and specified edge cases.\n    *   Aim for high test coverage (e.g., >90%).\n3.  Clear and concise docstrings for the `is_valid_email` function, explaining its purpose, parameters, return value, and any specific assumptions or limitations.\n4.  Inline comments where complex logic requires further explanation.\n\n**Constraints and Edge Cases to Consider:**\n\n*   **Performance:** The function should be reasonably efficient for single validations. Avoid overly complex regular expressions that could lead to ReDoS attacks or excessive backtracking.\n*   **Security:** Be mindful of potential Regular Expression Denial of Service (ReDoS) vulnerabilities if using regex. Design the regex carefully or consider alternative parsing methods for complex parts.\n*   **Edge Cases:**\n    *   Empty string `\"\"`\n    *   `None` input\n    *   Emails with multiple `@` symbols (e.g., `a@b@c.com`)\n    *   Emails with leading/trailing spaces (should be considered invalid)\n    *   Emails with invalid characters (e.g., `a\"b@c.com`)\n    *   Emails with very long local or domain parts (up to 254 total characters).\n    *   Emails with consecutive dots (`user..name@example.com`)\n    *   Emails with dots at the start/end of local/domain parts (`.user@example.com`, `user.@example.com`, `user@.example.com`, `user@example.com.`)\n    *   Emails with invalid TLDs (e.g., `user@example.c`, `user@example.123`)\n\n**Quality Criteria for the Solution:**\n\n*   **Correctness:** The function must accurately validate emails based on the defined rules.\n*   **Readability:** The code should be clean, well-structured, and easy to understand.\n*   **Maintainability:** The code should be easy to modify and extend in the future.\n*   **Test Coverage:** High unit test coverage demonstrating the function's robustness.\n*   **Efficiency:** Reasonable performance without ReDoS vulnerabilities.\n*   **Documentation:** Clear and comprehensive docstrings and comments.\n\n**Domain-Specific Best Practices to Apply:**\n\n*   **Regular Expressions:** While powerful, use them judiciously for email validation. A single, overly complex regex can be hard to read, debug, and prone to ReDoS. Consider breaking down validation into smaller, more manageable regex patterns or string operations.\n*   **RFC vs. Practicality:** Understand the trade-off between strict RFC compliance and practical validation. For most applications, a practical approach that covers 99% of real-world emails is sufficient and less error-prone than attempting full, complex RFC compliance.\n*   **Test-Driven Development (TDD):** Consider writing tests *before* or *during* the implementation to guide development and ensure correctness.\n*   **Security:** Always consider security implications, especially when dealing with user input and regular expressions.\n*   **Modularity:** If the validation logic becomes complex, consider breaking it down into smaller helper functions for better readability and maintainability.",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "performance_tracked",
+      "author": "system",
+      "tags": [
+        "performance_tracked"
+      ],
+      "description": "Automatically created for performance tracking",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "system",
+    "created_at": "2025-08-27T12:35:12.849047",
+    "parent_version": null,
+    "commit_message": "Created for performance tracking"
+  },
+  "version_prompt_1756270230_Performance_Tracked_Prompt_-_software_engineering_v1.0.0": {
+    "id": "version_prompt_1756270230_Performance_Tracked_Prompt_-_software_engineering_v1.0.0",
+    "prompt_id": "prompt_1756270230_Performance_Tracked_Prompt_-_software_engineering",
+    "version": "1.0.0",
+    "content": "As an expert Python software engineer, develop a robust and efficient function to validate email addresses based on common industry standards and best practices. The primary goal is to ensure that user-provided email strings conform to a widely accepted format, preventing malformed inputs in applications.\n\n**Specific Technical Requirements:**\n1.  **Language:** Python 3.x\n2.  **Function Signature:** The function must be named `is_valid_email` and accept a single string argument, `email_address`. It should return a boolean: `True` if the email is valid according to the specified rules, `False` otherwise.\n    ```python\n    def is_valid_email(email_address: str) -> bool:\n        # ... implementation ...\n    ```\n3.  **Validation Logic (using Regular Expressions is highly recommended for conciseness and efficiency):**\n    *   **Overall Structure:** The email must contain exactly one `@` symbol, separating the local part and the domain part.\n    *   **Local Part Rules:**\n        *   Can contain alphanumeric characters, `.` `_` `%` `+` `-`.\n        *   Cannot start or end with a `.`\n        *   Cannot contain consecutive `.` (e.g., `a..b`).\n        *   Maximum length of 64 characters.\n    *   **Domain Part Rules:**\n        *   Can contain alphanumeric characters and `-`.\n        *   Cannot start or end with a `-`.\n        *   Must contain at least one `.` after the `@` symbol.\n        *   The Top-Level Domain (TLD) must consist of at least two alphabetic characters (e.g., `.com`, `.org`, `.co.uk`).\n        *   Maximum length of 255 characters for the entire domain part.\n    *   **Overall Email Length:** The total email address length should not exceed 254 characters (as per RFC 5321).\n    *   **RFC Consideration:** While full RFC 5322 compliance is extremely complex and often impractical for general validation, the function should aim for a pragmatic subset that covers the vast majority of valid email formats encountered in web applications, while effectively rejecting common malformed inputs.\n\n**Expected Deliverables and Format:**\n1.  A complete Python function `is_valid_email` as described above.\n2.  A set of unit tests or example usage demonstrating the function's behavior with at least 5 valid and 5 invalid email addresses, covering various edge cases.\n3.  Clear docstrings for the function explaining its purpose, parameters, return value, and the key validation rules applied.\n4.  If a regular expression is used, a brief explanation of its components and rationale.\n\n**Constraints and Edge Cases to Consider:**\n*   **Valid Examples:** `user@example.com`, `john.doe@sub.domain.co.uk`, `user+tag@domain.net`, `firstname.lastname@domain.com`, `12345@domain.org`\n*   **Invalid Examples:** `invalid-email`, `user@.com`, `user@domain`, `user@domain.c`, `@domain.com`, `user@domain..com`, `user@domain.com.`, `.user@domain.com`, `user@-domain.com`, `user@domain-.com`, `user@domain.c1`, `user@domain_com`, `user@domain.toolongtld`\n*   **Performance:** The validation should be reasonably efficient for typical use cases. Avoid overly complex regex that could lead to ReDoS vulnerabilities.\n*   **Security:** The solution should be resistant to Regular expression Denial of Service (ReDoS) attacks.\n*   **Internationalized Domain Names (IDN):** For this task, assume ASCII-only email addresses. Full IDN support (e.g., `user@bücher.de`) is out of scope due to its complexity, but acknowledge its existence in a comment if desired.\n\n**Quality Criteria for the Solution:**\n*   **Correctness:** The function must accurately identify valid and invalid email addresses based on the specified rules.\n*   **Readability:** The code should be clean, well-structured, and easy to understand, with appropriate comments and docstrings.\n*   **Maintainability:** The validation logic should be straightforward to update if rules change or new requirements emerge.\n*   **Robustness:** The function should handle various malformed inputs gracefully without crashing or raising unhandled exceptions.\n*   **Efficiency:** The validation process should be performant, especially when dealing with a large number of validations.\n*   **Adherence to Python Best Practices:** Follow PEP 8 guidelines and use idiomatic Python constructs.",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "performance_tracked",
+      "author": "system",
+      "tags": [
+        "performance_tracked"
+      ],
+      "description": "Automatically created for performance tracking",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {
+      "quality_score": 0.92
+    },
+    "created_by": "system",
+    "created_at": "2025-08-27T12:50:30.206992",
+    "parent_version": null,
+    "commit_message": "Created for performance tracking"
+  },
+  "version_prompt_1756270277_Performance_Tracked_Prompt_-_software_engineering_v1.0.0": {
+    "id": "version_prompt_1756270277_Performance_Tracked_Prompt_-_software_engineering_v1.0.0",
+    "prompt_id": "prompt_1756270277_Performance_Tracked_Prompt_-_software_engineering",
+    "version": "1.0.0",
+    "content": "def test_function(): pass",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "performance_tracked",
+      "author": "system",
+      "tags": [
+        "performance_tracked"
+      ],
+      "description": "Automatically created for performance tracking",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "system",
+    "created_at": "2025-08-27T12:51:17.788236",
+    "parent_version": null,
+    "commit_message": "Created for performance tracking"
+  },
+  "version_prompt_1756270277_Experiment_Variant_0_-_System_Activation_Experiment_Test_v1.0.0": {
+    "id": "version_prompt_1756270277_Experiment_Variant_0_-_System_Activation_Experiment_Test_v1.0.0",
+    "prompt_id": "prompt_1756270277_Experiment_Variant_0_-_System_Activation_Experiment_Test",
+    "version": "1.0.0",
+    "content": "Write a function to sort an array using quicksort algorithm",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "experiment_variant",
+      "author": "coordinator",
+      "tags": [
+        "experiment",
+        "variant_0",
+        "software_engineering"
+      ],
+      "description": "Experiment variant 0 for System Activation Experiment Test",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "coordinator",
+    "created_at": "2025-08-27T12:51:17.767987",
+    "parent_version": null,
+    "commit_message": "Created experiment variant 0 for System Activation Experiment Test"
+  },
+  "version_prompt_1756270277_Experiment_Variant_1_-_System_Activation_Experiment_Test_v1.0.0": {
+    "id": "version_prompt_1756270277_Experiment_Variant_1_-_System_Activation_Experiment_Test_v1.0.0",
+    "prompt_id": "prompt_1756270277_Experiment_Variant_1_-_System_Activation_Experiment_Test",
+    "version": "1.0.0",
+    "content": "Write an efficient function to sort an array using mergesort algorithm",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "experiment_variant",
+      "author": "coordinator",
+      "tags": [
+        "experiment",
+        "variant_1",
+        "software_engineering"
+      ],
+      "description": "Experiment variant 1 for System Activation Experiment Test",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "coordinator",
+    "created_at": "2025-08-27T12:51:17.772981",
+    "parent_version": null,
+    "commit_message": "Created experiment variant 1 for System Activation Experiment Test"
+  }
+}

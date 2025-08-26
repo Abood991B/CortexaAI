@@ -5,13 +5,20 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_google_genai import ChatGoogleGenerativeAI
-from config.config import settings, get_model_config
+from config.config import (
+    settings, get_model_config, get_logger, metrics, log_performance,
+    cache_manager, perf_config, generate_prompt_cache_key, log_cache_performance,
+    circuit_breakers, reliability_config, log_circuit_breaker_event, CircuitBreakerOpenException,
+    security_manager, security_config, log_security_event
+)
+from agents.exceptions import ClassificationError, LLMServiceError, DomainError
 import json
 import logging
+import asyncio
+import time
 
-# Set up logging
-logging.basicConfig(level=settings.log_level)
-logger = logging.getLogger(__name__)
+# Set up structured logging
+logger = get_logger(__name__)
 
 
 class DomainClassifier:
@@ -93,57 +100,257 @@ class DomainClassifier:
             | JsonOutputParser()
         )
 
-    def classify_prompt(self, prompt: str) -> Dict[str, Any]:
+    async def classify_prompt(self, prompt: str) -> Dict[str, Any]:
         """
-        Classify a prompt into a domain.
+        Classify a prompt into a domain with security, caching and retry mechanism.
 
         Args:
             prompt: The prompt to classify
 
         Returns:
             Dict containing classification results
+
+        Raises:
+            ClassificationError: If classification fails after retries
         """
-        try:
-            logger.info(f"Classifying prompt: {prompt[:100]}...")
+        # Input sanitization
+        if security_config.enable_input_sanitization:
+            sanitized_result = security_manager.sanitize_input(prompt, "classification")
 
-            result = self.classifier_chain.invoke(prompt)
+            if not sanitized_result['is_safe'] and security_config.enable_injection_detection:
+                # Block potentially unsafe prompts
+                high_severity_events = [e for e in sanitized_result['security_events'] if e['severity'] == 'high']
+                if high_severity_events:
+                    log_security_event(logger, "unsafe_input_blocked", "high",
+                                     context="classification", events=high_severity_events)
+                    raise ClassificationError(
+                        "Input contains potentially unsafe content",
+                        prompt=prompt,
+                        security_events=high_severity_events
+                    )
 
-            # Handle new domain creation
-            if result.get("is_new_domain", False):
-                new_domain = result["new_domain_name"]
-                new_description = result["new_domain_description"]
+            sanitized_prompt = sanitized_result['sanitized_text']
+        else:
+            sanitized_prompt = prompt
 
-                logger.info(f"Creating new domain: {new_domain}")
-                self._create_new_domain(new_domain, new_description, result.get("key_topics", []))
+        # Check cache first if caching is enabled
+        if perf_config.enable_caching:
+            cache_key = generate_prompt_cache_key(sanitized_prompt, prefix="classification")
+            cached_result = cache_manager.get(cache_key)
+            if cached_result:
+                log_cache_performance(logger, "prompt_classification", True, prompt_length=len(sanitized_prompt))
+                return cached_result
 
-                # Update the result to use the new domain
-                result["domain"] = new_domain
+        max_retries = getattr(settings, 'max_llm_retries', 3)
+        retry_delay = getattr(settings, 'llm_retry_delay', 1.0)
 
-            logger.info(f"Classification result: {result}")
-            return result
+        # Use circuit breaker if enabled
+        if reliability_config.enable_circuit_breakers:
+            try:
+                result = await circuit_breakers["classification"].call(
+                    self._classify_with_fallback, sanitized_prompt, cache_key, max_retries, retry_delay
+                )
+                return result
+            except CircuitBreakerOpenException as cboe:
+                logger.warning(f"Circuit breaker open for classification: {cboe}")
+                log_circuit_breaker_event(logger, "classification", "circuit_open",
+                                         prompt_length=len(sanitized_prompt), failure_count=cboe.failure_count)
 
-        except ValueError as ve:
-            if "No generations found in stream" in str(ve):
-                logger.error(f"Model streaming error: {ve}. This may be due to an invalid model name, API key, or model availability.")
-                return {
-                    "domain": "general",
-                    "confidence": 0.5,
-                    "is_new_domain": False,
-                    "key_topics": [],
-                    "reasoning": f"Model error: {str(ve)}. Please check the model name '{self.classifier_chain.steps[1].model}' and API key."
-                }
-            else:
-                raise  # Re-raise if it's a different ValueError
+                # Return fallback result when circuit is open
+                if reliability_config.enable_fallbacks:
+                    return self._get_fallback_classification_result(sanitized_prompt)
+                else:
+                    raise ClassificationError(
+                        "Classification circuit breaker is open",
+                        prompt=sanitized_prompt,
+                        circuit_breaker="classification"
+                    )
 
-        except Exception as e:
-            logger.error(f"Error classifying prompt: {e}")
+        # Original retry logic without circuit breaker
+        for attempt in range(max_retries + 1):
+            try:
+                logger.info(f"Classifying prompt: {sanitized_prompt[:100]}... (attempt {attempt + 1})")
+
+                result = await self.classifier_chain.ainvoke(sanitized_prompt)
+
+                # Handle new domain creation
+                if result.get("is_new_domain", False):
+                    new_domain = result["new_domain_name"]
+                    new_description = result["new_domain_description"]
+
+                    logger.info(f"Creating new domain: {new_domain}")
+                    self._create_new_domain(new_domain, new_description, result.get("key_topics", []))
+
+                    # Update the result to use the new domain
+                    result["domain"] = new_domain
+
+                # Cache the result if caching is enabled
+                if perf_config.enable_caching:
+                    cache_manager.set(cache_key, result, perf_config.cache_ttl)
+
+                logger.info(f"Classification result: {result}")
+                log_cache_performance(logger, "prompt_classification", False, prompt_length=len(sanitized_prompt))
+                return result
+
+            except ValueError as ve:
+                if "No generations found in stream" in str(ve):
+                    logger.error(f"Model streaming error: {ve}. This may be due to an invalid model name, API key, or model availability.")
+                    # This is a configuration issue, not retryable
+                    return {
+                        "domain": "general",
+                        "confidence": 0.5,
+                        "is_new_domain": False,
+                        "key_topics": [],
+                        "reasoning": f"Model error: {str(ve)}. Please check the model name '{self.classifier_chain.steps[1].model}' and API key."
+                    }
+                else:
+                    # Re-raise unexpected ValueError
+                    raise ClassificationError(
+                        "Unexpected classification error",
+                        prompt=sanitized_prompt,
+                        cause=ve
+                    )
+
+            except Exception as e:
+                error_msg = f"Error classifying prompt: {str(e)}"
+
+                if attempt < max_retries:
+                    # Determine if error is retryable
+                    is_retryable = self._is_retryable_error(e)
+
+                    if is_retryable:
+                        logger.warning(f"{error_msg}. Retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        continue
+                    else:
+                        logger.error(f"{error_msg}. Error is not retryable.")
+                        break
+                else:
+                    logger.error(f"{error_msg}. All {max_retries + 1} attempts failed.")
+
+                    # Raise custom exception with detailed context
+                    raise ClassificationError(
+                        f"Failed to classify prompt after {max_retries + 1} attempts",
+                        prompt=sanitized_prompt,
+                        cause=e
+                    )
+
+        # Fallback: return degraded result if all retries failed
+        logger.warning("Returning fallback classification result due to repeated failures")
+        return self._get_fallback_classification_result(sanitized_prompt)
+
+    def _get_fallback_classification_result(self, prompt: str) -> Dict[str, Any]:
+        """Get a fallback classification result when all else fails."""
+        # Simple keyword-based fallback classification
+        prompt_lower = prompt.lower()
+
+        # Check for software engineering keywords
+        se_keywords = ["code", "programming", "software", "development", "algorithm", "function", "class", "api", "database", "debug"]
+        if any(keyword in prompt_lower for keyword in se_keywords):
             return {
-                "domain": "general",
-                "confidence": 0.5,
+                "domain": "software_engineering",
+                "confidence": reliability_config.fallback_response_quality,
                 "is_new_domain": False,
-                "key_topics": [],
-                "reasoning": f"Classification failed: {str(e)}"
+                "key_topics": ["programming"],
+                "reasoning": "Fallback classification based on keywords"
             }
+
+        # Check for data science keywords
+        ds_keywords = ["data", "analysis", "machine learning", "statistics", "visualization", "dataset", "model"]
+        if any(keyword in prompt_lower for keyword in ds_keywords):
+            return {
+                "domain": "data_science",
+                "confidence": reliability_config.fallback_response_quality,
+                "is_new_domain": False,
+                "key_topics": ["data", "analysis"],
+                "reasoning": "Fallback classification based on keywords"
+            }
+
+        # Default fallback
+        return {
+            "domain": "general",
+            "confidence": reliability_config.fallback_response_quality,
+            "is_new_domain": False,
+            "key_topics": [],
+            "reasoning": "Fallback classification - unable to determine specific domain"
+        }
+
+    async def _classify_with_fallback(self, prompt: str, cache_key: str,
+                                    max_retries: int, retry_delay: float) -> Dict[str, Any]:
+        """Classify with circuit breaker protection and fallback."""
+        for attempt in range(max_retries + 1):
+            try:
+                logger.info(f"Classifying prompt: {prompt[:100]}... (attempt {attempt + 1})")
+
+                result = await self.classifier_chain.ainvoke(prompt)
+
+                # Handle new domain creation
+                if result.get("is_new_domain", False):
+                    new_domain = result["new_domain_name"]
+                    new_description = result["new_domain_description"]
+
+                    logger.info(f"Creating new domain: {new_domain}")
+                    self._create_new_domain(new_domain, new_description, result.get("key_topics", []))
+
+                    # Update the result to use the new domain
+                    result["domain"] = new_domain
+
+                # Cache the result if caching is enabled
+                if perf_config.enable_caching:
+                    cache_manager.set(cache_key, result, perf_config.cache_ttl)
+
+                logger.info(f"Classification result: {result}")
+                log_cache_performance(logger, "prompt_classification", False, prompt_length=len(prompt))
+                return result
+
+            except ValueError as ve:
+                if "No generations found in stream" in str(ve):
+                    logger.error(f"Model streaming error: {ve}. This may be due to an invalid model name, API key, or model availability.")
+                    # This is a configuration issue, not retryable
+                    return self._get_fallback_classification_result(prompt)
+                else:
+                    # Re-raise unexpected ValueError
+                    raise ClassificationError(
+                        "Unexpected classification error",
+                        prompt=prompt,
+                        cause=ve
+                    )
+
+            except Exception as e:
+                error_msg = f"Error classifying prompt: {str(e)}"
+
+                if attempt < max_retries:
+                    # Determine if error is retryable
+                    is_retryable = self._is_retryable_error(e)
+
+                    if is_retryable:
+                        logger.warning(f"{error_msg}. Retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        continue
+                    else:
+                        logger.error(f"{error_msg}. Error is not retryable.")
+                        break
+                else:
+                    logger.error(f"{error_msg}. All {max_retries + 1} attempts failed.")
+                    # Return fallback instead of raising exception
+                    return self._get_fallback_classification_result(prompt)
+
+        # If we get here, return fallback
+        return self._get_fallback_classification_result(prompt)
+
+    def _is_retryable_error(self, error: Exception) -> bool:
+        """Determine if an error is retryable based on its characteristics."""
+        error_str = str(error).lower()
+        retryable_indicators = [
+            "rate limit", "timeout", "connection", "network",
+            "temporary", "server error", "502", "503", "504",
+            "internal server error", "service unavailable"
+        ]
+
+        # Check if any retryable indicator is in the error message
+        return any(indicator in error_str for indicator in retryable_indicators)
 
     def _create_new_domain(self, domain_name: str, description: str, keywords: List[str]):
         """
@@ -166,6 +373,27 @@ class DomainClassifier:
         }
 
         logger.info(f"New domain created: {domain_name}")
+
+    async def classify_prompt_type(self, prompt: str) -> str:
+        """Classify whether a prompt is raw or structured based on heuristics."""
+        # Simple heuristic: if it has clear sections, formatting, or specific keywords, it's structured
+        structured_indicators = [
+            "requirements:", "specifications:", "please", "i need", "create",
+            "develop", "build", "implement", "task:", "objective:",
+            "1.", "2.", "3.", "-", "*", "•"
+        ]
+
+        prompt_lower = prompt.lower()
+        structured_score = sum(1 for indicator in structured_indicators if indicator in prompt_lower)
+
+        # Check for structured formatting
+        lines = prompt.split('\n')
+        formatted_lines = sum(1 for line in lines if line.strip().startswith(('-', '*', '•', '1.', '2.', '3.')))
+
+        if structured_score > 3 or formatted_lines > 2 or len(lines) > 5:
+            return "structured"
+        else:
+            return "raw"
 
     def get_available_domains(self) -> Dict[str, Dict]:
         """Get all available domains (known + dynamically created)."""

@@ -47,15 +47,15 @@ class WorkflowState(TypedDict):
     next_action: Optional[str]  # For conditional routing
 
 
-def classify_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
+async def classify_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
     """Node for domain classification."""
     try:
         logger.info("Executing classification node")
 
         original_prompt = state["original_prompt"]
 
-        # Classify the prompt
-        classification_result = classifier.classify_prompt(original_prompt)
+        # Classify the prompt (await the async function)
+        classification_result = await classifier.classify_prompt(original_prompt)
 
         return {
             "domain": classification_result["domain"],
@@ -114,7 +114,7 @@ def create_expert_node(state: WorkflowState, config: RunnableConfig) -> Dict[str
         }
 
 
-def improve_prompt_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
+async def improve_prompt_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
     """Node for prompt improvement."""
     try:
         logger.info("Executing prompt improvement node")
@@ -131,8 +131,8 @@ def improve_prompt_node(state: WorkflowState, config: RunnableConfig) -> Dict[st
             # Create a generic expert agent as fallback
             expert_agent = create_expert_agent("general", "General prompt optimization")
 
-        # Improve the prompt
-        improvement_result = expert_agent.improve_prompt(
+        # Improve the prompt (await the async function)
+        improvement_result = await expert_agent.improve_prompt(
             original_prompt=original_prompt,
             prompt_type=prompt_type,
             key_topics=key_topics
@@ -163,7 +163,7 @@ def improve_prompt_node(state: WorkflowState, config: RunnableConfig) -> Dict[st
         }
 
 
-def evaluate_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
+async def evaluate_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
     """Node for prompt evaluation."""
     try:
         logger.info("Executing evaluation node")
@@ -181,8 +181,8 @@ def evaluate_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any
             # Create a generic expert agent as fallback
             expert_agent = create_expert_agent("general", "General prompt optimization")
 
-        # Run evaluation loop
-        evaluation_result, iterations_used = evaluator.run_evaluation_loop(
+        # Run evaluation loop (await the async function)
+        evaluation_result, iterations_used = await evaluator.run_evaluation_loop(
             original_prompt=original_prompt,
             improved_prompt=improved_prompt,
             domain=domain,
@@ -235,6 +235,20 @@ def check_threshold_node(state: WorkflowState, config: RunnableConfig) -> Dict[s
     return {"next_action": "improve_again"}
 
 
+def finalize_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
+    """Final node to prepare the final result."""
+    final_prompt = state.get("final_prompt", state.get("original_prompt", ""))
+    evaluation_result = state.get("evaluation_result", {})
+    domain = state.get("domain", "unknown")
+
+    return {
+        "final_prompt": final_prompt,
+        "final_evaluation": evaluation_result,
+        "final_domain": domain,
+        "status": "workflow_completed"
+    }
+
+
 def error_handler_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
     """Node for handling errors in the workflow."""
     error_message = state.get("error_message", "Unknown error occurred")
@@ -259,6 +273,7 @@ def create_workflow_graph() -> StateGraph:
     workflow.add_node("improve", improve_prompt_node)
     workflow.add_node("evaluate", evaluate_node)
     workflow.add_node("check_threshold", check_threshold_node)
+    workflow.add_node("finalize", finalize_node)
     workflow.add_node("error_handler", error_handler_node)
 
     # Define the workflow edges
@@ -272,18 +287,35 @@ def create_workflow_graph() -> StateGraph:
     workflow.add_edge("improve", "evaluate")
     workflow.add_edge("evaluate", "check_threshold")
 
-    # Conditional edges from threshold check
+    # Conditional edges from threshold check with proper routing
+    def route_based_on_threshold(state: WorkflowState) -> str:
+        """Route based on evaluation results and iteration count."""
+        next_action = state.get("next_action", "end")
+        iterations_used = state.get("iterations_used", 0)
+
+        # Safety check: prevent infinite loops (hard limit)
+        if iterations_used >= settings.max_evaluation_iterations:
+            return "finalize"
+
+        if next_action == "improve_again":
+            return "improve"
+        elif next_action == "error":
+            return "error_handler"
+        else:
+            return "finalize"
+
     workflow.add_conditional_edges(
         "check_threshold",
-        lambda state: state.get("next_action", "end"),
+        route_based_on_threshold,
         {
-            "improve_again": "improve",  # Go back to improvement
-            "end": END,                  # End the workflow
-            "error": "error_handler"     # Handle errors
+            "improve": "improve",        # Continue improving
+            "finalize": "finalize",      # End workflow successfully
+            "error_handler": "error_handler"  # Handle errors
         }
     )
 
-    # Error handling
+    # Final edges
+    workflow.add_edge("finalize", END)
     workflow.add_edge("error_handler", END)
 
     return workflow
@@ -303,7 +335,7 @@ def create_prompt_engineering_app():
 prompt_engineering_app = create_prompt_engineering_app()
 
 
-def process_prompt_with_langgraph(prompt: str, prompt_type: str = "auto") -> Dict[str, Any]:
+async def process_prompt_with_langgraph(prompt: str, prompt_type: str = "auto") -> Dict[str, Any]:
     """
     Process a prompt using the LangGraph workflow.
 
@@ -331,9 +363,9 @@ def process_prompt_with_langgraph(prompt: str, prompt_type: str = "auto") -> Dic
             }
         )
 
-        # Execute the workflow
+        # Execute the workflow (use ainvoke for async nodes)
         logger.info(f"Starting LangGraph workflow for prompt processing")
-        result = prompt_engineering_app.invoke(initial_state, config)
+        result = await prompt_engineering_app.ainvoke(initial_state, config)
 
         # Convert result to expected format
         import time

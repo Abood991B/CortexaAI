@@ -7,11 +7,22 @@ from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_google_genai import ChatGoogleGenerativeAI
 from config.config import settings, get_model_config
+from agents.exceptions import ImprovementError, LLMServiceError, ConfigurationError
 import logging
+import asyncio
+import time
 
-# Set up logging
-logging.basicConfig(level=settings.log_level)
-logger = logging.getLogger(__name__)
+from config.config import (
+    settings, get_model_config, get_logger, metrics, log_performance,
+    cache_manager, perf_config, generate_prompt_cache_key, log_cache_performance,
+    security_manager, security_config, log_security_event,
+    memory_config, prompt_generation_config
+)
+from agents.memory import memory_manager
+from agents.prompt import prompt_generator
+
+# Set up structured logging
+logger = get_logger(__name__)
 
 
 class BaseExpertAgent(ABC):
@@ -30,6 +41,396 @@ class BaseExpertAgent(ABC):
         self.expertise_areas = self._define_expertise_areas()
         self.improvement_templates = self._define_improvement_templates()
         self._setup_improvement_chain()
+
+    async def improve_prompt_with_memory(self, original_prompt: str, user_id: str,
+                                       prompt_type: str = "raw", key_topics: List[str] = None) -> Dict[str, Any]:
+        """
+        Improve a prompt using domain expertise with RAG-enhanced context and memory.
+
+        Args:
+            original_prompt: The original prompt to improve
+            user_id: User identifier for memory retrieval
+            prompt_type: Type of prompt ("raw" or "structured")
+            key_topics: Key topics identified by classifier
+
+        Returns:
+            Dict containing the improved prompt and analysis
+        """
+        # Generate RAG context
+        rag_context = await memory_manager.generate_rag_context(
+            user_id=user_id,
+            domain=self.domain,
+            query=original_prompt
+        )
+
+        # Get conversation context
+        conversation_context = memory_manager.get_conversation_context(user_id)
+
+        # Combine context for enhanced improvement
+        enhanced_context = self._build_enhanced_context(
+            original_prompt, rag_context, conversation_context
+        )
+
+        # Use standard improvement with enhanced context
+        result = await self.improve_prompt_with_context(
+            original_prompt=original_prompt,
+            context=enhanced_context,
+            prompt_type=prompt_type,
+            key_topics=key_topics
+        )
+
+        # Store the improvement in memory for future reference
+        await memory_manager.store_memory(
+            user_id=user_id,
+            content=f"Prompt: {original_prompt}\nImprovement: {result.get('improved_prompt', '')}",
+            metadata={
+                'domain': self.domain,
+                'prompt_type': prompt_type,
+                'improvement_score': result.get('effectiveness_score', 0),
+                'type': 'prompt_improvement'
+            }
+        )
+
+        return result
+
+    async def improve_prompt_with_context(self, original_prompt: str, context: Dict[str, Any],
+                                        prompt_type: str = "raw", key_topics: List[str] = None) -> Dict[str, Any]:
+        """
+        Improve a prompt using additional context information.
+
+        Args:
+            original_prompt: The original prompt to improve
+            context: Additional context from RAG and conversation history
+            prompt_type: Type of prompt ("raw" or "structured")
+            key_topics: Key topics identified by classifier
+
+        Returns:
+            Dict containing the improved prompt and analysis
+        """
+        # Input sanitization
+        if security_config.enable_input_sanitization:
+            sanitized_result = security_manager.sanitize_input(original_prompt, f"improvement_{self.domain}")
+
+            if not sanitized_result['is_safe'] and security_config.enable_injection_detection:
+                high_severity_events = [e for e in sanitized_result['security_events'] if e['severity'] == 'high']
+                if high_severity_events:
+                    log_security_event(logger, "unsafe_input_blocked", "high",
+                                     context=f"improvement_{self.domain}", events=high_severity_events)
+                    raise ImprovementError(
+                        "Input contains potentially unsafe content",
+                        domain=self.domain,
+                        prompt_type=prompt_type,
+                        original_prompt=original_prompt,
+                        security_events=high_severity_events
+                    )
+
+            sanitized_prompt = sanitized_result['sanitized_text']
+        else:
+            sanitized_prompt = original_prompt
+
+        # Check cache first if caching is enabled
+        if perf_config.enable_caching:
+            cache_key = generate_prompt_cache_key(sanitized_prompt, self.domain, f"{prompt_type}_context")
+            cached_result = cache_manager.get(cache_key)
+            if cached_result:
+                log_cache_performance(logger, "prompt_improvement_context", True,
+                                    domain=self.domain, prompt_type=prompt_type)
+                return cached_result
+
+        max_retries = getattr(settings, 'max_llm_retries', 3)
+        retry_delay = getattr(settings, 'llm_retry_delay', 1.0)
+
+        for attempt in range(max_retries + 1):
+            try:
+                logger.info(f"Improving {prompt_type} prompt with context in domain {self.domain} (attempt {attempt + 1})")
+
+                # Use context-enhanced improvement chain
+                input_data = {
+                    "original_prompt": sanitized_prompt,
+                    "prompt_type": prompt_type,
+                    "key_topics": key_topics or [],
+                    "context": context
+                }
+
+                result = await self.improvement_with_context_chain.ainvoke(input_data)
+
+                # Cache the result if caching is enabled
+                if perf_config.enable_caching:
+                    cache_manager.set(cache_key, result, perf_config.cache_ttl)
+
+                logger.info(f"Context-enhanced prompt improvement completed for {self.domain}")
+                log_cache_performance(logger, "prompt_improvement_context", False,
+                                    domain=self.domain, prompt_type=prompt_type)
+                return result
+
+            except Exception as e:
+                error_msg = f"Error improving prompt with context in {self.domain}: {str(e)}"
+
+                if attempt < max_retries:
+                    is_retryable = self._is_retryable_error(e)
+
+                    if is_retryable:
+                        logger.warning(f"{error_msg}. Retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2
+                        continue
+                    else:
+                        logger.error(f"{error_msg}. Error is not retryable.")
+                        break
+                else:
+                    logger.error(f"{error_msg}. All {max_retries + 1} attempts failed.")
+                    raise ImprovementError(
+                        f"Failed to improve prompt after {max_retries + 1} attempts",
+                        domain=self.domain,
+                        prompt_type=prompt_type,
+                        original_prompt=original_prompt,
+                        cause=e
+                    )
+
+        # Fallback result
+        logger.warning(f"Returning fallback result for {self.domain} due to repeated failures")
+        return {
+            "improved_prompt": original_prompt,
+            "improvements_made": [],
+            "key_additions": [],
+            "structure_analysis": "Improvement failed after multiple attempts",
+            "effectiveness_score": 0.5,
+            "reasoning": "Unable to improve prompt due to processing errors"
+        }
+
+    def _build_enhanced_context(self, original_prompt: str, rag_context: Dict[str, Any],
+                              conversation_context: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build enhanced context for prompt improvement."""
+        context_parts = []
+
+        # Add RAG context
+        for part in rag_context.get('context_parts', []):
+            context_parts.append({
+                'type': part['type'],
+                'content': part['content'],
+                'relevance': part['relevance'],
+                'source': 'rag'
+            })
+
+        # Add recent conversation context
+        for turn in conversation_context[-3:]:  # Last 3 turns
+            context_parts.append({
+                'type': 'conversation',
+                'content': f"User: {turn['message']}\nResponse: {turn['response']}",
+                'relevance': 0.6,
+                'source': 'conversation'
+            })
+
+        return {
+            'original_prompt': original_prompt,
+            'context_parts': context_parts,
+            'rag_metadata': {
+                'memories_count': rag_context.get('memories_count', 0),
+                'knowledge_count': rag_context.get('knowledge_count', 0),
+                'total_context_length': rag_context.get('total_context_length', 0)
+            },
+            'conversation_turns': len(conversation_context)
+        }
+
+    async def improve_prompt(self, original_prompt: str, prompt_type: str = "raw",
+                      key_topics: List[str] = None) -> Dict[str, Any]:
+        """
+        Improve a prompt using domain expertise with security, caching and retry mechanism.
+
+        Args:
+            original_prompt: The original prompt to improve
+            prompt_type: Type of prompt ("raw" or "structured")
+            key_topics: Key topics identified by classifier
+
+        Returns:
+            Dict containing the improved prompt and analysis
+
+        Raises:
+            ImprovementError: If prompt improvement fails after retries
+        """
+        # Input sanitization
+        if security_config.enable_input_sanitization:
+            sanitized_result = security_manager.sanitize_input(original_prompt, f"improvement_{self.domain}")
+
+            if not sanitized_result['is_safe'] and security_config.enable_injection_detection:
+                # Block potentially unsafe prompts
+                high_severity_events = [e for e in sanitized_result['security_events'] if e['severity'] == 'high']
+                if high_severity_events:
+                    log_security_event(logger, "unsafe_input_blocked", "high",
+                                     context=f"improvement_{self.domain}", events=high_severity_events)
+                    raise ImprovementError(
+                        "Input contains potentially unsafe content",
+                        domain=self.domain,
+                        prompt_type=prompt_type,
+                        original_prompt=original_prompt,
+                        security_events=high_severity_events
+                    )
+
+            sanitized_prompt = sanitized_result['sanitized_text']
+        else:
+            sanitized_prompt = original_prompt
+
+        # Check cache first if caching is enabled
+        if perf_config.enable_caching:
+            cache_key = generate_prompt_cache_key(sanitized_prompt, self.domain, prompt_type)
+            cached_result = cache_manager.get(cache_key)
+            if cached_result:
+                log_cache_performance(logger, "prompt_improvement", True,
+                                    domain=self.domain, prompt_type=prompt_type)
+                return cached_result
+
+        max_retries = getattr(settings, 'max_llm_retries', 3)
+        retry_delay = getattr(settings, 'llm_retry_delay', 1.0)
+
+        for attempt in range(max_retries + 1):
+            try:
+                logger.info(f"Improving {prompt_type} prompt in domain {self.domain} (attempt {attempt + 1})")
+
+                input_data = {
+                    "original_prompt": sanitized_prompt,
+                    "prompt_type": prompt_type,
+                    "key_topics": key_topics or []
+                }
+
+                result = await self.improvement_chain.ainvoke(input_data)
+
+                # Cache the result if caching is enabled
+                if perf_config.enable_caching:
+                    cache_manager.set(cache_key, result, perf_config.cache_ttl)
+
+                logger.info(f"Prompt improvement completed for {self.domain}")
+                log_cache_performance(logger, "prompt_improvement", False,
+                                    domain=self.domain, prompt_type=prompt_type)
+                return result
+
+            except Exception as e:
+                error_msg = f"Error improving prompt in {self.domain}: {str(e)}"
+
+                if attempt < max_retries:
+                    # Determine if error is retryable
+                    is_retryable = self._is_retryable_error(e)
+
+                    if is_retryable:
+                        logger.warning(f"{error_msg}. Retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        continue
+                    else:
+                        logger.error(f"{error_msg}. Error is not retryable.")
+                        break
+                else:
+                    logger.error(f"{error_msg}. All {max_retries + 1} attempts failed.")
+
+                    # Raise custom exception with detailed context
+                    raise ImprovementError(
+                        f"Failed to improve prompt after {max_retries + 1} attempts",
+                        domain=self.domain,
+                        prompt_type=prompt_type,
+                        original_prompt=original_prompt,
+                        cause=e
+                    )
+
+        # Fallback: return degraded result if all retries failed
+        logger.warning(f"Returning fallback result for {self.domain} due to repeated failures")
+        return {
+            "improved_prompt": original_prompt,  # Return original if improvement fails
+            "improvements_made": [],
+            "key_additions": [],
+            "structure_analysis": "Improvement failed after multiple attempts",
+            "effectiveness_score": 0.5,
+            "reasoning": "Unable to improve prompt due to processing errors"
+        }
+
+    async def generate_and_improve_prompt(self, task: str, prompt_type: str = "raw",
+                                        key_topics: List[str] = None, context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Generate and then improve a prompt using advanced generation strategies.
+
+        Args:
+            task: The task to generate a prompt for
+            prompt_type: Type of prompt ("raw" or "structured")
+            key_topics: Key topics identified by classifier
+            context: Additional context information
+
+        Returns:
+            Dict containing generated and improved prompt with metadata
+        """
+        if not prompt_generation_config.enable_advanced_generation:
+            # Fall back to standard improvement if advanced generation is disabled
+            return await self.improve_prompt(
+                original_prompt=task,
+                prompt_type=prompt_type,
+                key_topics=key_topics
+            )
+
+        try:
+            logger.info(f"Generating and improving prompt for task in domain {self.domain}")
+
+            # Generate initial prompt using advanced strategies
+            generation_result = await prompt_generator.generate_prompt(
+                task=task,
+                domain=self.domain,
+                strategy=prompt_generation_config.generation_strategy,
+                context={
+                    'key_topics': key_topics or [],
+                    'domain_expertise': self.expertise_areas,
+                    'prompt_type': prompt_type
+                }
+            )
+
+            generated_prompt = generation_result['generated_prompt']
+
+            # Improve the generated prompt using domain expertise
+            improvement_result = await self.improve_prompt(
+                original_prompt=generated_prompt,
+                prompt_type=prompt_type,
+                key_topics=key_topics
+            )
+
+            # Combine results
+            combined_result = {
+                'task': task,
+                'domain': self.domain,
+                'generated_prompt': generated_prompt,
+                'final_prompt': improvement_result.get('improved_prompt', generated_prompt),
+                'generation_metadata': {
+                    'strategy_used': generation_result.get('strategy_used'),
+                    'quality_score': generation_result.get('quality_score'),
+                    'generation_time': generation_result.get('generation_time')
+                },
+                'improvement_metadata': {
+                    'improvements_made': improvement_result.get('improvements_made', []),
+                    'key_additions': improvement_result.get('key_additions', []),
+                    'effectiveness_score': improvement_result.get('effectiveness_score', 0)
+                },
+                'overall_quality_score': improvement_result.get('effectiveness_score', generation_result.get('quality_score', 0)),
+                'total_time': generation_result.get('generation_time', 0),
+                'method': 'generate_and_improve'
+            }
+
+            logger.info(f"Generated and improved prompt for {self.domain} with quality score {combined_result['overall_quality_score']:.2f}")
+            return combined_result
+
+        except Exception as e:
+            logger.error(f"Failed to generate and improve prompt for {self.domain}: {e}")
+            # Fall back to standard improvement
+            return await self.improve_prompt(
+                original_prompt=task,
+                prompt_type=prompt_type,
+                key_topics=key_topics
+            )
+
+    def _is_retryable_error(self, error: Exception) -> bool:
+        """Determine if an error is retryable based on its characteristics."""
+        error_str = str(error).lower()
+        retryable_indicators = [
+            "rate limit", "timeout", "connection", "network",
+            "temporary", "server error", "502", "503", "504",
+            "internal server error", "service unavailable"
+        ]
+
+        # Check if any retryable indicator is in the error message
+        return any(indicator in error_str for indicator in retryable_indicators)
 
     @abstractmethod
     def _define_expertise_areas(self) -> List[str]:
@@ -107,43 +508,112 @@ class BaseExpertAgent(ABC):
             | JsonOutputParser()
         )
 
-    def improve_prompt(self, original_prompt: str, prompt_type: str = "raw",
-                      key_topics: List[str] = None) -> Dict[str, Any]:
-        """
-        Improve a prompt using domain expertise.
+        # Set up context-enhanced improvement chain
+        self._setup_context_improvement_chain()
 
-        Args:
-            original_prompt: The original prompt to improve
-            prompt_type: Type of prompt ("raw" or "structured")
-            key_topics: Key topics identified by classifier
+    def _setup_context_improvement_chain(self):
+        """Set up the LangChain for context-enhanced prompt improvement."""
+        model_config = get_model_config()
+        context_model = ChatGoogleGenerativeAI(
+            model=model_config["model_name"],
+            google_api_key=model_config["api_key"],
+            temperature=0.2  # Lower temperature for context-aware improvements
+        )
 
-        Returns:
-            Dict containing the improved prompt and analysis
-        """
-        try:
-            logger.info(f"Improving {prompt_type} prompt in domain {self.domain}")
+        # Context-enhanced improvement prompt template
+        context_improvement_prompt = PromptTemplate.from_template("""
+        You are an expert prompt engineer specializing in {domain}.
 
-            input_data = {
-                "original_prompt": original_prompt,
-                "prompt_type": prompt_type,
-                "key_topics": key_topics or []
+        DOMAIN EXPERTISE: {domain_description}
+        EXPERTISE AREAS: {expertise_areas}
+
+        ORIGINAL PROMPT:
+        {original_prompt}
+
+        PROMPT TYPE: {prompt_type}
+        KEY TOPICS: {key_topics}
+
+        ADDITIONAL CONTEXT:
+        You have access to relevant context from previous interactions and knowledge:
+
+        {context_parts}
+
+        RAG METADATA:
+        - Memories retrieved: {memories_count}
+        - Knowledge entries: {knowledge_count}
+        - Context length: {total_context_length} characters
+        - Conversation turns: {conversation_turns}
+
+        TASK:
+        Improve this prompt using your domain expertise and the provided context. Focus on:
+        1. Adding missing context and specificity based on previous interactions
+        2. Removing ambiguity and unclear requirements
+        3. Structuring the prompt for better results using learned patterns
+        4. Adding relevant domain-specific best practices from knowledge base
+        5. Leveraging conversation history for continuity
+        6. Optimizing wording for clarity and effectiveness
+
+        {improvement_instructions}
+
+        Respond in JSON format with the following structure:
+        {{
+            "improved_prompt": "The fully improved and optimized prompt with context",
+            "improvements_made": [
+                "Specific improvement 1",
+                "Specific improvement 2",
+                "Context-based improvement"
+            ],
+            "key_additions": [
+                "Important context or requirements added",
+                "Domain-specific best practices included",
+                "Conversation continuity maintained"
+            ],
+            "structure_analysis": "Analysis of how the prompt was structured and improved with context",
+            "effectiveness_score": 0.95,
+            "context_utilization": {{
+                "memories_used": {memories_count},
+                "knowledge_applied": {knowledge_count},
+                "conversation_continuity": "high|medium|low"
+            }},
+            "reasoning": "Explanation of why these improvements will be effective, including context benefits"
+        }}
+        """)
+
+        self.improvement_with_context_chain = (
+            {
+                "domain": lambda x: self.domain,
+                "domain_description": lambda x: self.domain_description,
+                "expertise_areas": lambda x: ", ".join(self.expertise_areas),
+                "original_prompt": lambda x: x["original_prompt"],
+                "prompt_type": lambda x: x["prompt_type"],
+                "key_topics": lambda x: ", ".join(x.get("key_topics", [])),
+                "context_parts": lambda x: self._format_context_parts(x["context"]["context_parts"]),
+                "memories_count": lambda x: x["context"]["rag_metadata"]["memories_count"],
+                "knowledge_count": lambda x: x["context"]["rag_metadata"]["knowledge_count"],
+                "total_context_length": lambda x: x["context"]["rag_metadata"]["total_context_length"],
+                "conversation_turns": lambda x: x["context"]["conversation_turns"],
+                "improvement_instructions": lambda x: self.improvement_templates.get(
+                    x["prompt_type"], self.improvement_templates.get("default", "")
+                )
             }
+            | context_improvement_prompt
+            | context_model
+            | JsonOutputParser()
+        )
 
-            result = self.improvement_chain.invoke(input_data)
+    def _format_context_parts(self, context_parts: List[Dict[str, Any]]) -> str:
+        """Format context parts for inclusion in prompts."""
+        if not context_parts:
+            return "No additional context available."
 
-            logger.info(f"Prompt improvement completed for {self.domain}")
-            return result
+        formatted_parts = []
+        for i, part in enumerate(context_parts, 1):
+            formatted_parts.append(f"""
+[{i}] {part['type'].upper()} CONTEXT (Relevance: {part.get('relevance', 0):.2f})
+{part['content']}
+""")
 
-        except Exception as e:
-            logger.error(f"Error improving prompt in {self.domain}: {e}")
-            return {
-                "improved_prompt": original_prompt,  # Return original if improvement fails
-                "improvements_made": [],
-                "key_additions": [],
-                "structure_analysis": f"Improvement failed: {str(e)}",
-                "effectiveness_score": 0.5,
-                "reasoning": "Unable to improve prompt due to processing error"
-            }
+        return "\n".join(formatted_parts)
 
     def get_domain_info(self) -> Dict[str, Any]:
         """Get information about this expert agent's domain and capabilities."""

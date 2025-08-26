@@ -12,13 +12,21 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.config import settings, setup_langsmith
-from agents.coordinator import coordinator
+from config.config import settings, setup_langsmith, metrics, get_logger
+from agents.coordinator import WorkflowCoordinator
+from agents.classifier import DomainClassifier
+from agents.evaluator import PromptEvaluator
 from src.workflow import process_prompt_with_langgraph
+import psutil
+import time
 
-# Set up logging
-logging.basicConfig(level=settings.log_level)
-logger = logging.getLogger(__name__)
+# Set up structured logging
+logger = get_logger(__name__)
+
+# Global instances for dependency injection
+classifier_instance = DomainClassifier()
+evaluator_instance = PromptEvaluator()
+coordinator = WorkflowCoordinator(classifier_instance, evaluator_instance)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -79,13 +87,13 @@ async def process_prompt(request: PromptRequest) -> PromptResponse:
 
         if request.use_langgraph:
             # Use LangGraph workflow
-            result = process_prompt_with_langgraph(
+            result = await process_prompt_with_langgraph(
                 prompt=request.prompt,
                 prompt_type=request.prompt_type
             )
         else:
             # Use Coordinator workflow
-            result = coordinator.process_prompt(
+            result = await coordinator.process_prompt(
                 prompt=request.prompt,
                 prompt_type=request.prompt_type,
                 return_comparison=request.return_comparison
@@ -482,15 +490,170 @@ async def root():
     """
 
 
+@app.get("/metrics")
+async def get_metrics():
+    """Prometheus-compatible metrics endpoint."""
+    lines = []
+
+    # Get current metrics
+    current_metrics = metrics.get_metrics()
+
+    # Add system metrics
+    lines.append("# HELP system_info System information")
+    lines.append("# TYPE system_info gauge")
+    lines.append('system_info{version="1.0.0",langsmith_enabled="' + str(bool(settings.langsmith_api_key)).lower() + '"} 1')
+
+    # Add LLM call metrics
+    lines.append("# HELP llm_calls_total Total number of LLM calls")
+    lines.append("# TYPE llm_calls_total counter")
+    lines.append(f'llm_calls_total {current_metrics.get("llm_calls_total", 0)}')
+
+    lines.append("# HELP llm_calls_success Successful LLM calls")
+    lines.append("# TYPE llm_calls_success counter")
+    lines.append(f'llm_calls_success {current_metrics.get("llm_calls_success", 0)}')
+
+    lines.append("# HELP llm_calls_error Failed LLM calls")
+    lines.append("# TYPE llm_calls_error counter")
+    lines.append(f'llm_calls_error {current_metrics.get("llm_calls_error", 0)}')
+
+    # Add workflow metrics
+    lines.append("# HELP workflows_completed Completed workflows")
+    lines.append("# TYPE workflows_completed counter")
+    lines.append(f'workflows_completed {current_metrics.get("workflows_completed", 0)}')
+
+    lines.append("# HELP workflows_failed Failed workflows")
+    lines.append("# TYPE workflows_failed counter")
+    lines.append(f'workflows_failed {current_metrics.get("workflows_failed", 0)}')
+
+    # Add retry metrics
+    lines.append("# HELP retry_attempts_total Total retry attempts")
+    lines.append("# TYPE retry_attempts_total counter")
+    lines.append(f'retry_attempts_total {current_metrics.get("retry_attempts", 0)}')
+
+    # Add performance histograms
+    durations = current_metrics.get("llm_call_duration_seconds", [])
+    if durations:
+        lines.append("# HELP llm_call_duration_seconds LLM call duration in seconds")
+        lines.append("# TYPE llm_call_duration_seconds histogram")
+        lines.append(f'llm_call_duration_seconds_count {len(durations)}')
+        lines.append(f'llm_call_duration_seconds_sum {sum(durations)}')
+
+        # Calculate buckets
+        buckets = [0.1, 0.5, 1.0, 2.0, 5.0, 10.0, float('inf')]
+        bucket_counts = [0] * len(buckets)
+        for duration in durations:
+            for i, bucket in enumerate(buckets):
+                if duration <= bucket:
+                    bucket_counts[i] += 1
+                    break
+
+        for i, bucket in enumerate(buckets):
+            lines.append(f'llm_call_duration_seconds_bucket{{le="{bucket}"}} {bucket_counts[i]}')
+
+    # Add domain distribution
+    domains = current_metrics.get("domains_processed", {})
+    for domain, count in domains.items():
+        lines.append(f'# HELP domain_processed_total Total workflows processed for domain {domain}')
+        lines.append("# TYPE domain_processed_total counter")
+        lines.append(f'domain_processed_total{{domain="{domain}"}} {count}')
+
+    # Add memory and system metrics
+    try:
+        process = psutil.Process()
+        memory_info = process.memory_info()
+
+        lines.append("# HELP process_memory_bytes Process memory usage in bytes")
+        lines.append("# TYPE process_memory_bytes gauge")
+        lines.append(f'process_memory_bytes {memory_info.rss}')
+
+        lines.append("# HELP system_memory_percent System memory usage percentage")
+        lines.append("# TYPE system_memory_percent gauge")
+        lines.append(f'system_memory_percent {psutil.virtual_memory().percent}')
+
+        lines.append("# HELP system_cpu_percent System CPU usage percentage")
+        lines.append("# TYPE system_cpu_percent gauge")
+        lines.append(f'system_cpu_percent {psutil.cpu_percent(interval=0.1)}')
+
+    except ImportError:
+        # psutil not available, skip system metrics
+        pass
+
+    return "\n".join(lines)
+
+
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {
+    """Enhanced health check endpoint with detailed system status."""
+    health_status = {
         "status": "healthy",
+        "timestamp": time.time(),
         "version": "1.0.0",
-        "langsmith_enabled": bool(settings.langsmith_api_key),
-        "available_domains": len(coordinator.get_available_domains())
+        "uptime_seconds": time.time() - getattr(health_check, 'start_time', time.time()),
+        "components": {},
+        "metrics": {}
     }
+
+    # Store start time for uptime calculation
+    if not hasattr(health_check, 'start_time'):
+        health_check.start_time = time.time()
+
+    # Check LLM provider connectivity
+    health_status["components"]["llm_providers"] = {}
+    for provider in ["openai", "anthropic", "google"]:
+        api_key_attr = f"{provider}_api_key"
+        has_key = getattr(settings, api_key_attr) is not None
+        health_status["components"]["llm_providers"][provider] = {
+            "configured": has_key,
+            "status": "available" if has_key else "not_configured"
+        }
+
+    # Check LangSmith
+    health_status["components"]["langsmith"] = {
+        "enabled": bool(settings.langsmith_api_key),
+        "status": "enabled" if settings.langsmith_api_key else "disabled"
+    }
+
+    # Check coordinator
+    try:
+        domains = coordinator.get_available_domains()
+        health_status["components"]["coordinator"] = {
+            "status": "healthy",
+            "available_domains": len(domains)
+        }
+    except Exception as e:
+        health_status["components"]["coordinator"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        health_status["status"] = "unhealthy"
+
+    # Add key metrics
+    current_metrics = metrics.get_metrics()
+    health_status["metrics"] = {
+        "total_workflows": current_metrics.get("workflows_completed", 0) + current_metrics.get("workflows_failed", 0),
+        "successful_workflows": current_metrics.get("workflows_completed", 0),
+        "failed_workflows": current_metrics.get("workflows_failed", 0),
+        "llm_calls_total": current_metrics.get("llm_calls_total", 0),
+        "retry_attempts": current_metrics.get("retry_attempts", 0)
+    }
+
+    # Add system resource info
+    try:
+        health_status["system"] = {
+            "memory_percent": psutil.virtual_memory().percent,
+            "cpu_percent": psutil.cpu_percent(interval=0.1),
+            "active_connections": len(psutil.net_connections()) if hasattr(psutil, 'net_connections') else 0
+        }
+    except ImportError:
+        health_status["system"] = {
+            "note": "System monitoring not available (psutil not installed)"
+        }
+
+    # Readiness and liveness probes
+    health_status["readiness"] = health_status["status"] == "healthy"
+    health_status["liveness"] = True  # Basic liveness check
+
+    return health_status
 
 
 def main():
