@@ -146,9 +146,27 @@ This system revolutionizes prompt engineering by providing an intelligent, multi
    ```
 
 5. **Run activation script**
-   ```bash
-   python system_activation.py
-   ```
+    ```bash
+    python system_activation.py
+    ```
+
+## 📁 Project Structure
+
+```
+prompt-engineering-agent/
+├── src/                    # Main application code
+├── agents/                 # AI agent implementations
+├── config/                 # Configuration files
+├── tools/                  # Utility scripts and tools
+│   ├── performance_benchmark.py    # System benchmarking
+│   └── run_langgraph_studio.py     # LangGraph studio runner
+├── tests/                  # Test suites
+├── examples/               # Usage examples and demos
+├── data/                   # Data files and templates
+├── templates/              # Prompt templates
+├── docs/                   # Documentation
+└── docker/                 # Docker configuration
+```
 
 ## ⚡ Quick Start
 
@@ -158,18 +176,22 @@ python system_activation.py
 ```
 Choose option 3 for full system activation with all features.
 
-### Option 2: Manual Activation
+### Option 2: Direct Usage
 ```bash
-# Activate core features
-python production_activation.py
-
-# Activate advanced features
-python phase2_activation.py
+# Run the main application directly
+python src/main.py
 ```
 
-### Option 3: Direct Usage
+### Option 3: Performance Benchmarking
 ```bash
-python src/main.py
+# Run comprehensive system benchmarks
+python tools/performance_benchmark.py
+```
+
+### Option 4: Development Tools
+```bash
+# Run LangGraph Studio
+python tools/run_langgraph_studio.py
 ```
 
 ## 📖 Usage
@@ -372,13 +394,13 @@ pip install -r requirements.txt
 ### Testing
 ```bash
 # Run all tests
-python -m pytest
+python -m pytest tests/
 
 # Run specific test file
 python -m pytest tests/test_evaluator.py
 
 # Run with coverage
-python -m pytest --cov=src --cov-report=html
+python -m pytest --cov=src --cov-report=html tests/
 ```
 
 ## 📄 License
