@@ -465,5 +465,355 @@
     "created_at": "2025-08-27T12:51:17.772981",
     "parent_version": null,
     "commit_message": "Created experiment variant 1 for System Activation Experiment Test"
+  },
+  "version_prompt_1756351146_Customer_Support_Assistant_v1.0.0": {
+    "id": "version_prompt_1756351146_Customer_Support_Assistant_v1.0.0",
+    "prompt_id": "prompt_1756351146_Customer_Support_Assistant",
+    "version": "1.0.0",
+    "content": "You are a customer support assistant. friendly and empathetic\n\nYour main tasks:\nhelp customers with their issues and provide solutions\n\nGuidelines:\nlisten carefully, show empathy, provide clear solutions",
+    "metadata": {
+      "domain": "templates",
+      "strategy": "template_base",
+      "author": "test_user",
+      "tags": [
+        "template",
+        "base",
+        "reusable"
+      ],
+      "description": "Base template for assistants",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:19:06.348430",
+    "parent_version": null,
+    "commit_message": "Created from template template_1756351146_Assistant_Base_Template"
+  },
+  "version_prompt_1756351146_Customer_Support_Assistant_1.1.0": {
+    "id": "version_prompt_1756351146_Customer_Support_Assistant_1.1.0",
+    "prompt_id": "prompt_1756351146_Customer_Support_Assistant",
+    "version": "1.1.0",
+    "content": "You are an advanced customer support assistant with extensive knowledge. Always be polite, provide accurate information, and offer additional resources when relevant.",
+    "metadata": {
+      "domain": "customer_support",
+      "strategy": "helpful_assistant",
+      "author": "test_user",
+      "tags": [
+        "support",
+        "chatbot",
+        "helpful"
+      ],
+      "description": "A helpful customer support assistant",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:19:06.134449",
+    "parent_version": "1.0.0",
+    "commit_message": "Enhanced with more capabilities and resource suggestions"
+  },
+  "version_prompt_1756351146_Code_Review_Assistant_v1.0.0": {
+    "id": "version_prompt_1756351146_Code_Review_Assistant_v1.0.0",
+    "prompt_id": "prompt_1756351146_Code_Review_Assistant",
+    "version": "1.0.0",
+    "content": "You are a code review assistant. Focus on best practices, security, and performance.",
+    "metadata": {
+      "domain": "code_review",
+      "strategy": "technical_assistant",
+      "author": "test_user",
+      "tags": [
+        "coding",
+        "review",
+        "technical"
+      ],
+      "description": "A technical assistant for code review",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:19:06.159812",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756351146_Marketing_Copy_Assistant_V1_v1.0.0": {
+    "id": "version_prompt_1756351146_Marketing_Copy_Assistant_V1_v1.0.0",
+    "prompt_id": "prompt_1756351146_Marketing_Copy_Assistant_V1",
+    "version": "1.0.0",
+    "content": "You are a marketing copywriter. Create engaging content.",
+    "metadata": {
+      "domain": "marketing",
+      "strategy": "creative_writer",
+      "author": "test_user",
+      "tags": [
+        "marketing",
+        "creative",
+        "writing"
+      ],
+      "description": "Creative marketing copy writer",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:19:06.187098",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756351146_Marketing_Copy_Assistant_V2_v1.0.0": {
+    "id": "version_prompt_1756351146_Marketing_Copy_Assistant_V2_v1.0.0",
+    "prompt_id": "prompt_1756351146_Marketing_Copy_Assistant_V2",
+    "version": "1.0.0",
+    "content": "You are an advanced marketing copywriter with expertise in psychology and persuasion. Create highly engaging, conversion-optimized content.",
+    "metadata": {
+      "domain": "marketing",
+      "strategy": "creative_writer",
+      "author": "test_user",
+      "tags": [
+        "marketing",
+        "creative",
+        "writing"
+      ],
+      "description": "Creative marketing copy writer",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:19:06.190122",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756351146_Production_Assistant_v1.0.0": {
+    "id": "version_prompt_1756351146_Production_Assistant_v1.0.0",
+    "prompt_id": "prompt_1756351146_Production_Assistant",
+    "version": "1.0.0",
+    "content": "You are a production-ready assistant with stable responses.",
+    "metadata": {
+      "domain": "production",
+      "strategy": "reliable_assistant",
+      "author": "test_user",
+      "tags": [
+        "production",
+        "reliable",
+        "stable"
+      ],
+      "description": "Production-ready assistant",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:19:06.216377",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756351146_Analytics_Test_Prompt_v1.0.0": {
+    "id": "version_prompt_1756351146_Analytics_Test_Prompt_v1.0.0",
+    "prompt_id": "prompt_1756351146_Analytics_Test_Prompt",
+    "version": "1.0.0",
+    "content": "You are a test assistant for analytics demonstration.",
+    "metadata": {
+      "domain": "analytics",
+      "strategy": "performance_test",
+      "author": "test_user",
+      "tags": [
+        "analytics",
+        "performance",
+        "testing"
+      ],
+      "description": "Prompt for analytics testing",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:19:06.384900",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756351200_Customer_Support_Assistant_v1.0.0": {
+    "id": "version_prompt_1756351200_Customer_Support_Assistant_v1.0.0",
+    "prompt_id": "prompt_1756351200_Customer_Support_Assistant",
+    "version": "1.0.0",
+    "content": "You are a customer support assistant. friendly and empathetic\n\nYour main tasks:\nhelp customers with their issues and provide solutions\n\nGuidelines:\nlisten carefully, show empathy, provide clear solutions",
+    "metadata": {
+      "domain": "templates",
+      "strategy": "template_base",
+      "author": "test_user",
+      "tags": [
+        "template",
+        "base",
+        "reusable"
+      ],
+      "description": "Base template for assistants",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:20:00.284557",
+    "parent_version": null,
+    "commit_message": "Created from template template_1756351200_Assistant_Base_Template"
+  },
+  "version_prompt_1756351200_Customer_Support_Assistant_1.1.0": {
+    "id": "version_prompt_1756351200_Customer_Support_Assistant_1.1.0",
+    "prompt_id": "prompt_1756351200_Customer_Support_Assistant",
+    "version": "1.1.0",
+    "content": "You are an advanced customer support assistant with extensive knowledge. Always be polite, provide accurate information, and offer additional resources when relevant.",
+    "metadata": {
+      "domain": "customer_support",
+      "strategy": "helpful_assistant",
+      "author": "test_user",
+      "tags": [
+        "support",
+        "chatbot",
+        "helpful"
+      ],
+      "description": "A helpful customer support assistant",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:20:00.019729",
+    "parent_version": "1.0.0",
+    "commit_message": "Enhanced with more capabilities and resource suggestions"
+  },
+  "version_prompt_1756351200_Code_Review_Assistant_v1.0.0": {
+    "id": "version_prompt_1756351200_Code_Review_Assistant_v1.0.0",
+    "prompt_id": "prompt_1756351200_Code_Review_Assistant",
+    "version": "1.0.0",
+    "content": "You are a code review assistant. Focus on best practices, security, and performance.",
+    "metadata": {
+      "domain": "code_review",
+      "strategy": "technical_assistant",
+      "author": "test_user",
+      "tags": [
+        "coding",
+        "review",
+        "technical"
+      ],
+      "description": "A technical assistant for code review",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:20:00.054898",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756351200_Marketing_Copy_Assistant_V1_v1.0.0": {
+    "id": "version_prompt_1756351200_Marketing_Copy_Assistant_V1_v1.0.0",
+    "prompt_id": "prompt_1756351200_Marketing_Copy_Assistant_V1",
+    "version": "1.0.0",
+    "content": "You are a marketing copywriter. Create engaging content.",
+    "metadata": {
+      "domain": "marketing",
+      "strategy": "creative_writer",
+      "author": "test_user",
+      "tags": [
+        "marketing",
+        "creative",
+        "writing"
+      ],
+      "description": "Creative marketing copy writer",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:20:00.088229",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756351200_Marketing_Copy_Assistant_V2_v1.0.0": {
+    "id": "version_prompt_1756351200_Marketing_Copy_Assistant_V2_v1.0.0",
+    "prompt_id": "prompt_1756351200_Marketing_Copy_Assistant_V2",
+    "version": "1.0.0",
+    "content": "You are an advanced marketing copywriter with expertise in psychology and persuasion. Create highly engaging, conversion-optimized content.",
+    "metadata": {
+      "domain": "marketing",
+      "strategy": "creative_writer",
+      "author": "test_user",
+      "tags": [
+        "marketing",
+        "creative",
+        "writing"
+      ],
+      "description": "Creative marketing copy writer",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:20:00.098366",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756351200_Production_Assistant_v1.0.0": {
+    "id": "version_prompt_1756351200_Production_Assistant_v1.0.0",
+    "prompt_id": "prompt_1756351200_Production_Assistant",
+    "version": "1.0.0",
+    "content": "You are a production-ready assistant with stable responses.",
+    "metadata": {
+      "domain": "production",
+      "strategy": "reliable_assistant",
+      "author": "test_user",
+      "tags": [
+        "production",
+        "reliable",
+        "stable"
+      ],
+      "description": "Production-ready assistant",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:20:00.134715",
+    "parent_version": null,
+    "commit_message": ""
+  },
+  "version_prompt_1756351200_Analytics_Test_Prompt_v1.0.0": {
+    "id": "version_prompt_1756351200_Analytics_Test_Prompt_v1.0.0",
+    "prompt_id": "prompt_1756351200_Analytics_Test_Prompt",
+    "version": "1.0.0",
+    "content": "You are a test assistant for analytics demonstration.",
+    "metadata": {
+      "domain": "analytics",
+      "strategy": "performance_test",
+      "author": "test_user",
+      "tags": [
+        "analytics",
+        "performance",
+        "testing"
+      ],
+      "description": "Prompt for analytics testing",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "performance_metrics": {},
+    "created_by": "test_user",
+    "created_at": "2025-08-28T11:20:00.330327",
+    "parent_version": null,
+    "commit_message": ""
   }
 }

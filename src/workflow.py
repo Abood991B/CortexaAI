@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Any, Annotated, TypedDict
 from langgraph.graph import StateGraph, END
 from langchain_core.runnables import RunnableConfig
 import logging
+import time
 
 from agents.classifier import classifier
 from agents.base_expert import create_expert_agent
@@ -365,11 +366,11 @@ async def process_prompt_with_langgraph(prompt: str, prompt_type: str = "auto") 
 
         # Execute the workflow (use ainvoke for async nodes)
         logger.info(f"Starting LangGraph workflow for prompt processing")
+        start_time = time.time()
         result = await prompt_engineering_app.ainvoke(initial_state, config)
 
         # Convert result to expected format
-        import time
-        processing_time = time.time() - time.time()  # Placeholder for actual timing
+        processing_time = time.time() - start_time
 
         return {
             "workflow_id": result.get("workflow_id"),

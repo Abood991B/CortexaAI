@@ -20,26 +20,28 @@ class TestDomainClassifier:
         assert "software_engineering" in classifier.known_domains
         assert "data_science" in classifier.known_domains
 
-    @patch('agents.classifier.ChatGoogleGenerativeAI')
-    def test_classify_prompt_mock(self, mock_chat):
+    def test_classify_prompt_mock(self):
         """Test prompt classification with mocked LLM."""
-        # Mock the LLM response
-        mock_response = Mock()
-        mock_response.content = json.dumps({
+        import asyncio
+        from unittest.mock import patch, AsyncMock
+
+        # Mock the classifier chain with an async mock
+        mock_chain = AsyncMock(return_value={
             "domain": "software_engineering",
             "confidence": 0.95,
             "is_new_domain": False,
             "key_topics": ["code", "algorithm"],
             "reasoning": "This is a coding task"
         })
-        mock_chat.return_value.invoke.return_value = mock_response
 
-        result = classifier.classify_prompt("Write a function to sort a list")
+        with patch.object(classifier, 'classifier_chain', mock_chain):
+            # Run the async function synchronously
+            result = asyncio.run(classifier.classify_prompt("Write a function to sort a list"))
 
-        assert result["domain"] == "software_engineering"
-        # The actual confidence may vary, just check it's a reasonable value
-        assert 0.9 <= result["confidence"] <= 1.0
-        assert "code" in result["key_topics"]
+            assert result["domain"] == "software_engineering"
+            # The actual confidence may vary, just check it's a reasonable value
+            assert 0.9 <= result["confidence"] <= 1.0
+            assert "code" in result["key_topics"]
 
     def test_get_available_domains(self):
         """Test getting available domains."""
@@ -89,9 +91,11 @@ class TestPromptEvaluator:
         assert evaluator.evaluation_threshold == settings.evaluation_threshold
         assert evaluator.max_iterations == settings.max_evaluation_iterations
 
-    @patch('agents.evaluator.ChatGoogleGenerativeAI')
+    @patch('langchain_google_genai.ChatGoogleGenerativeAI')
     def test_evaluate_prompt_mock(self, mock_chat):
         """Test prompt evaluation with mocked LLM."""
+        import asyncio
+
         mock_response = Mock()
         mock_response.content = json.dumps({
             "overall_score": 0.85,
@@ -114,12 +118,13 @@ class TestPromptEvaluator:
         })
         mock_chat.return_value.invoke.return_value = mock_response
 
-        result = evaluator.evaluate_prompt(
+        # Run the async function synchronously
+        result = asyncio.run(evaluator.evaluate_prompt(
             original_prompt="Write code",
             improved_prompt="Write a Python function to sort a list",
             domain="software_engineering",
             prompt_type="raw"
-        )
+        ))
 
         assert result["overall_score"] == 0.85
         assert result["passes_threshold"] == True

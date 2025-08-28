@@ -12,6 +12,8 @@ from unittest.mock import patch, Mock
 # Add the project root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
+import pytest
+
 from agents.classifier import classifier
 from agents.base_expert import create_expert_agent, SoftwareEngineeringExpert, GenericExpertAgent
 from agents.evaluator import evaluator
@@ -35,11 +37,12 @@ def test_system_initialization():
     print("✓ All system components initialized successfully!\n")
 
 
-def test_domain_classification():
+@pytest.mark.asyncio
+async def test_domain_classification():
     """Test domain classification with mock responses."""
     print("=== Domain Classification Test ===")
 
-    with patch('agents.classifier.ChatOpenAI') as mock_chat:
+    with patch('agents.classifier.ChatGoogleGenerativeAI') as mock_chat:
         # Mock the LLM response
         mock_response = Mock()
         mock_response.content = json.dumps({
@@ -52,7 +55,7 @@ def test_domain_classification():
         mock_chat.return_value.invoke.return_value = mock_response
 
         prompt = "Write a function to sort a list of numbers"
-        result = classifier.classify_prompt(prompt)
+        result = await classifier.classify_prompt(prompt)
 
         print(f"✓ Classified prompt: '{prompt[:30]}...'")
         print(f"✓ Domain: {result['domain']}")
@@ -81,13 +84,14 @@ def test_expert_agent_creation():
     print("✓ Expert agent creation working correctly!\n")
 
 
-def test_expert_prompt_improvement():
+@pytest.mark.asyncio
+async def test_expert_prompt_improvement():
     """Test prompt improvement with mock responses."""
     print("=== Prompt Improvement Test ===")
 
     expert = SoftwareEngineeringExpert("software_engineering", "Coding expert")
 
-    with patch('agents.base_expert.ChatOpenAI') as mock_chat:
+    with patch('agents.base_expert.ChatGoogleGenerativeAI') as mock_chat:
         # Mock the LLM response
         mock_response = Mock()
         mock_response.content = json.dumps({
@@ -101,7 +105,7 @@ def test_expert_prompt_improvement():
         mock_chat.return_value.invoke.return_value = mock_response
 
         original_prompt = "Write a function to sort a list"
-        result = expert.improve_prompt(original_prompt, "raw", ["code", "algorithm"])
+        result = await expert.improve_prompt(original_prompt, "raw", ["code", "algorithm"])
 
         print(f"✓ Improved prompt: '{original_prompt[:20]}...'")
         print(f"✓ Effectiveness score: {result['effectiveness_score']:.2f}")
@@ -110,11 +114,12 @@ def test_expert_prompt_improvement():
     print("✓ Prompt improvement working correctly!\n")
 
 
-def test_evaluation_system():
+@pytest.mark.asyncio
+async def test_evaluation_system():
     """Test the evaluation system with mock responses."""
     print("=== Evaluation System Test ===")
 
-    with patch('agents.evaluator.ChatOpenAI') as mock_chat:
+    with patch('agents.evaluator.ChatGoogleGenerativeAI') as mock_chat:
         # Mock the LLM response
         mock_response = Mock()
         mock_response.content = json.dumps({
@@ -141,7 +146,7 @@ def test_evaluation_system():
         original = "Write code"
         improved = "Write a Python function to sort a list using merge sort algorithm"
 
-        result = evaluator.evaluate_prompt(
+        result = await evaluator.evaluate_prompt(
             original_prompt=original,
             improved_prompt=improved,
             domain="software_engineering",
@@ -156,14 +161,15 @@ def test_evaluation_system():
     print("✓ Evaluation system working correctly!\n")
 
 
-def test_full_workflow_integration():
+@pytest.mark.asyncio
+async def test_full_workflow_integration():
     """Test the full workflow integration with mocks."""
     print("=== Full Workflow Integration Test ===")
 
     # Mock all the LLM calls
-    with patch('agents.classifier.ChatOpenAI') as mock_classifier_chat, \
-         patch('agents.base_expert.ChatOpenAI') as mock_expert_chat, \
-         patch('agents.evaluator.ChatOpenAI') as mock_eval_chat:
+    with patch('agents.classifier.ChatGoogleGenerativeAI') as mock_classifier_chat, \
+          patch('agents.base_expert.ChatGoogleGenerativeAI') as mock_expert_chat, \
+          patch('agents.evaluator.ChatGoogleGenerativeAI') as mock_eval_chat:
 
         # Mock classifier response
         classifier_response = Mock()
@@ -209,7 +215,7 @@ def test_full_workflow_integration():
 
         # Test the full workflow
         prompt = "Write a function to sort a list of numbers"
-        result = coordinator.process_prompt(prompt, "raw", True)
+        result = await coordinator.process_prompt(prompt, "raw", True)
 
         print(f"✓ Full workflow completed")
         print(f"✓ Status: {result['status']}")
@@ -237,9 +243,14 @@ def test_system_statistics():
 
     # Get system statistics
     stats = coordinator.get_workflow_stats()
-    print(f"✓ Total workflows: {stats['total_workflows']}")
-    print(f"✓ Success rate: {stats['success_rate']:.2%}")
-    print(f"✓ Average quality score: {stats['average_quality_score']:.2f}")
+    if "error" in stats:
+        # Handle case when no workflows exist yet
+        print(f"✓ No workflow history available: {stats['error']}")
+        print("✓ This is expected when running tests before any workflows are recorded")
+    else:
+        print(f"✓ Total workflows: {stats['total_workflows']}")
+        print(f"✓ Success rate: {stats['success_rate']:.2%}")
+        print(f"✓ Average quality score: {stats['average_quality_score']:.2f}")
 
     print("✓ System statistics working correctly!\n")
 
@@ -286,7 +297,7 @@ def test_configuration_system():
     print("✓ Configuration system working correctly!\n")
 
 
-def main():
+async def main():
     """Run all system tests."""
     print("🚀 Multi-Agent Prompt Engineering System - Architecture Tests")
     print("=" * 70)
@@ -296,11 +307,11 @@ def main():
     try:
         # Run all tests
         test_system_initialization()
-        test_domain_classification()
+        await test_domain_classification()
         test_expert_agent_creation()
-        test_expert_prompt_improvement()
-        test_evaluation_system()
-        test_full_workflow_integration()
+        await test_expert_prompt_improvement()
+        await test_evaluation_system()
+        await test_full_workflow_integration()
         test_system_statistics()
         test_error_handling()
         test_configuration_system()
@@ -323,4 +334,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
