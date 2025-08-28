@@ -10,13 +10,30 @@ import asyncio
 import time
 import psutil
 import json
+import sys
+import os
 from datetime import datetime
 from typing import Dict, List, Any
 import statistics
-import matplotlib.pyplot as plt
-import seaborn as sns
-from agents.coordinator import get_coordinator
-from config.config import get_logger, settings
+
+# Add the parent directory to the path so we can import agents and config
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    PLOTTING_AVAILABLE = True
+except ImportError:
+    PLOTTING_AVAILABLE = False
+    print("Warning: matplotlib/seaborn not available, plotting disabled")
+
+try:
+    from agents.coordinator import get_coordinator
+    from config.config import get_logger, settings
+    IMPORTS_AVAILABLE = True
+except ImportError as e:
+    print(f"Error importing required modules: {e}")
+    IMPORTS_AVAILABLE = False
 
 logger = get_logger(__name__)
 
@@ -62,6 +79,8 @@ class PerformanceBenchmark:
 
     async def setup(self):
         """Initialize the system for benchmarking."""
+        if not IMPORTS_AVAILABLE:
+            raise RuntimeError("Required modules not available")
         logger.info("Setting up benchmark environment...")
         self.coordinator = get_coordinator()
         self.start_time = time.time()
@@ -493,11 +512,20 @@ async def main():
     print("🧪 Multi-Agent Prompt Engineering System - Performance Benchmark")
     print("="*70)
 
-    benchmark = PerformanceBenchmark()
-    report = await benchmark.run_full_benchmark()
+    if not IMPORTS_AVAILABLE:
+        print("\n❌ Required modules not available. Please ensure the project is properly set up.")
+        print("Missing imports: agents, config modules")
+        return None
 
-    print("\n✅ Benchmark completed successfully!")
-    return report
+    try:
+        benchmark = PerformanceBenchmark()
+        report = await benchmark.run_full_benchmark()
+
+        print("\n✅ Benchmark completed successfully!")
+        return report
+    except Exception as e:
+        print(f"\n❌ Benchmark failed: {e}")
+        return None
 
 
 if __name__ == "__main__":
