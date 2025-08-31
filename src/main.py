@@ -3,10 +3,14 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List, Optional, Any
 import uvicorn
 import logging
+from datetime import datetime
+import json
+import uuid
 
 import sys
 import os
@@ -34,6 +38,15 @@ app = FastAPI(
     title="Multi-Agent Prompt Engineering System",
     description="A production-level system for improving and optimizing prompts using multiple AI agents",
     version="1.0.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -77,6 +90,87 @@ class SystemStats(BaseModel):
     average_quality_score: float
     average_processing_time: float
     domain_distribution: Dict[str, int]
+
+
+class WorkflowSummary(BaseModel):
+    """Model for workflow summary."""
+    workflow_id: str
+    status: str
+    domain: str
+    prompt_preview: str
+    created_at: str
+    duration: float
+    total_steps: int
+
+
+class WorkflowDetails(BaseModel):
+    """Model for detailed workflow information."""
+    workflow_id: str
+    status: str
+    domain: str
+    prompt: str
+    created_at: str
+    completed_at: Optional[str]
+    duration: float
+    agent_steps: List[Dict[str, Any]]
+    final_output: Dict[str, Any]
+    metadata: Dict[str, Any]
+
+
+class AnalyticsData(BaseModel):
+    """Model for analytics data."""
+    total_prompts: int
+    success_rate: float
+    avg_processing_time: float
+    domain_breakdown: Dict[str, int]
+    quality_trends: List[Dict[str, Any]]
+    performance_metrics: Dict[str, Any]
+
+
+class PromptMetadata(BaseModel):
+    """Model for prompt metadata."""
+    id: str
+    title: str
+    content: str
+    domain: str
+    tags: List[str]
+    created_at: str
+    updated_at: str
+    version: str
+    metadata: Dict[str, Any]
+    versions: List[Dict[str, Any]]
+
+
+class CreatePromptData(BaseModel):
+    """Model for creating new prompts."""
+    title: str
+    content: str
+    domain: str
+    tags: List[str] = []
+    metadata: Dict[str, Any] = {}
+
+
+class Template(BaseModel):
+    """Model for prompt templates."""
+    id: str
+    name: str
+    description: str
+    content: str
+    variables: List[str]
+    category: str
+    created_at: str
+
+
+class ExperimentResult(BaseModel):
+    """Model for A/B test experiment results."""
+    id: str
+    name: str
+    description: str
+    status: str
+    variants: List[Dict[str, Any]]
+    metrics: Dict[str, Any]
+    created_at: str
+    completed_at: Optional[str]
 
 
 # API Routes
@@ -150,6 +244,275 @@ async def get_workflow_history(limit: int = 10):
     except Exception as e:
         logger.error(f"Error getting history: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get history: {str(e)}")
+
+
+# Workflows API
+@app.get("/api/workflows")
+async def get_workflows(
+    page: int = 1,
+    limit: int = 20,
+    status: Optional[str] = None,
+    domain: Optional[str] = None
+):
+    """Get paginated list of workflows."""
+    try:
+        # Mock data for now - replace with actual database queries
+        workflows = []
+        for i in range(min(limit, 10)):  # Generate some mock data
+            workflow_id = f"workflow_{uuid.uuid4().hex[:8]}"
+            workflows.append({
+                "workflow_id": workflow_id,
+                "status": "completed" if i % 3 == 0 else "running" if i % 3 == 1 else "failed",
+                "domain": ["technology", "business", "creative", "academic"][i % 4],
+                "prompt_preview": f"Sample prompt {i + 1} for testing the workflow system...",
+                "created_at": datetime.now().isoformat(),
+                "duration": 2.5 + i * 0.3,
+                "total_steps": 3 + i % 3
+            })
+        
+        return {
+            "data": workflows,
+            "total": 50,  # Mock total
+            "page": page,
+            "limit": limit,
+            "pages": 3
+        }
+    except Exception as e:
+        logger.error(f"Error getting workflows: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get workflows: {str(e)}")
+
+
+@app.get("/api/workflows/{workflow_id}")
+async def get_workflow_details(workflow_id: str):
+    """Get detailed information about a specific workflow."""
+    try:
+        # Mock detailed workflow data
+        workflow_details = {
+            "workflow_id": workflow_id,
+            "status": "completed",
+            "domain": "technology",
+            "prompt": "Create a comprehensive guide for implementing microservices architecture",
+            "created_at": datetime.now().isoformat(),
+            "completed_at": datetime.now().isoformat(),
+            "duration": 4.2,
+            "agent_steps": [
+                {
+                    "agent_type": "Classifier",
+                    "processing_time": 0.8,
+                    "output": "Classified as technology domain with high confidence"
+                },
+                {
+                    "agent_type": "Expert",
+                    "processing_time": 2.1,
+                    "output": "Generated comprehensive microservices guide with best practices"
+                },
+                {
+                    "agent_type": "Evaluator",
+                    "processing_time": 1.3,
+                    "output": "Quality score: 8.5/10, completeness: 95%"
+                }
+            ],
+            "final_output": {
+                "improved_prompt": "Create a comprehensive, production-ready guide for implementing microservices architecture including deployment strategies, monitoring, and security considerations",
+                "quality_score": 8.5,
+                "improvements": ["Added deployment strategies", "Included monitoring guidance", "Enhanced security considerations"]
+            },
+            "metadata": {
+                "model_used": "gpt-4",
+                "total_tokens": 2500,
+                "cost_estimate": 0.05
+            }
+        }
+        return workflow_details
+    except Exception as e:
+        logger.error(f"Error getting workflow details: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get workflow details: {str(e)}")
+
+
+# Analytics API
+@app.get("/api/analytics", response_model=AnalyticsData)
+async def get_analytics():
+    """Get system analytics data."""
+    try:
+        # Mock analytics data
+        analytics = {
+            "total_prompts": 1247,
+            "success_rate": 87.3,
+            "avg_processing_time": 3.2,
+            "domain_breakdown": {
+                "technology": 45,
+                "business": 32,
+                "creative": 15,
+                "academic": 8
+            },
+            "quality_trends": [
+                {"date": "2024-01-01", "avg_quality": 7.2},
+                {"date": "2024-01-02", "avg_quality": 7.8},
+                {"date": "2024-01-03", "avg_quality": 8.1},
+                {"date": "2024-01-04", "avg_quality": 8.3},
+                {"date": "2024-01-05", "avg_quality": 8.5}
+            ],
+            "performance_metrics": {
+                "avg_response_time": 2.1,
+                "error_rate": 2.3,
+                "throughput": 150
+            }
+        }
+        return AnalyticsData(**analytics)
+    except Exception as e:
+        logger.error(f"Error getting analytics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get analytics: {str(e)}")
+
+
+# Prompts Management API
+@app.get("/api/prompts")
+async def get_prompts(
+    page: int = 1,
+    limit: int = 20,
+    domain: Optional[str] = None,
+    tags: Optional[str] = None
+):
+    """Get paginated list of prompts."""
+    try:
+        # Mock prompts data
+        prompts = []
+        for i in range(min(limit, 10)):
+            prompt_id = f"prompt_{uuid.uuid4().hex[:8]}"
+            prompts.append({
+                "id": prompt_id,
+                "title": f"Sample Prompt {i + 1}",
+                "content": f"This is a sample prompt content for testing prompt {i + 1}...",
+                "domain": ["technology", "business", "creative", "academic"][i % 4],
+                "tags": ["optimization", "testing", "sample"],
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
+                "version": "1.0",
+                "metadata": {
+                    "author": "system",
+                    "quality_score": 7.5 + i * 0.2
+                },
+                "versions": [
+                    {"version": "1.0", "created_at": datetime.now().isoformat()}
+                ]
+            })
+        
+        return {
+            "data": prompts,
+            "total": 85,
+            "page": page,
+            "limit": limit,
+            "pages": 5
+        }
+    except Exception as e:
+        logger.error(f"Error getting prompts: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get prompts: {str(e)}")
+
+
+@app.post("/api/prompts")
+async def create_prompt(prompt_data: CreatePromptData):
+    """Create a new prompt."""
+    try:
+        prompt_id = f"prompt_{uuid.uuid4().hex[:8]}"
+        new_prompt = {
+            "id": prompt_id,
+            "title": prompt_data.title,
+            "content": prompt_data.content,
+            "domain": prompt_data.domain,
+            "tags": prompt_data.tags,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "version": "1.0",
+            "metadata": prompt_data.metadata,
+            "versions": [
+                {"version": "1.0", "created_at": datetime.now().isoformat()}
+            ]
+        }
+        return PromptMetadata(**new_prompt)
+    except Exception as e:
+        logger.error(f"Error creating prompt: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create prompt: {str(e)}")
+
+
+# Templates API
+@app.get("/api/templates", response_model=List[Template])
+async def get_templates():
+    """Get available prompt templates."""
+    try:
+        # Mock templates data
+        templates = [
+            {
+                "id": "template_1",
+                "name": "Business Analysis Template",
+                "description": "Template for business analysis and strategy prompts",
+                "content": "Analyze the following business scenario: {scenario}\nConsider these factors: {factors}\nProvide recommendations for: {objectives}",
+                "variables": ["scenario", "factors", "objectives"],
+                "category": "business",
+                "created_at": datetime.now().isoformat()
+            },
+            {
+                "id": "template_2",
+                "name": "Technical Documentation Template",
+                "description": "Template for technical documentation and guides",
+                "content": "Create documentation for: {topic}\nTarget audience: {audience}\nInclude: {sections}",
+                "variables": ["topic", "audience", "sections"],
+                "category": "technology",
+                "created_at": datetime.now().isoformat()
+            }
+        ]
+        return [Template(**template) for template in templates]
+    except Exception as e:
+        logger.error(f"Error getting templates: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get templates: {str(e)}")
+
+
+# Experiments API
+@app.get("/api/experiments", response_model=List[ExperimentResult])
+async def get_experiments():
+    """Get A/B test experiments."""
+    try:
+        # Mock experiments data
+        experiments = [
+            {
+                "id": "exp_1",
+                "name": "Prompt Length Optimization",
+                "description": "Testing different prompt lengths for better results",
+                "status": "completed",
+                "variants": [
+                    {"name": "Short", "conversion_rate": 0.75},
+                    {"name": "Medium", "conversion_rate": 0.82},
+                    {"name": "Long", "conversion_rate": 0.78}
+                ],
+                "metrics": {
+                    "total_samples": 1000,
+                    "confidence_level": 0.95,
+                    "winner": "Medium"
+                },
+                "created_at": datetime.now().isoformat(),
+                "completed_at": datetime.now().isoformat()
+            }
+        ]
+        return [ExperimentResult(**exp) for exp in experiments]
+    except Exception as e:
+        logger.error(f"Error getting experiments: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get experiments: {str(e)}")
+
+
+# Memory Management API
+@app.post("/api/process-prompt-with-memory")
+async def process_prompt_with_memory(request: PromptRequest, user_id: str):
+    """Process prompt with memory context."""
+    try:
+        # Enhanced request with memory
+        result = await coordinator.process_prompt(
+            prompt=request.prompt,
+            prompt_type=request.prompt_type,
+            return_comparison=request.return_comparison,
+            user_id=user_id  # Add user context for memory
+        )
+        return PromptResponse(**result)
+    except Exception as e:
+        logger.error(f"Error processing prompt with memory: {e}")
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
 # Web Interface Routes

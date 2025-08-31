@@ -766,5 +766,105 @@
     "created_by": "test_user",
     "created_at": "2025-08-28T11:20:00.330327",
     "updated_at": "2025-08-28T11:20:00.330327"
+  },
+  "prompt_1756540778_Performance_Tracked_Prompt_-_software_engineering": {
+    "id": "prompt_1756540778_Performance_Tracked_Prompt_-_software_engineering",
+    "name": "Performance Tracked Prompt - software_engineering",
+    "current_version": "1.0.0",
+    "status": "draft",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "performance_tracked",
+      "author": "system",
+      "tags": [
+        "performance_tracked"
+      ],
+      "description": "Automatically created for performance tracking",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "versions": [
+      "version_prompt_1756540778_Performance_Tracked_Prompt_-_software_engineering_v1.0.0"
+    ],
+    "created_by": "system",
+    "created_at": "2025-08-30T15:59:38.932741",
+    "updated_at": "2025-08-30T15:59:38.932741"
+  },
+  "prompt_1756540825_Performance_Tracked_Prompt_-_software_engineering": {
+    "id": "prompt_1756540825_Performance_Tracked_Prompt_-_software_engineering",
+    "name": "Performance Tracked Prompt - software_engineering",
+    "current_version": "1.0.0",
+    "status": "draft",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "performance_tracked",
+      "author": "system",
+      "tags": [
+        "performance_tracked"
+      ],
+      "description": "Automatically created for performance tracking",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "versions": [
+      "version_prompt_1756540825_Performance_Tracked_Prompt_-_software_engineering_v1.0.0"
+    ],
+    "created_by": "system",
+    "created_at": "2025-08-30T16:00:25.891180",
+    "updated_at": "2025-08-30T16:00:25.891180"
+  },
+  "prompt_1756540825_Experiment_Variant_0_-_System_Activation_Experiment_Test": {
+    "id": "prompt_1756540825_Experiment_Variant_0_-_System_Activation_Experiment_Test",
+    "name": "Experiment Variant 0 - System Activation Experiment Test",
+    "current_version": "1.0.0",
+    "status": "draft",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "experiment_variant",
+      "author": "coordinator",
+      "tags": [
+        "experiment",
+        "variant_0",
+        "software_engineering"
+      ],
+      "description": "Experiment variant 0 for System Activation Experiment Test",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "versions": [
+      "version_prompt_1756540825_Experiment_Variant_0_-_System_Activation_Experiment_Test_v1.0.0"
+    ],
+    "created_by": "coordinator",
+    "created_at": "2025-08-30T16:00:25.909442",
+    "updated_at": "2025-08-30T16:00:25.909442"
+  },
+  "prompt_1756540825_Experiment_Variant_1_-_System_Activation_Experiment_Test": {
+    "id": "prompt_1756540825_Experiment_Variant_1_-_System_Activation_Experiment_Test",
+    "name": "Experiment Variant 1 - System Activation Experiment Test",
+    "current_version": "1.0.0",
+    "status": "draft",
+    "metadata": {
+      "domain": "software_engineering",
+      "strategy": "experiment_variant",
+      "author": "coordinator",
+      "tags": [
+        "experiment",
+        "variant_1",
+        "software_engineering"
+      ],
+      "description": "Experiment variant 1 for System Activation Experiment Test",
+      "performance_metrics": {},
+      "dependencies": [],
+      "configuration": {}
+    },
+    "versions": [
+      "version_prompt_1756540825_Experiment_Variant_1_-_System_Activation_Experiment_Test_v1.0.0"
+    ],
+    "created_by": "coordinator",
+    "created_at": "2025-08-30T16:00:25.918941",
+    "updated_at": "2025-08-30T16:00:25.918941"
   }
 }

@@ -108,5 +108,38 @@
     },
     "recorded_at": "2025-08-28T11:20:00.525792",
     "request_id": null
+  },
+  "perf_prompt_1756540778_Performance_Tracked_Prompt_-_software_engineering_1.0.0_1756540778": {
+    "id": "perf_prompt_1756540778_Performance_Tracked_Prompt_-_software_engineering_1.0.0_1756540778",
+    "prompt_id": "prompt_1756540778_Performance_Tracked_Prompt_-_software_engineering",
+    "prompt_version": "1.0.0",
+    "environment": "development",
+    "metrics": {
+      "quality_score": 0.96
+    },
+    "recorded_at": "2025-08-30T15:59:38.950443",
+    "request_id": null
+  },
+  "perf_prompt_1756540825_Performance_Tracked_Prompt_-_software_engineering_1.0.0_1756540825": {
+    "id": "perf_prompt_1756540825_Performance_Tracked_Prompt_-_software_engineering_1.0.0_1756540825",
+    "prompt_id": "prompt_1756540825_Performance_Tracked_Prompt_-_software_engineering",
+    "prompt_version": "1.0.0",
+    "environment": "development",
+    "metrics": {
+      "quality_score": 0.93
+    },
+    "recorded_at": "2025-08-30T16:00:25.891180",
+    "request_id": null
+  },
+  "perf_prompt_1756270277_Performance_Tracked_Prompt_-_software_engineering_1.0.0_1756540825": {
+    "id": "perf_prompt_1756270277_Performance_Tracked_Prompt_-_software_engineering_1.0.0_1756540825",
+    "prompt_id": "prompt_1756270277_Performance_Tracked_Prompt_-_software_engineering",
+    "prompt_version": "1.0.0",
+    "environment": "development",
+    "metrics": {
+      "quality_score": 0.95
+    },
+    "recorded_at": "2025-08-30T16:00:25.933601",
+    "request_id": null
   }
 }

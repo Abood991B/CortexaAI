@@ -464,8 +464,128 @@
       "created_at": "2025-08-28T11:20:00.279550",
       "updated_at": "2025-08-28T11:20:00.279550",
       "version": "1.0.0"
+    },
+    "template_1756540825_Function_Implementation_Template": {
+      "id": "template_1756540825_Function_Implementation_Template",
+      "name": "Function Implementation Template",
+      "content": "You are an expert software engineer. Implement a {language} function to {task}.\n\nRequirements:\n- Function should be efficient and well-documented\n- Include proper error handling\n- Follow {language} best practices\n- Time complexity: {complexity}\n\nFunction signature: {signature}\n\n{additional_requirements}\n\nPlease provide a complete, working implementation:",
+      "metadata": {
+        "domain": "software_engineering",
+        "strategy": "template_based",
+        "author": "system",
+        "tags": [
+          "domain_specific",
+          "software_engineering"
+        ],
+        "description": "Domain-specific template for software_engineering",
+        "performance_metrics": {},
+        "dependencies": [],
+        "configuration": {}
+      },
+      "parent_template": null,
+      "variables": {
+        "language": "Python",
+        "task": "solve the given problem",
+        "complexity": "optimal",
+        "signature": "def solution(input):",
+        "additional_requirements": ""
+      },
+      "detected_variables": [],
+      "created_at": "2025-08-30T16:00:25.925051",
+      "updated_at": "2025-08-30T16:00:25.925051",
+      "version": "1.0.0"
+    },
+    "template_1756540825_Code_Review_Template": {
+      "id": "template_1756540825_Code_Review_Template",
+      "name": "Code Review Template",
+      "content": "You are a senior software engineer conducting a code review. Review the following {language} code for:\n\n1. **Functionality**: Does the code meet the requirements?\n2. **Efficiency**: Time and space complexity analysis\n3. **Best Practices**: Code style, naming conventions, documentation\n4. **Edge Cases**: Error handling and edge case coverage\n5. **Security**: Potential security vulnerabilities\n6. **Maintainability**: Code readability and future modifications\n\nCode to review:\n```python\n{code_content}\n```\n\nReview focus: {review_focus}\n\nPlease provide a comprehensive review with specific recommendations:",
+      "metadata": {
+        "domain": "software_engineering",
+        "strategy": "template_based",
+        "author": "system",
+        "tags": [
+          "domain_specific",
+          "software_engineering"
+        ],
+        "description": "Domain-specific template for software_engineering",
+        "performance_metrics": {},
+        "dependencies": [],
+        "configuration": {}
+      },
+      "parent_template": null,
+      "variables": {
+        "language": "Python",
+        "code_content": "def example():\n    pass",
+        "review_focus": "general quality and efficiency"
+      },
+      "detected_variables": [],
+      "created_at": "2025-08-30T16:00:25.927053",
+      "updated_at": "2025-08-30T16:00:25.927053",
+      "version": "1.0.0"
+    },
+    "template_1756540825_Data_Analysis_Template": {
+      "id": "template_1756540825_Data_Analysis_Template",
+      "name": "Data Analysis Template",
+      "content": "You are an expert data scientist. Analyze the following dataset and {task}.\n\nDataset information:\n- Type: {data_type}\n- Size: {data_size}\n- Features: {features}\n- Target variable: {target}\n\nAnalysis requirements:\n1. **Data Exploration**: Summary statistics, missing values, distributions\n2. **Data Quality**: Identify issues and outliers\n3. **Feature Analysis**: Correlation analysis, feature importance\n4. **Modeling Approach**: Recommended algorithms and techniques\n5. **Results**: Expected outcomes and metrics\n\nDataset description: {dataset_description}\n\nPlease provide a comprehensive analysis plan and initial insights:",
+      "metadata": {
+        "domain": "data_science",
+        "strategy": "template_based",
+        "author": "system",
+        "tags": [
+          "domain_specific",
+          "data_science"
+        ],
+        "description": "Domain-specific template for data_science",
+        "performance_metrics": {},
+        "dependencies": [],
+        "configuration": {}
+      },
+      "parent_template": null,
+      "variables": {
+        "task": "perform analysis",
+        "data_type": "tabular",
+        "data_size": "medium",
+        "features": "numerical and categorical",
+        "target": "classification/regression target",
+        "dataset_description": "General dataset for analysis"
+      },
+      "detected_variables": [],
+      "created_at": "2025-08-30T16:00:25.928904",
+      "updated_at": "2025-08-30T16:00:25.928904",
+      "version": "1.0.0"
+    },
+    "template_1756540825_Story_Development_Template": {
+      "id": "template_1756540825_Story_Development_Template",
+      "name": "Story Development Template",
+      "content": "You are a creative writing expert. Develop a {genre} story about {theme}.\n\nStory requirements:\n- Genre: {genre}\n- Theme: {theme}\n- Length: {length}\n- Style: {style}\n- Target audience: {audience}\n\nStory elements to include:\n1. **Setting**: Time period, location, atmosphere\n2. **Characters**: Main character(s), supporting characters, motivations\n3. **Plot**: Beginning, middle, end structure\n4. **Conflict**: Central conflict and resolution\n5. **Themes**: Underlying messages or lessons\n\nAdditional constraints: {constraints}\n\nPlease write an engaging {genre} story that explores {theme}:",
+      "metadata": {
+        "domain": "creative_writing",
+        "strategy": "template_based",
+        "author": "system",
+        "tags": [
+          "domain_specific",
+          "creative_writing"
+        ],
+        "description": "Domain-specific template for creative_writing",
+        "performance_metrics": {},
+        "dependencies": [],
+        "configuration": {}
+      },
+      "parent_template": null,
+      "variables": {
+        "genre": "short story",
+        "theme": "human nature",
+        "length": "1000-2000 words",
+        "style": "engaging and descriptive",
+        "audience": "general readers",
+        "constraints": "none"
+      },
+      "detected_variables": [],
+      "created_at": "2025-08-30T16:00:25.930593",
+      "updated_at": "2025-08-30T16:00:25.930593",
+      "version": "1.0.0"
     }
   },
   "hierarchy": {},
-  "last_updated": "2025-08-28T11:20:00.279550"
+  "last_updated": "2025-08-30T16:00:25.930593"
 }
