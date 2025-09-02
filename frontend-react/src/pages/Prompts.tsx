@@ -5,7 +5,6 @@ import {
   Search, 
   Edit, 
   Filter, 
-  MoreHorizontal, 
   Trash2, 
   Copy,
   Calendar,
@@ -19,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading';
 import { formatDate, copyToClipboard } from '@/utils';
 import { toast } from 'sonner';
-import { usePrompts, useCreatePrompt, useUpdatePrompt, useDeletePrompt } from '@/hooks/useApi';
+import { useCreatePrompt, useUpdatePrompt } from '@/hooks/useApi';
 
 interface SimplePrompt {
   id: string;
@@ -93,7 +92,6 @@ export function Prompts() {
 
   const createPromptMutation = useCreatePrompt();
   const updatePromptMutation = useUpdatePrompt();
-  const deletePromptMutation = useDeletePrompt();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,7 +129,7 @@ export function Prompts() {
     }
   };
 
-  const handleDeletePrompt = async (promptId: string) => {
+  const handleDeletePrompt = async (/* promptId: string */) => {
     if (confirm('Are you sure you want to delete this prompt?')) {
       // TODO: Implement API call when backend is running
       toast.info('Prompt deletion will be available when backend is connected');
@@ -244,7 +242,7 @@ export function Prompts() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleDeletePrompt(prompt.id)}
+                      onClick={() => handleDeletePrompt()}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -369,7 +367,23 @@ export function Prompts() {
                     onClick={() => {
                       setIsCreateModalOpen(false);
                       setEditingPrompt(null);
-                      setNewPrompt({ title: '', content: '', category: '', tags: [], description: '' });
+                      setNewPrompt({
+                        name: '',
+                        current_version: '1.0.0',
+                        status: 'draft',
+                        metadata: {
+                          domain: '',
+                          strategy: 'default',
+                          author: 'user',
+                          tags: [],
+                          description: '',
+                          performance_metrics: {},
+                          dependencies: [],
+                          configuration: {},
+                        },
+                        versions: ['1.0.0'],
+                        created_by: 'user',
+                      });
                     }}
                   >
                     Cancel

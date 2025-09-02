@@ -1,5 +1,4 @@
-import React from 'react';
-import { Globe, Users, CheckCircle, XCircle } from 'lucide-react';
+import { Globe, CheckCircle, XCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading';

@@ -44,8 +44,8 @@ class DomainClassifier:
                 "description": "Educational content creation and teaching materials"
             },
             "business_strategy": {
-                "keywords": ["business", "strategy", "marketing", "management", "planning", "growth", "market", "competitive", "analysis"],
-                "description": "Business strategy, planning, and management tasks"
+                "keywords": ["business", "strategy", "marketing", "management", "growth", "market", "competitive", "analysis"],
+                "description": "Business strategy, and management tasks"
             }
         }
 

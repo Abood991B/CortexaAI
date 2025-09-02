@@ -55,34 +55,37 @@ class ApiClient {
   }
 
   // Core Prompt Processing
-  async processPrompt(request: PromptRequest): Promise<PromptResponse> {
-    const response = await this.client.post<PromptResponse>('/api/process-prompt', request);
+    async processPrompt(request: PromptRequest, signal?: AbortSignal): Promise<PromptResponse> {
+    const response = await this.client.post('/api/process-prompt', request, { 
+      signal,
+      timeout: 0 // Remove timeout since we're using AbortController
+    });
     return response.data;
   }
 
 
   // System Information
-  async getDomains(): Promise<DomainInfo[]> {
-    const response = await this.client.get<DomainInfo[]>('/api/domains');
+  async getDomains(signal?: AbortSignal): Promise<DomainInfo[]> {
+    const response = await this.client.get('/api/domains', { signal });
     return response.data;
   }
-  async getStats(): Promise<SystemStats> {
-    const response = await this.client.get<SystemStats>('/api/stats');
-    return response.data;
-  }
-
-  async getHistory(limit: number = 10): Promise<WorkflowHistory[]> {
-    const response = await this.client.get<WorkflowHistory[]>(`/api/history?limit=${limit}`);
+  async getStats(signal?: AbortSignal): Promise<SystemStats> {
+    const response = await this.client.get('/api/stats', { signal });
     return response.data;
   }
 
-  async getHealth(): Promise<HealthStatus> {
-    const response = await this.client.get<HealthStatus>('/health');
+  async getHistory(limit: number = 10, signal?: AbortSignal): Promise<WorkflowHistory[]> {
+    const response = await this.client.get(`/api/history?limit=${limit}`, { signal });
+    return response.data;
+  }
+
+  async getHealth(signal?: AbortSignal): Promise<HealthStatus> {
+    const response = await this.client.get('/health', { signal });
     return response.data;
   }
 
   // Prompt Management
-  async getPrompts(filters?: PromptFilters): Promise<PaginatedResponse<PromptMetadata>> {
+  async getPrompts(filters?: PromptFilters, signal?: AbortSignal): Promise<PaginatedResponse<PromptMetadata>> {
     const params = new URLSearchParams();
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
@@ -96,88 +99,88 @@ class ApiClient {
       });
     }
     
-    const response = await this.client.get<PaginatedResponse<PromptMetadata>>(`/api/prompts?${params}`);
+    const response = await this.client.get(`/api/prompts?${params}`, { signal });
     return response.data;
   }
 
-  async getPrompt(id: string): Promise<PromptMetadata> {
-    const response = await this.client.get<PromptMetadata>(`/api/prompts/${id}`);
+  async getPrompt(id: string, signal?: AbortSignal): Promise<PromptMetadata> {
+    const response = await this.client.get(`/api/prompts/${id}`, { signal });
     return response.data;
   }
 
-  async createPrompt(prompt: Omit<PromptMetadata, 'id' | 'created_at' | 'updated_at'>): Promise<PromptMetadata> {
-    const response = await this.client.post<PromptMetadata>('/api/prompts', prompt);
+  async createPrompt(prompt: Omit<PromptMetadata, 'id' | 'created_at' | 'updated_at'>, signal?: AbortSignal): Promise<PromptMetadata> {
+    const response = await this.client.post('/api/prompts', prompt, { signal });
     return response.data;
   }
 
-  async updatePrompt(id: string, prompt: Partial<PromptMetadata>): Promise<PromptMetadata> {
-    const response = await this.client.put<PromptMetadata>(`/api/prompts/${id}`, prompt);
+  async updatePrompt(id: string, prompt: Partial<PromptMetadata>, signal?: AbortSignal): Promise<PromptMetadata> {
+    const response = await this.client.put(`/api/prompts/${id}`, prompt, { signal });
     return response.data;
   }
 
-  async deletePrompt(id: string): Promise<void> {
-    await this.client.delete(`/api/prompts/${id}`);
+  async deletePrompt(id: string, signal?: AbortSignal): Promise<void> {
+    await this.client.delete(`/api/prompts/${id}`, { signal });
   }
 
   // Prompt Versions
-  async getPromptVersions(promptId: string): Promise<PromptVersion[]> {
-    const response = await this.client.get<PromptVersion[]>(`/api/prompts/${promptId}/versions`);
+  async getPromptVersions(promptId: string, signal?: AbortSignal): Promise<PromptVersion[]> {
+    const response = await this.client.get(`/api/prompts/${promptId}/versions`, { signal });
     return response.data;
   }
 
-  async getPromptVersion(promptId: string, version: string): Promise<PromptVersion> {
-    const response = await this.client.get<PromptVersion>(`/api/prompts/${promptId}/versions/${version}`);
+  async getPromptVersion(promptId: string, version: string, signal?: AbortSignal): Promise<PromptVersion> {
+    const response = await this.client.get(`/api/prompts/${promptId}/versions/${version}`, { signal });
     return response.data;
   }
 
-  async createPromptVersion(promptId: string, version: Omit<PromptVersion, 'id' | 'created_at'>): Promise<PromptVersion> {
-    const response = await this.client.post<PromptVersion>(`/api/prompts/${promptId}/versions`, version);
+  async createPromptVersion(promptId: string, version: Omit<PromptVersion, 'id' | 'created_at'>, signal?: AbortSignal): Promise<PromptVersion> {
+    const response = await this.client.post(`/api/prompts/${promptId}/versions`, version, { signal });
     return response.data;
   }
 
   // Templates
-  async getTemplates(): Promise<Template[]> {
-    const response = await this.client.get<Template[]>('/api/templates');
+  async getTemplates(signal?: AbortSignal): Promise<Template[]> {
+    const response = await this.client.get('/api/templates', { signal });
     return response.data;
   }
 
-  async getTemplate(id: string): Promise<Template> {
-    const response = await this.client.get<Template>(`/api/templates/${id}`);
+  async getTemplate(id: string, signal?: AbortSignal): Promise<Template> {
+    const response = await this.client.get(`/api/templates/${id}`, { signal });
     return response.data;
   }
 
-  async createTemplate(template: Omit<Template, 'id' | 'created_at' | 'updated_at'>): Promise<Template> {
-    const response = await this.client.post<Template>('/api/templates', template);
+  async createTemplate(template: Omit<Template, 'id' | 'created_at' | 'updated_at'>, signal?: AbortSignal): Promise<Template> {
+    const response = await this.client.post('/api/templates', template, { signal });
     return response.data;
   }
 
-  async updateTemplate(id: string, template: Partial<Template>): Promise<Template> {
-    const response = await this.client.put<Template>(`/api/templates/${id}`, template);
+  async updateTemplate(id: string, template: Partial<Template>, signal?: AbortSignal): Promise<Template> {
+    const response = await this.client.put(`/api/templates/${id}`, template, { signal });
     return response.data;
   }
 
-  async deleteTemplate(id: string): Promise<void> {
-    await this.client.delete(`/api/templates/${id}`);
+  async deleteTemplate(id: string, signal?: AbortSignal): Promise<void> {
+    await this.client.delete(`/api/templates/${id}`, { signal });
   }
 
   // Experiments
-  async getExperiments(): Promise<ExperimentResult[]> {
-    const response = await this.client.get<ExperimentResult[]>('/api/experiments');
+  async getExperiments(signal?: AbortSignal): Promise<ExperimentResult[]> {
+    const response = await this.client.get('/api/experiments', { signal });
     return response.data;
   }
 
-  async getExperiment(id: string): Promise<ExperimentResult> {
-    const response = await this.client.get<ExperimentResult>(`/api/experiments/${id}`);
+  async getExperiment(id: string, signal?: AbortSignal): Promise<ExperimentResult> {
+    const response = await this.client.get(`/api/experiments/${id}`, { signal });
     return response.data;
   }
 
-  async createExperiment(experiment: Omit<ExperimentResult, 'experiment_id' | 'created_at' | 'updated_at'>): Promise<ExperimentResult> {
-    const response = await this.client.post<ExperimentResult>('/api/experiments', experiment);
+  async createExperiment(experiment: Omit<ExperimentResult, 'experiment_id' | 'created_at' | 'updated_at'>, signal?: AbortSignal): Promise<ExperimentResult> {
+    const response = await this.client.post('/api/experiments', experiment, { signal });
     return response.data;
   }
 
-  async updateExperiment(id: string, experiment: Partial<ExperimentResult>): Promise<ExperimentResult> {
-    const response = await this.client.put<ExperimentResult>(`/api/experiments/${id}`, experiment);
+  async updateExperiment(id: string, experiment: Partial<ExperimentResult>, signal?: AbortSignal): Promise<ExperimentResult> {
+    const response = await this.client.put(`/api/experiments/${id}`, experiment, { signal });
     return response.data;
   }
 
@@ -210,20 +213,19 @@ class ApiClient {
     return response.data;
   }
 
-  // Memory and Planning (if available)
-  async processPromptWithMemory(request: PromptRequest & { user_id: string }): Promise<PromptResponse> {
-    const { user_id, ...promptRequest } = request;
+  // Memory-enhanced processing
+      async processPromptWithMemory(request: PromptRequest & { user_id: string }, signal?: AbortSignal): Promise<PromptResponse> {
     const response = await this.client.post<PromptResponse>(
-      `/api/process-prompt-with-memory?user_id=${encodeURIComponent(user_id)}`, 
-      promptRequest
+      '/api/process-prompt-with-memory',
+      request,
+      { 
+        signal,
+        timeout: 0 // Remove timeout since we're using AbortController
+      }
     );
     return response.data;
   }
 
-  async processPromptWithPlanning(request: PromptRequest & { user_id?: string }): Promise<PromptResponse> {
-    const response = await this.client.post<PromptResponse>('/api/process-prompt-planning', request);
-    return response.data;
-  }
 
   async generatePrompt(task: string, domain?: string): Promise<PromptResponse> {
     const response = await this.client.post<PromptResponse>('/api/generate-prompt', { task, domain });
@@ -255,10 +257,20 @@ class ApiClient {
     const response = await this.client.get(`/api/workflows/${workflowId}`);
     return response.data;
   }
+
+  async cancelWorkflow(workflowId: string): Promise<any> {
+    const response = await this.client.post(`/api/cancel-workflow/${workflowId}`);
+    return response.data;
+  }
+
+  async getWorkflowStatus(workflowId: string): Promise<any> {
+    const response = await this.client.get(`/api/workflow-status/${workflowId}`);
+    return response.data;
+  }
 }
 
 // Create singleton instance
-export const apiClient = new ApiClient();
+const apiClient = new ApiClient();
 
 // Export for use in React Query
 export default apiClient;

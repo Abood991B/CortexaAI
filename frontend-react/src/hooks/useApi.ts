@@ -1,8 +1,10 @@
+import axios from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import apiClient from '@/api/client';
-import {
+import type {
   PromptRequest,
+  PromptResponse,
   PromptMetadata,
   PromptVersion,
   Template,
@@ -31,16 +33,71 @@ export const queryKeys = {
   analytics: (timeRange?: string) => ['analytics', timeRange] as const,
 };
 
+// Caching layer for prompt processing
+const CACHE_KEY_PREFIX = 'prompt_cache_';
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const getCacheKey = (request: PromptRequest): string => {
+  const sortedRequest = Object.keys(request)
+    .sort()
+    .reduce((acc: { [key: string]: any }, key) => {
+      acc[key] = request[key as keyof PromptRequest];
+      return acc;
+    }, {});
+  return `${CACHE_KEY_PREFIX}${JSON.stringify(sortedRequest)}`;
+};
+
+const getCachedResponse = (cacheKey: string): PromptResponse | null => {
+  const cachedItem = localStorage.getItem(cacheKey);
+  if (cachedItem) {
+    try {
+      const { data, timestamp } = JSON.parse(cachedItem);
+      if (Date.now() - timestamp < CACHE_TTL) {
+        return data as PromptResponse;
+      }
+      localStorage.removeItem(cacheKey);
+    } catch (error) {
+      console.error('Failed to parse cache item:', error);
+      localStorage.removeItem(cacheKey);
+    }
+  }
+  return null;
+};
+
+const setCachedResponse = (cacheKey: string, data: PromptResponse): void => {
+  try {
+    const cacheItem = {
+      data,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(cacheKey, JSON.stringify(cacheItem));
+  } catch (error) {
+    console.error('Failed to set cache item:', error);
+  }
+};
+
 // Core API Hooks
 export const useProcessPrompt = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (request: PromptRequest) => {
+    mutationFn: async ({ request, signal }: { request: PromptRequest; signal?: AbortSignal }) => {
+      const cacheKey = getCacheKey(request);
+      const cachedResponse = getCachedResponse(cacheKey);
+      if (cachedResponse) {
+        toast.info('Returning cached response.');
+        return cachedResponse;
+      }
+
       try {
-        const response = await apiClient.processPrompt(request);
+        const response = await apiClient.processPrompt(request, signal);
+        setCachedResponse(cacheKey, response);
         return response;
       } catch (error: any) {
+        if (axios.isCancel(error)) {
+          // Don't show success toast for cancelled requests
+          return;
+        }
         console.error('API Error:', error);
         const errorMessage = error.response?.data?.detail || 
                            error.message || 
@@ -49,10 +106,11 @@ export const useProcessPrompt = () => {
       }
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.history() });
-      toast.success('Prompt processed successfully!');
-      return data;
+      if (data) { 
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+        queryClient.invalidateQueries({ queryKey: queryKeys.history() });
+        toast.success('Prompt processed successfully!');
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -328,14 +386,26 @@ export const useProcessPromptWithMemory = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (request: PromptRequest & { user_id: string }) => {
+    mutationFn: async ({ request, signal }: { request: PromptRequest & { user_id: string }; signal?: AbortSignal }) => {
+      const cacheKey = getCacheKey(request);
+      const cachedResponse = getCachedResponse(cacheKey);
+      if (cachedResponse) {
+        toast.info('Returning cached response.');
+        return cachedResponse;
+      }
+
       try {
         if (!request.user_id) {
           throw new Error('User ID is required for processing with memory');
         }
-        const response = await apiClient.processPromptWithMemory(request);
+        const response = await apiClient.processPromptWithMemory(request, signal);
+        setCachedResponse(cacheKey, response);
         return response;
       } catch (error: any) {
+        if (axios.isCancel(error)) {
+          // Don't show success toast for cancelled requests
+          return;
+        }
         console.error('API Error (with memory):', error);
         const errorMessage = error.response?.data?.detail || 
                            error.message || 
@@ -344,30 +414,14 @@ export const useProcessPromptWithMemory = () => {
       }
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.history() });
-      toast.success('Prompt processed with memory successfully!');
-      return data;
+      if (data) { 
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+        queryClient.invalidateQueries({ queryKey: queryKeys.history() });
+        toast.success('Prompt processed with memory successfully!');
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message);
-    },
-  });
-};
-
-export const useProcessPromptWithPlanning = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (request: PromptRequest & { user_id?: string }) => 
-      apiClient.processPromptWithPlanning(request),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.history() });
-      toast.success('Prompt processed with planning successfully!');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to process prompt with planning');
     },
   });
 };
@@ -402,3 +456,30 @@ export const useWorkflowDetails = (workflowId: string) => {
   });
 };
 
+export const useCancelWorkflow = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (workflowId: string) => apiClient.cancelWorkflow(workflowId),
+    onSuccess: (_, workflowId) => {
+      toast.success('Workflow cancellation requested.');
+      // Optionally, you can invalidate queries related to this workflow
+      queryClient.invalidateQueries({ queryKey: ['workflows', workflowId] });
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to cancel workflow');
+    },
+  });
+};
+
+export const useWorkflowStatus = (workflowId: string | null) => {
+  return useQuery<any, Error>({
+    queryKey: ['workflowStatus', workflowId],
+    queryFn: () => apiClient.getWorkflowStatus(workflowId!),
+    enabled: !!workflowId,
+    refetchInterval: (query) => {
+        const data: any = query.state.data;
+        return data?.status === 'running' ? 2000 : false;
+    },
+  });
+};

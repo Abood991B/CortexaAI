@@ -60,7 +60,7 @@ export function getStatusColor(status: string): string {
   }
 }
 
-export function getDomainColor(domain: string): string {
+export function getDomainColor(domain?: string | null): string {
   const colors = [
     'bg-blue-100 text-blue-800',
     'bg-green-100 text-green-800',
@@ -72,12 +72,22 @@ export function getDomainColor(domain: string): string {
     'bg-red-100 text-red-800',
   ];
   
-  const hash = domain.split('').reduce((a, b) => {
-    a = ((a << 5) - a) + b.charCodeAt(0);
-    return a & a;
-  }, 0);
+  // Return a default color if domain is not provided
+  if (!domain) {
+    return colors[0];
+  }
   
-  return colors[Math.abs(hash) % colors.length];
+  try {
+    const hash = domain.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    
+    return colors[Math.abs(hash) % colors.length];
+  } catch (error) {
+    console.error('Error generating domain color:', error);
+    return colors[0];
+  }
 }
 
 export function debounce<T extends (...args: any[]) => any>(

@@ -1,4 +1,3 @@
-import React from 'react';
 import { 
   Brain, 
   FileText, 
@@ -71,9 +70,9 @@ export function Dashboard() {
                   <p className="text-sm font-medium text-muted-foreground">
                     {stat.title}
                   </p>
-                  <p className="text-2xl font-bold">
+                  <div className="text-2xl font-bold">
                     {statsLoading ? <LoadingSpinner size="sm" /> : stat.value}
-                  </p>
+                  </div>
                 </div>
                 <div className={`p-3 rounded-full ${stat.bgColor}`}>
                   <stat.icon className={`h-6 w-6 ${stat.color}`} />
@@ -110,13 +109,13 @@ export function Dashboard() {
                   >
                     <div className="flex-1">
                       <div className="flex items-center space-x-2">
-                        <Badge className={getDomainColor(workflow.domain)}>
-                          {workflow.domain}
+                        <Badge className={getDomainColor(workflow?.domain || 'default')}>
+                          {workflow?.domain || 'Uncategorized'}
                         </Badge>
                         <Badge 
-                          variant={workflow.status === 'completed' ? 'success' : 'destructive'}
+                          variant={workflow?.status === 'completed' ? 'success' : 'destructive'}
                         >
-                          {workflow.status}
+                          {workflow?.status || 'unknown'}
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground mt-1">
@@ -128,10 +127,10 @@ export function Dashboard() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium">
-                        {workflow.quality_score.toFixed(2)}
+                        {workflow.quality_score ? workflow.quality_score.toFixed(2) : 'N/A'}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatDuration(workflow.processing_time)}
+                        {workflow.processing_time ? formatDuration(workflow.processing_time) : 'N/A'}
                       </p>
                     </div>
                   </div>

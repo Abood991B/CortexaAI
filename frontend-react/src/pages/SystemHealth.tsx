@@ -1,28 +1,13 @@
-import React from 'react';
 import { Activity, Server, Database, Wifi, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading';
 import { useHealth } from '@/hooks/useApi';
-import { formatDuration } from '@/lib/utils';
+import { formatDuration } from '@/utils';
 
 export function SystemHealth() {
   const { data: health, isLoading } = useHealth();
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'healthy':
-      case 'available':
-      case 'enabled':
-        return 'text-green-600';
-      case 'unhealthy':
-      case 'not_configured':
-      case 'disabled':
-        return 'text-red-600';
-      default:
-        return 'text-yellow-600';
-    }
-  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {

@@ -5,6 +5,7 @@ export interface PromptRequest {
   prompt_type: 'auto' | 'raw' | 'structured';
   return_comparison: boolean;
   use_langgraph: boolean;
+  chat_history?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
 export interface PromptResponse {

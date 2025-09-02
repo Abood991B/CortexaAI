@@ -21,10 +21,9 @@ from config.config import (
     settings, setup_langsmith, get_logger, metrics, log_workflow_event,
     cache_manager, perf_config, generate_prompt_cache_key,
     security_manager, security_config, log_security_event, rate_limiter,
-    memory_config, planning_config, prompt_generation_config
+    memory_config, prompt_generation_config
 )
 from agents.memory import memory_manager
-from agents.planning import planning_engine
 from agents.prompt import prompt_generator
 
 # Import Prompt Management System (optional for hybrid integration)
@@ -436,174 +435,6 @@ class WorkflowCoordinator:
             self._record_workflow(error_result)
             return error_result
 
-    async def process_prompt_with_planning(self, prompt: str, user_id: str = None,
-                                         prompt_type: str = "auto", return_comparison: bool = True,
-                                         client_ip: str = "unknown") -> Dict[str, Any]:
-        """
-        Process a prompt through the complete multi-agent workflow with planning and reasoning.
-
-        Args:
-            prompt: The input prompt to process
-            user_id: User identifier for context
-            prompt_type: Type of prompt ("auto", "raw", or "structured")
-            return_comparison: Whether to include before/after comparison
-            client_ip: IP address of the client making the request
-
-        Returns:
-            Dict containing the final optimized prompt and workflow metadata
-        """
-        start_time = datetime.now()
-        workflow_id = f"planning_workflow_{int(start_time.timestamp())}"
-
-        # Security: Rate limiting
-        if security_config.enable_rate_limiting:
-            if not rate_limiter.is_allowed(client_ip):
-                log_security_event(logger, "rate_limit_exceeded", "medium",
-                                 client_ip=client_ip, workflow_id=workflow_id)
-                raise AgenticSystemError(
-                    "Rate limit exceeded. Please try again later.",
-                    error_code="RATE_LIMIT_EXCEEDED",
-                    client_ip=client_ip
-                )
-
-        # Security: Input validation and sanitization
-        if security_config.enable_input_sanitization:
-            sanitized_result = security_manager.sanitize_input(prompt, "coordinator")
-
-            # Log security events
-            if sanitized_result['security_events']:
-                log_security_event(logger, "input_security_events", "medium",
-                                 workflow_id=workflow_id, client_ip=client_ip,
-                                 events=sanitized_result['security_events'])
-
-            # Block unsafe content
-            if not sanitized_result['is_safe']:
-                high_severity_events = [e for e in sanitized_result['security_events'] if e['severity'] == 'high']
-                if high_severity_events:
-                    log_security_event(logger, "unsafe_content_blocked", "high",
-                                     workflow_id=workflow_id, client_ip=client_ip,
-                                     events=high_severity_events)
-                    raise AgenticSystemError(
-                        "Input contains potentially unsafe content and has been blocked.",
-                        error_code="UNSAFE_CONTENT_BLOCKED",
-                        security_events=high_severity_events
-                    )
-
-            prompt = sanitized_result['sanitized_text']
-
-        logger.info(f"Starting planning-enhanced workflow {workflow_id}", extra={
-            'workflow_id': workflow_id,
-            'user_id': user_id,
-            'client_ip': client_ip,
-            'prompt_length': len(prompt),
-            'prompt_type': prompt_type
-        })
-
-        try:
-            # Step 1: Determine prompt type if set to auto
-            if prompt_type == "auto":
-                prompt_type = await self.classifier.classify_prompt_type(prompt)
-                logger.info(f"Auto-detected prompt type: {prompt_type}")
-
-            # Step 2: Classify domain
-            logger.info("Step 1: Classifying domain...")
-            classification_result = await self.classifier.classify_prompt(prompt)
-            domain = classification_result["domain"]
-
-            # Step 3: Create plan using planning engine
-            logger.info("Step 2: Creating execution plan...")
-            plan = await planning_engine.create_plan(
-                task=f"Optimize prompt: {prompt}",
-                domain=domain,
-                user_id=user_id,
-                context={
-                    'classification_result': classification_result,
-                    'prompt_type': prompt_type,
-                    'client_ip': client_ip
-                }
-            )
-
-            # Step 4: Execute plan step by step
-            logger.info("Step 3: Executing plan...")
-            final_result = None
-            async for step_result in planning_engine.execute_plan(plan):
-                if step_result.get('status') in ['completed', 'partial']:
-                    final_result = step_result
-                    break
-                elif step_result.get('status') == 'failed':
-                    raise AgenticSystemError(
-                        f"Plan execution failed: {step_result.get('error', 'Unknown error')}",
-                        error_code="PLAN_EXECUTION_FAILED"
-                    )
-
-            if not final_result:
-                raise AgenticSystemError(
-                    "Plan execution did not produce a final result",
-                    error_code="NO_EXECUTION_RESULT"
-                )
-
-            # Step 5: Get the final improved prompt from execution results
-            final_prompt = prompt  # Default fallback
-            if final_result.get('results'):
-                # Find the last successful subtask result
-                successful_results = [
-                    result for result in final_result['results'].values()
-                    if result.get('success', False)
-                ]
-                if successful_results:
-                    # Use the output from the last successful step
-                    final_prompt = successful_results[-1].get('output', prompt)
-
-            # Step 6: Prepare final result with planning metadata
-            workflow_result = self._prepare_planning_final_result(
-                workflow_id=workflow_id,
-                user_id=user_id,
-                original_prompt=prompt,
-                final_prompt=final_prompt,
-                domain=domain,
-                classification_result=classification_result,
-                plan=plan,
-                execution_result=final_result,
-                prompt_type=prompt_type,
-                return_comparison=return_comparison,
-                start_time=start_time
-            )
-
-            # Step 7: Record workflow
-            self._record_workflow(workflow_result)
-
-            logger.info(f"Planning-enhanced workflow {workflow_id} completed successfully")
-            return workflow_result
-
-        except ClassificationError as ce:
-            logger.error(f"Classification error in planning workflow {workflow_id}: {ce}")
-            error_result = self._prepare_error_result(
-                workflow_id, prompt,
-                f"Domain classification failed: {ce.message}",
-                start_time, ce.error_code, ce.to_dict()
-            )
-            self._record_workflow(error_result)
-            return error_result
-
-        except AgenticSystemError as ase:
-            logger.error(f"System error in planning workflow {workflow_id}: {ase}")
-            error_result = self._prepare_error_result(
-                workflow_id, prompt,
-                f"Agentic system error: {ase.message}",
-                start_time, ase.error_code, ase.to_dict()
-            )
-            self._record_workflow(error_result)
-            return error_result
-
-        except Exception as e:
-            logger.error(f"Unexpected error in planning workflow {workflow_id}: {e}")
-            error_result = self._prepare_error_result(
-                workflow_id, prompt,
-                f"Unexpected error: {str(e)}",
-                start_time, "UNKNOWN_ERROR", {"cause": str(e)}
-            )
-            self._record_workflow(error_result)
-            return error_result
 
     async def process_prompt_with_generation(self, task: str, user_id: str = None,
                                            domain: str = None, return_comparison: bool = True,
@@ -934,7 +765,7 @@ class WorkflowCoordinator:
             result["comparison"] = {
                 "original_length": len(original_prompt),
                 "optimized_length": len(final_prompt),
-                "improvement_ratio": len(final_prompt) / len(original_prompt) if original_prompt else 0,
+                "improvement_ratio": final_evaluation.get("scores", {}).get("overall_score", 0.5),
                 "side_by_side": {
                     "original": original_prompt,
                     "optimized": final_prompt
@@ -1018,7 +849,7 @@ class WorkflowCoordinator:
             result["comparison"] = {
                 "original_length": len(original_prompt),
                 "optimized_length": len(final_prompt),
-                "improvement_ratio": len(final_prompt) / len(original_prompt) if original_prompt else 0,
+                "improvement_ratio": final_evaluation.get("scores", {}).get("overall_score", 0.5),
                 "side_by_side": {
                     "original": original_prompt,
                     "optimized": final_prompt
@@ -1027,88 +858,6 @@ class WorkflowCoordinator:
 
         return result
 
-    def _prepare_planning_final_result(self, workflow_id: str, user_id: str,
-                                     original_prompt: str, final_prompt: str,
-                                     domain: str, classification_result: Dict[str, Any],
-                                     plan: Dict[str, Any], execution_result: Dict[str, Any],
-                                     prompt_type: str, return_comparison: bool,
-                                     start_time: datetime) -> Dict[str, Any]:
-        """Prepare the final result dictionary for planning-enhanced workflow."""
-        processing_time = (datetime.now() - start_time).total_seconds()
-
-        # Get planning statistics
-        planning_stats = planning_engine.get_metrics()
-
-        result = {
-            "workflow_id": workflow_id,
-            "status": "completed",
-            "timestamp": datetime.now().isoformat(),
-            "processing_time_seconds": processing_time,
-            "input": {
-                "original_prompt": original_prompt,
-                "prompt_type": prompt_type,
-                "user_id": user_id
-            },
-            "output": {
-                "optimized_prompt": final_prompt,
-                "domain": domain,
-                "quality_score": 0.9,  # Would be calculated from evaluation
-                "iterations_used": len(plan.get('subtasks', [])),
-                "passes_threshold": True  # Would be determined by evaluation
-            },
-            "analysis": {
-                "classification": {
-                    "domain": classification_result.get("domain"),
-                    "confidence": classification_result.get("confidence", 0),
-                    "key_topics": classification_result.get("key_topics", []),
-                    "reasoning": classification_result.get("reasoning", "")
-                },
-                "planning": {
-                    "plan_id": plan.get('plan_id'),
-                    "strategy": plan.get('strategy'),
-                    "complexity": plan.get('complexity'),
-                    "subtasks_count": len(plan.get('subtasks', [])),
-                    "execution_success_rate": execution_result.get('success_rate', 0),
-                    "planning_time": plan.get('metadata', {}).get('planning_time_seconds', 0)
-                },
-                "improvements": {
-                    "improvements_made": ["Planning-based optimization"],
-                    "key_additions": ["Structured approach", "Reasoning-driven improvements"],
-                    "effectiveness_score": 0.9
-                }
-            },
-            "planning": {
-                "enabled": True,
-                "plan_id": plan.get('plan_id'),
-                "strategy": plan.get('strategy'),
-                "subtasks_executed": len(execution_result.get('results', {})),
-                "subtasks_successful": execution_result.get('completed_steps', 0),
-                "execution_time": execution_result.get('execution_time', 0),
-                "success_rate": execution_result.get('success_rate', 0),
-                "reasoning_steps": planning_stats.get('reasoning_steps', 0),
-                "plans_created": planning_stats.get('plans_created', 0),
-                "plans_successful": planning_stats.get('plans_successful', 0)
-            },
-            "metadata": {
-                "langsmith_enabled": bool(settings.langsmith_api_key),
-                "planning_enabled": planning_config.enable_planning,
-                "planning_engine": planning_config.planning_engine,
-                "max_reasoning_depth": planning_config.max_reasoning_depth
-            }
-        }
-
-        if return_comparison:
-            result["comparison"] = {
-                "original_length": len(original_prompt),
-                "optimized_length": len(final_prompt),
-                "improvement_ratio": len(final_prompt) / len(original_prompt) if original_prompt else 0,
-                "side_by_side": {
-                    "original": original_prompt,
-                    "optimized": final_prompt
-                }
-            }
-
-        return result
 
     def _prepare_generation_final_result(self, workflow_id: str, task: str, user_id: str,
                                        domain: str, generation_result: Dict[str, Any],

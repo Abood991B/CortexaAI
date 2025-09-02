@@ -33,6 +33,10 @@ classifier_instance = DomainClassifier()
 evaluator_instance = PromptEvaluator()
 coordinator = WorkflowCoordinator(classifier_instance, evaluator_instance)
 
+# In-memory store for active workflows
+active_workflows: Dict[str, Any] = {}
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Multi-Agent Prompt Engineering System",
@@ -43,7 +47,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,18 +61,24 @@ class PromptRequest(BaseModel):
     prompt_type: str = "auto"  # "auto", "raw", or "structured"
     return_comparison: bool = True
     use_langgraph: bool = False  # Whether to use LangGraph workflow
+    chat_history: Optional[List[Dict[str, str]]] = None  # For memory-enhanced processing
+    user_id: Optional[str] = None  # User identifier for memory context
+    workflow_id: Optional[str] = None  # Add workflow_id for tracking
+
 
 
 class PromptResponse(BaseModel):
     """Response model for prompt processing."""
     workflow_id: str
     status: str
+    message: Optional[str] = None  # Add an optional message field
+
     timestamp: str
     processing_time_seconds: Optional[float]
     input: Dict[str, Any]
     output: Dict[str, Any]
     analysis: Optional[Dict[str, Any]]
-    comparison: Optional[Dict[str, Any]]
+    comparison: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any]
 
 
@@ -175,31 +185,59 @@ class ExperimentResult(BaseModel):
 
 # API Routes
 @app.post("/api/process-prompt", response_model=PromptResponse)
-async def process_prompt(request: PromptRequest) -> PromptResponse:
+async def process_prompt(request: PromptRequest, background_tasks: BackgroundTasks) -> PromptResponse:
     """Process a prompt through the multi-agent workflow."""
+    workflow_id = f"workflow_{uuid.uuid4().hex[:8]}"
+    
+    # Store the task in active_workflows
+    active_workflows[workflow_id] = {
+        "status": "running",
+        "task": None,  # Placeholder for the background task
+    }
+
     try:
-        logger.info(f"Processing prompt via API: {request.prompt[:100]}...")
+        logger.info(f"Starting workflow {workflow_id} for prompt: {request.prompt[:100]}...")
 
-        if request.use_langgraph:
-            # Use LangGraph workflow
-            result = await process_prompt_with_langgraph(
-                prompt=request.prompt,
-                prompt_type=request.prompt_type
-            )
-        else:
-            # Use Coordinator workflow
-            result = await coordinator.process_prompt(
-                prompt=request.prompt,
-                prompt_type=request.prompt_type,
-                return_comparison=request.return_comparison
-            )
+        async def workflow_task():
+            try:
+                if request.use_langgraph:
+                    result = await process_prompt_with_langgraph(
+                        prompt=request.prompt,
+                        prompt_type=request.prompt_type
+                    )
+                else:
+                    result = await coordinator.process_prompt(
+                        prompt=request.prompt,
+                        prompt_type=request.prompt_type,
+                        return_comparison=request.return_comparison
+                    )
+                active_workflows[workflow_id]["status"] = "completed"
+                active_workflows[workflow_id]["result"] = result
+            except Exception as e:
+                logger.error(f"Workflow {workflow_id} failed: {e}")
+                active_workflows[workflow_id]["status"] = "failed"
+                active_workflows[workflow_id]["error"] = str(e)
 
-        # Convert result to response format
-        return PromptResponse(**result)
+        # Run the workflow in the background
+        background_tasks.add_task(workflow_task)
+        active_workflows[workflow_id]["task"] = background_tasks
+
+        return PromptResponse(
+            workflow_id=workflow_id,
+            status="running",
+            message="Workflow started successfully.",
+            timestamp=datetime.now().isoformat(),
+            input=request.dict(),
+            output={},
+            analysis={},
+            metadata={}
+        )
 
     except Exception as e:
-        logger.error(f"Error processing prompt: {e}")
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+        logger.error(f"Error starting workflow: {e}")
+        active_workflows.pop(workflow_id, None)
+        raise HTTPException(status_code=500, detail=f"Failed to start workflow: {str(e)}")
+
 
 
 @app.get("/api/domains", response_model=List[DomainInfo])
@@ -211,6 +249,43 @@ async def get_available_domains():
     except Exception as e:
         logger.error(f"Error getting domains: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get domains: {str(e)}")
+
+
+@app.post("/api/cancel-workflow/{workflow_id}")
+async def cancel_workflow(workflow_id: str):
+    """Cancel a running workflow."""
+    if workflow_id not in active_workflows:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    if active_workflows[workflow_id]["status"] != "running":
+        raise HTTPException(status_code=400, detail="Workflow is not running")
+
+    # For now, we just mark it as cancelled. 
+    # In a real-world scenario, you'd need a more robust way to stop the task.
+    active_workflows[workflow_id]["status"] = "cancelled"
+    logger.info(f"User cancelled workflow {workflow_id}")
+
+    return {"status": "cancelled", "message": f"Workflow {workflow_id} has been cancelled."}
+
+
+@app.get("/api/workflow-status/{workflow_id}")
+async def get_workflow_status(workflow_id: str):
+    """Get the status of a running or completed workflow."""
+    if workflow_id not in active_workflows:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    workflow = active_workflows[workflow_id]
+    status = workflow.get("status")
+
+    if status == "completed":
+        return {"status": "completed", "result": workflow.get("result")}
+    elif status == "failed":
+        return {"status": "failed", "error": workflow.get("error")}
+    elif status == "cancelled":
+        return {"status": "cancelled"}
+    else:
+        return {"status": "running"}
+
 
 
 @app.get("/api/stats", response_model=SystemStats)
@@ -498,17 +573,56 @@ async def get_experiments():
 
 
 # Memory Management API
-@app.post("/api/process-prompt-with-memory")
-async def process_prompt_with_memory(request: PromptRequest, user_id: str):
+@app.post("/api/process-prompt-with-memory", response_model=PromptResponse)
+async def process_prompt_with_memory(request: PromptRequest):
     """Process prompt with memory context."""
     try:
-        # Enhanced request with memory
-        result = await coordinator.process_prompt(
-            prompt=request.prompt,
-            prompt_type=request.prompt_type,
-            return_comparison=request.return_comparison,
-            user_id=user_id  # Add user context for memory
-        )
+        if not request.user_id:
+            raise HTTPException(status_code=400, detail="User ID is required for memory-enhanced processing")
+        
+        logger.info(f"Processing prompt with memory for user {request.user_id}: {request.prompt[:100]}...")
+        
+        # Build context from chat history if provided
+        context_prompt = request.prompt
+        if request.chat_history and len(request.chat_history) > 0:
+            # Create a context-aware prompt that includes conversation history
+            context_parts = ["Previous conversation context:"]
+            
+            for message in request.chat_history[-10:]:  # Use last 10 messages for context
+                role = message.get('role', 'user')
+                content = message.get('content', '')
+                if role == 'user':
+                    context_parts.append(f"User: {content}")
+                elif role == 'assistant':
+                    context_parts.append(f"Assistant: {content}")
+            
+            context_parts.append("\nCurrent request:")
+            context_parts.append(f"User: {request.prompt}")
+            context_parts.append("\nPlease provide a response that takes into account the previous conversation context and continues the discussion appropriately.")
+            
+            context_prompt = "\n".join(context_parts)
+        
+        if request.use_langgraph:
+            # Use LangGraph workflow with context
+            result = await process_prompt_with_langgraph(
+                prompt=context_prompt,
+                prompt_type=request.prompt_type
+            )
+        else:
+            # Use Coordinator workflow with context
+            result = await coordinator.process_prompt(
+                prompt=context_prompt,
+                prompt_type=request.prompt_type,
+                return_comparison=request.return_comparison
+            )
+        
+        # Store the original prompt in metadata for frontend display
+        if 'metadata' not in result:
+            result['metadata'] = {}
+        result['metadata']['original_prompt'] = request.prompt
+        result['metadata']['user_id'] = request.user_id
+        result['metadata']['has_context'] = bool(request.chat_history)
+        
         return PromptResponse(**result)
     except Exception as e:
         logger.error(f"Error processing prompt with memory: {e}")
