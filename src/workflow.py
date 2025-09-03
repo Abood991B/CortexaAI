@@ -5,6 +5,8 @@ from langgraph.graph import StateGraph, END
 from langchain_core.runnables import RunnableConfig
 import logging
 import time
+import asyncio
+from functools import wraps
 
 from agents.classifier import classifier
 from agents.base_expert import create_expert_agent
@@ -46,8 +48,21 @@ class WorkflowState(TypedDict):
     status: str
     error_message: Optional[str]
     next_action: Optional[str]  # For conditional routing
+    cancellation_event: Optional[asyncio.Event]
 
 
+def cancellable_node(node_func):
+    """Decorator to make a workflow node check for cancellation before running."""
+    @wraps(node_func)
+    async def wrapper(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
+        cancellation_event = state.get("cancellation_event")
+        if cancellation_event and cancellation_event.is_set():
+            logger.info(f"Cancellation detected in node '{node_func.__name__}'. Halting workflow.")
+            return {"status": "cancelled"}
+        return await node_func(state, config)
+    return wrapper
+
+@cancellable_node
 async def classify_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
     """Node for domain classification."""
     try:
@@ -78,7 +93,8 @@ async def classify_node(state: WorkflowState, config: RunnableConfig) -> Dict[st
         }
 
 
-def create_expert_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
+@cancellable_node
+async def create_expert_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
     """Node for creating/selecting expert agent."""
     try:
         logger.info("Executing expert creation node")
@@ -115,6 +131,7 @@ def create_expert_node(state: WorkflowState, config: RunnableConfig) -> Dict[str
         }
 
 
+@cancellable_node
 async def improve_prompt_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
     """Node for prompt improvement."""
     try:
@@ -164,6 +181,7 @@ async def improve_prompt_node(state: WorkflowState, config: RunnableConfig) -> D
         }
 
 
+@cancellable_node
 async def evaluate_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
     """Node for prompt evaluation."""
     try:
@@ -215,7 +233,8 @@ async def evaluate_node(state: WorkflowState, config: RunnableConfig) -> Dict[st
         }
 
 
-def check_threshold_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
+@cancellable_node
+async def check_threshold_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
     """Node to check if the prompt passes the evaluation threshold."""
     passes_threshold = state.get("passes_threshold", False)
     iterations_used = state.get("iterations_used", 0)
@@ -236,7 +255,8 @@ def check_threshold_node(state: WorkflowState, config: RunnableConfig) -> Dict[s
     return {"next_action": "improve_again"}
 
 
-def finalize_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
+@cancellable_node
+async def finalize_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
     """Final node to prepare the final result."""
     final_prompt = state.get("final_prompt", state.get("original_prompt", ""))
     evaluation_result = state.get("evaluation_result", {})
@@ -250,7 +270,8 @@ def finalize_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any
     }
 
 
-def error_handler_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
+@cancellable_node
+async def error_handler_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
     """Node for handling errors in the workflow."""
     error_message = state.get("error_message", "Unknown error occurred")
 
@@ -336,7 +357,11 @@ def create_prompt_engineering_app():
 prompt_engineering_app = create_prompt_engineering_app()
 
 
-async def process_prompt_with_langgraph(prompt: str, prompt_type: str = "auto") -> Dict[str, Any]:
+async def process_prompt_with_langgraph(
+    prompt: str, 
+    prompt_type: str = "auto", 
+    cancellation_event: Optional[asyncio.Event] = None
+) -> Dict[str, Any]:
     """
     Process a prompt using the LangGraph workflow.
 
@@ -354,7 +379,8 @@ async def process_prompt_with_langgraph(prompt: str, prompt_type: str = "auto") 
             "prompt_type": prompt_type,
             "iterations_used": 0,
             "status": "started",
-            "workflow_id": f"lg_workflow_{int(__import__('time').time())}"
+            "workflow_id": f"lg_workflow_{int(__import__('time').time())}",
+            "cancellation_event": cancellation_event
         }
 
         # Configure the run

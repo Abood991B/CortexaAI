@@ -1,7 +1,11 @@
 """Main application entry point for Multi-Agent Prompt Engineering System."""
 
+import uuid
+import asyncio
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Any
 from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -33,8 +37,58 @@ classifier_instance = DomainClassifier()
 evaluator_instance = PromptEvaluator()
 coordinator = WorkflowCoordinator(classifier_instance, evaluator_instance)
 
-# In-memory store for active workflows
-active_workflows: Dict[str, Any] = {}
+# In-memory storage for active workflows with cancellation tokens
+active_workflows: Dict[str, Dict[str, Any]] = {}
+
+class WorkflowCancellationError(Exception):
+    """Exception raised when a workflow is cancelled."""
+    pass
+
+async def process_prompt_with_langgraph_cancellable(prompt: str, prompt_type: str, cancellation_event: asyncio.Event):
+    """Wrapper for LangGraph processing with cancellation support."""
+    return await process_prompt_with_langgraph(
+        prompt=prompt, 
+        prompt_type=prompt_type, 
+        cancellation_event=cancellation_event
+    )
+
+async def check_cancellation(cancellation_event: asyncio.Event, workflow_id: str):
+    """Check if workflow should be cancelled and raise exception if so."""
+    if cancellation_event.is_set():
+        logger.info(f"Workflow {workflow_id} cancellation detected")
+        raise WorkflowCancellationError(f"Workflow {workflow_id} was cancelled")
+
+
+def clear_workflow_caches(prompt: str, prompt_type: str = None):
+    """Clear all cache entries related to a workflow prompt."""
+    from config.config import cache_manager, generate_prompt_cache_key, generate_evaluation_cache_key
+    
+    # Clear classification cache
+    cache_key_classification = generate_prompt_cache_key(prompt, prefix="classification")
+    cache_manager.delete(cache_key_classification)
+    
+    # Clear prompt type classification cache if applicable
+    if prompt_type:
+        cache_key_prompt_type = generate_prompt_cache_key(prompt, prefix="prompt_type_classification")
+        cache_manager.delete(cache_key_prompt_type)
+    
+    # Clear caches for common domains (we can't know the exact domain without classifying)
+    common_domains = [
+        "software_engineering", "data_science", "report_writing", 
+        "education", "business_strategy", "general"
+    ]
+    
+    for domain in common_domains:
+        # Clear improvement caches
+        for pt in ["raw", "structured", "auto"]:
+            cache_key_improvement = generate_prompt_cache_key(prompt, domain, pt)
+            cache_manager.delete(cache_key_improvement)
+            
+            # Clear context-based improvement caches
+            cache_key_improvement_context = generate_prompt_cache_key(prompt, domain, f"{pt}_context")
+            cache_manager.delete(cache_key_improvement_context)
+    
+    logger.info(f"Cleared all cache entries for prompt: {prompt[:50]}...")
 
 
 # Initialize FastAPI app
@@ -189,10 +243,14 @@ async def process_prompt(request: PromptRequest, background_tasks: BackgroundTas
     """Process a prompt through the multi-agent workflow."""
     workflow_id = f"workflow_{uuid.uuid4().hex[:8]}"
     
-    # Store the task in active_workflows
+    # Store the task in active_workflows with cancellation token
+    cancellation_event = asyncio.Event()
     active_workflows[workflow_id] = {
         "status": "running",
-        "task": None,  # Placeholder for the background task
+        "task": None,
+        "cancellation_event": cancellation_event,
+        "start_time": datetime.now(),
+        "grace_period_active": True
     }
 
     try:
@@ -200,20 +258,80 @@ async def process_prompt(request: PromptRequest, background_tasks: BackgroundTas
 
         async def workflow_task():
             try:
+                # Wait for grace period (3 seconds) to allow cancellation
+                try:
+                    await asyncio.wait_for(cancellation_event.wait(), timeout=3.0)
+                    # If we reach here, the workflow was cancelled during grace period
+                    logger.info(f"Workflow {workflow_id} was cancelled during grace period")
+                    active_workflows[workflow_id]["status"] = "cancelled"
+                    
+                    # Clear all cache entries for cancelled workflows to prevent returning cached cancelled results
+                    clear_workflow_caches(request.prompt, request.prompt_type)
+                    
+                    return
+                except asyncio.TimeoutError:
+                    # Grace period expired, disable cancellation option
+                    active_workflows[workflow_id]["grace_period_active"] = False
+                    logger.info(f"Workflow {workflow_id} grace period expired, proceeding with execution")
+                
+                # Check if cancelled after grace period (shouldn't happen, but safety check)
+                if cancellation_event.is_set():
+                    logger.info(f"Workflow {workflow_id} was cancelled after grace period")
+                    active_workflows[workflow_id]["status"] = "cancelled"
+                    
+                    # Clear cache entries for cancelled workflows
+                    clear_workflow_caches(request.prompt, request.prompt_type)
+                    
+                    return
+                
+                # Execute the workflow with periodic cancellation checks
                 if request.use_langgraph:
-                    result = await process_prompt_with_langgraph(
+                    result = await process_prompt_with_langgraph_cancellable(
                         prompt=request.prompt,
-                        prompt_type=request.prompt_type
+                        prompt_type=request.prompt_type,
+                        cancellation_event=cancellation_event
                     )
                 else:
+                    # Use regular coordinator but with periodic cancellation checks
                     result = await coordinator.process_prompt(
                         prompt=request.prompt,
                         prompt_type=request.prompt_type,
                         return_comparison=request.return_comparison
                     )
+                
+                # Final check if cancelled
+                if cancellation_event.is_set():
+                    logger.info(f"Workflow {workflow_id} was cancelled during execution")
+                    active_workflows[workflow_id]["status"] = "cancelled"
+                    
+                    # Clear cache entries to prevent stale cancelled results
+                    clear_workflow_caches(request.prompt, request.prompt_type)
+                    
+                    return
+                
                 active_workflows[workflow_id]["status"] = "completed"
                 active_workflows[workflow_id]["result"] = result
+                logger.info(f"Workflow {workflow_id} completed successfully")
+                
+            except WorkflowCancellationError:
+                logger.info(f"Workflow {workflow_id} was cancelled during execution")
+                active_workflows[workflow_id]["status"] = "cancelled"
+                
+                # Clear cache entries
+                clear_workflow_caches(request.prompt, request.prompt_type)
+                
+                return
             except Exception as e:
+                # Check if this was due to cancellation
+                if cancellation_event.is_set():
+                    logger.info(f"Workflow {workflow_id} was cancelled during execution")
+                    active_workflows[workflow_id]["status"] = "cancelled"
+                    
+                    # Clear cache entries
+                    clear_workflow_caches(request.prompt, request.prompt_type)
+                    
+                    return
+                
                 logger.error(f"Workflow {workflow_id} failed: {e}")
                 active_workflows[workflow_id]["status"] = "failed"
                 active_workflows[workflow_id]["error"] = str(e)
@@ -227,6 +345,7 @@ async def process_prompt(request: PromptRequest, background_tasks: BackgroundTas
             status="running",
             message="Workflow started successfully.",
             timestamp=datetime.now().isoformat(),
+            processing_time_seconds=0.0,
             input=request.dict(),
             output={},
             analysis={},
@@ -257,15 +376,25 @@ async def cancel_workflow(workflow_id: str):
     if workflow_id not in active_workflows:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
-    if active_workflows[workflow_id]["status"] != "running":
+    workflow = active_workflows[workflow_id]
+    if workflow["status"] != "running":
         raise HTTPException(status_code=400, detail="Workflow is not running")
 
-    # For now, we just mark it as cancelled. 
-    # In a real-world scenario, you'd need a more robust way to stop the task.
-    active_workflows[workflow_id]["status"] = "cancelled"
-    logger.info(f"User cancelled workflow {workflow_id}")
+    # Check if still in grace period
+    if not workflow.get("grace_period_active", False):
+        return {"status": "too_late", "message": f"Workflow {workflow_id} is past the cancellation grace period and cannot be cancelled."}
 
-    return {"status": "cancelled", "message": f"Workflow {workflow_id} has been cancelled."}
+    # Trigger the cancellation event
+    cancellation_event = workflow.get("cancellation_event")
+    if cancellation_event:
+        cancellation_event.set()
+        logger.info(f"User cancelled workflow {workflow_id} during grace period")
+        return {"status": "cancelled", "message": f"Workflow {workflow_id} has been cancelled."}
+    else:
+        # Fallback for older workflows without cancellation events
+        workflow["status"] = "cancelled"
+        logger.info(f"User cancelled workflow {workflow_id} (fallback method)")
+        return {"status": "cancelled", "message": f"Workflow {workflow_id} has been cancelled."}
 
 
 @app.get("/api/workflow-status/{workflow_id}")
@@ -277,14 +406,18 @@ async def get_workflow_status(workflow_id: str):
     workflow = active_workflows[workflow_id]
     status = workflow.get("status")
 
-    if status == "completed":
-        return {"status": "completed", "result": workflow.get("result")}
-    elif status == "failed":
-        return {"status": "failed", "error": workflow.get("error")}
-    elif status == "cancelled":
-        return {"status": "cancelled"}
-    else:
-        return {"status": "running"}
+    response = {
+        "workflow_id": workflow_id,
+        "status": status,
+        "grace_period_active": workflow.get("grace_period_active", False)
+    }
+    
+    if status == "completed" and "result" in workflow:
+        response["result"] = workflow["result"]
+    elif status == "failed" and "error" in workflow:
+        response["error"] = workflow["error"]
+    
+    return response
 
 
 
@@ -334,29 +467,25 @@ async def get_workflows(
         # Mock data for now - replace with actual database queries
         workflows = []
         for i in range(min(limit, 10)):  # Generate some mock data
-            workflow_id = f"workflow_{uuid.uuid4().hex[:8]}"
-            workflows.append({
+            workflow_id = f"workflow_{i+1}"
+            mock_workflow = {
                 "workflow_id": workflow_id,
-                "status": "completed" if i % 3 == 0 else "running" if i % 3 == 1 else "failed",
-                "domain": ["technology", "business", "creative", "academic"][i % 4],
-                "prompt_preview": f"Sample prompt {i + 1} for testing the workflow system...",
+                "status": "completed",
                 "created_at": datetime.now().isoformat(),
-                "duration": 2.5 + i * 0.3,
-                "total_steps": 3 + i % 3
-            })
+                "completed_at": datetime.now().isoformat()
+            }
+            workflows.append(mock_workflow)
         
         return {
             "data": workflows,
-            "total": 50,  # Mock total
+            "total": len(workflows),
             "page": page,
             "limit": limit,
-            "pages": 3
+            "pages": 1
         }
     except Exception as e:
         logger.error(f"Error getting workflows: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get workflows: {str(e)}")
-
-
 @app.get("/api/workflows/{workflow_id}")
 async def get_workflow_details(workflow_id: str):
     """Get detailed information about a specific workflow."""
@@ -574,59 +703,142 @@ async def get_experiments():
 
 # Memory Management API
 @app.post("/api/process-prompt-with-memory", response_model=PromptResponse)
-async def process_prompt_with_memory(request: PromptRequest):
-    """Process prompt with memory context."""
+async def process_prompt_with_memory(request: PromptRequest, background_tasks: BackgroundTasks):
+    """Process prompt with memory context using async workflow."""
+    if not request.user_id:
+        raise HTTPException(status_code=400, detail="User ID is required for memory-enhanced processing")
+    
+    # Generate unique workflow ID
+    workflow_id = f"workflow_{uuid.uuid4().hex[:8]}"
+    
+    # Store the task in active_workflows with cancellation token
+    cancellation_event = asyncio.Event()
+    active_workflows[workflow_id] = {
+        "status": "running",
+        "task": None,
+        "cancellation_event": cancellation_event,
+        "start_time": datetime.now(),
+        "grace_period_active": True
+    }
+
     try:
-        if not request.user_id:
-            raise HTTPException(status_code=400, detail="User ID is required for memory-enhanced processing")
-        
-        logger.info(f"Processing prompt with memory for user {request.user_id}: {request.prompt[:100]}...")
-        
-        # Build context from chat history if provided
-        context_prompt = request.prompt
-        if request.chat_history and len(request.chat_history) > 0:
-            # Create a context-aware prompt that includes conversation history
-            context_parts = ["Previous conversation context:"]
-            
-            for message in request.chat_history[-10:]:  # Use last 10 messages for context
-                role = message.get('role', 'user')
-                content = message.get('content', '')
-                if role == 'user':
-                    context_parts.append(f"User: {content}")
-                elif role == 'assistant':
-                    context_parts.append(f"Assistant: {content}")
-            
-            context_parts.append("\nCurrent request:")
-            context_parts.append(f"User: {request.prompt}")
-            context_parts.append("\nPlease provide a response that takes into account the previous conversation context and continues the discussion appropriately.")
-            
-            context_prompt = "\n".join(context_parts)
-        
-        if request.use_langgraph:
-            # Use LangGraph workflow with context
-            result = await process_prompt_with_langgraph(
-                prompt=context_prompt,
-                prompt_type=request.prompt_type
-            )
-        else:
-            # Use Coordinator workflow with context
-            result = await coordinator.process_prompt(
-                prompt=context_prompt,
-                prompt_type=request.prompt_type,
-                return_comparison=request.return_comparison
-            )
-        
-        # Store the original prompt in metadata for frontend display
-        if 'metadata' not in result:
-            result['metadata'] = {}
-        result['metadata']['original_prompt'] = request.prompt
-        result['metadata']['user_id'] = request.user_id
-        result['metadata']['has_context'] = bool(request.chat_history)
-        
-        return PromptResponse(**result)
+        logger.info(f"Starting memory workflow {workflow_id} for user {request.user_id}: {request.prompt[:100]}...")
+
+        async def workflow_task():
+            try:
+                # Wait for grace period (3 seconds) to allow cancellation
+                try:
+                    await asyncio.wait_for(cancellation_event.wait(), timeout=3.0)
+                    # If we reach here, the workflow was cancelled during grace period
+                    logger.info(f"Memory workflow {workflow_id} was cancelled during grace period")
+                    active_workflows[workflow_id]["status"] = "cancelled"
+                    # Clear cache entries for cancelled workflows
+                    clear_workflow_caches(request.prompt, request.prompt_type)
+                    return
+                except asyncio.TimeoutError:
+                    # Grace period expired, disable cancellation option
+                    active_workflows[workflow_id]["grace_period_active"] = False
+                    logger.info(f"Memory workflow {workflow_id} grace period expired, proceeding with execution")
+                
+                # Check if cancelled after grace period (shouldn't happen, but safety check)
+                if cancellation_event.is_set():
+                    logger.info(f"Memory workflow {workflow_id} was cancelled after grace period")
+                    active_workflows[workflow_id]["status"] = "cancelled"
+                    # Clear cache entries for cancelled workflows
+                    clear_workflow_caches(request.prompt, request.prompt_type)
+                    return
+                
+                # Build context from chat history if provided
+                context_prompt = request.prompt
+                if request.chat_history and len(request.chat_history) > 0:
+                    # Create a context-aware prompt that includes conversation history
+                    context_parts = ["Previous conversation context:"]
+                    
+                    for message in request.chat_history[-10:]:  # Use last 10 messages for context
+                        role = message.get('role', 'user')
+                        content = message.get('content', '')
+                        if role == 'user':
+                            context_parts.append(f"User: {content}")
+                        elif role == 'assistant':
+                            context_parts.append(f"Assistant: {content}")
+                    
+                    context_parts.append("\nCurrent request:")
+                    context_parts.append(f"User: {request.prompt}")
+                    context_parts.append("\nPlease provide a response that takes into account the previous conversation context and continues the discussion appropriately.")
+                    
+                    context_prompt = "\n".join(context_parts)
+                
+                if request.use_langgraph:
+                    result = await process_prompt_with_langgraph_cancellable(
+                        prompt=context_prompt,
+                        prompt_type=request.prompt_type,
+                        cancellation_event=cancellation_event
+                    )
+                else:
+                    result = await coordinator.process_prompt(
+                        prompt=context_prompt,
+                        prompt_type=request.prompt_type,
+                        return_comparison=request.return_comparison
+                    )
+                
+                # Final check if cancelled
+                if cancellation_event.is_set():
+                    logger.info(f"Memory workflow {workflow_id} was cancelled during execution")
+                    active_workflows[workflow_id]["status"] = "cancelled"
+                    # Clear cache entries for cancelled workflows
+                    clear_workflow_caches(request.prompt, request.prompt_type)
+                    return
+                
+                # Store the original prompt in metadata for frontend display
+                if 'metadata' not in result:
+                    result['metadata'] = {}
+                result['metadata']['original_prompt'] = request.prompt
+                result['metadata']['user_id'] = request.user_id
+                result['metadata']['has_context'] = bool(request.chat_history)
+                
+                active_workflows[workflow_id]["status"] = "completed"
+                active_workflows[workflow_id]["result"] = result
+                logger.info(f"Memory workflow {workflow_id} completed successfully")
+                
+            except WorkflowCancellationError:
+                logger.info(f"Memory workflow {workflow_id} was cancelled during execution")
+                active_workflows[workflow_id]["status"] = "cancelled"
+                # Clear cache entries for cancelled workflows
+                clear_workflow_caches(request.prompt, request.prompt_type)
+                return
+            except Exception as e:
+                # Check if this was due to cancellation
+                if cancellation_event.is_set():
+                    logger.info(f"Memory workflow {workflow_id} was cancelled during execution")
+                    active_workflows[workflow_id]["status"] = "cancelled"
+                    # Clear cache entries for cancelled workflows
+                    clear_workflow_caches(request.prompt, request.prompt_type)
+                    return
+                
+                logger.error(f"Memory workflow {workflow_id} failed: {e}")
+                active_workflows[workflow_id]["status"] = "failed"
+                active_workflows[workflow_id]["error"] = str(e)
+
+        # Run the workflow in the background
+        background_tasks.add_task(workflow_task)
+        active_workflows[workflow_id]["task"] = background_tasks
+
+        return PromptResponse(
+            workflow_id=workflow_id,
+            status="running",
+            message="Memory workflow started successfully.",
+            timestamp=datetime.now().isoformat(),
+            processing_time_seconds=0.0,
+            input=request.dict(),
+            output={},
+            analysis={},
+            metadata={}
+        )
+
     except Exception as e:
-        logger.error(f"Error processing prompt with memory: {e}")
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+        logger.error(f"Error starting memory workflow: {e}")
+        active_workflows.pop(workflow_id, None)
+        raise HTTPException(status_code=500, detail=f"Failed to start memory workflow: {str(e)}")
 
 
 # Web Interface Routes
