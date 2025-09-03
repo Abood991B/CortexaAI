@@ -37,7 +37,7 @@ export const queryKeys = {
 const CACHE_KEY_PREFIX = 'prompt_cache_';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-const getCacheKey = (request: PromptRequest): string => {
+export const getCacheKey = (request: PromptRequest): string => {
   const sortedRequest = Object.keys(request)
     .sort()
     .reduce((acc: { [key: string]: any }, key) => {
@@ -45,6 +45,12 @@ const getCacheKey = (request: PromptRequest): string => {
       return acc;
     }, {});
   return `${CACHE_KEY_PREFIX}${JSON.stringify(sortedRequest)}`;
+};
+
+// Clear cache for a specific request
+export const clearCacheForRequest = (request: PromptRequest): void => {
+  const cacheKey = getCacheKey(request);
+  localStorage.removeItem(cacheKey);
 };
 
 const getCachedResponse = (cacheKey: string): PromptResponse | null => {
@@ -64,7 +70,7 @@ const getCachedResponse = (cacheKey: string): PromptResponse | null => {
   return null;
 };
 
-const setCachedResponse = (cacheKey: string, data: PromptResponse): void => {
+export const setCachedResponse = (cacheKey: string, data: PromptResponse): void => {
   try {
     const cacheItem = {
       data,
@@ -81,17 +87,27 @@ export const useProcessPrompt = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ request, signal }: { request: PromptRequest; signal?: AbortSignal }) => {
+    mutationFn: async ({ request, signal, skipCache = false }: { request: PromptRequest; signal?: AbortSignal; skipCache?: boolean }) => {
       const cacheKey = getCacheKey(request);
-      const cachedResponse = getCachedResponse(cacheKey);
-      if (cachedResponse) {
-        toast.info('Returning cached response.');
-        return cachedResponse;
+      
+      // Clear any existing cache for this request when skipCache is true (for retries)
+      if (skipCache) {
+        localStorage.removeItem(cacheKey);
+      }
+      
+      // Check cache only if not explicitly skipping
+      if (!skipCache) {
+        const cachedResponse = getCachedResponse(cacheKey);
+        if (cachedResponse) {
+          toast.info('Returning cached response.');
+          return cachedResponse;
+        }
       }
 
       try {
         const response = await apiClient.processPrompt(request, signal);
-        setCachedResponse(cacheKey, response);
+        // Don't cache here - let the workflow completion handler decide when to cache
+        // setCachedResponse(cacheKey, response);
         return response;
       } catch (error: any) {
         if (axios.isCancel(error)) {
@@ -386,12 +402,21 @@ export const useProcessPromptWithMemory = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ request, signal }: { request: PromptRequest & { user_id: string }; signal?: AbortSignal }) => {
+    mutationFn: async ({ request, signal, skipCache = false }: { request: PromptRequest & { user_id: string }; signal?: AbortSignal; skipCache?: boolean }) => {
       const cacheKey = getCacheKey(request);
-      const cachedResponse = getCachedResponse(cacheKey);
-      if (cachedResponse) {
-        toast.info('Returning cached response.');
-        return cachedResponse;
+      
+      // Clear any existing cache for this request when skipCache is true (for retries)
+      if (skipCache) {
+        localStorage.removeItem(cacheKey);
+      }
+      
+      // Check cache only if not explicitly skipping
+      if (!skipCache) {
+        const cachedResponse = getCachedResponse(cacheKey);
+        if (cachedResponse) {
+          toast.info('Returning cached response.');
+          return cachedResponse;
+        }
       }
 
       try {
@@ -399,7 +424,8 @@ export const useProcessPromptWithMemory = () => {
           throw new Error('User ID is required for processing with memory');
         }
         const response = await apiClient.processPromptWithMemory(request, signal);
-        setCachedResponse(cacheKey, response);
+        // Don't cache here - let the workflow completion handler decide when to cache
+        // setCachedResponse(cacheKey, response);
         return response;
       } catch (error: any) {
         if (axios.isCancel(error)) {

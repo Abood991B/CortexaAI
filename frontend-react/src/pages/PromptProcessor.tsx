@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Brain, Zap, Play, Copy, Download, ChevronDown, ChevronUp, Send, History, ArrowLeft, MessageSquare, Trash2, RefreshCw, Edit, Check } from 'lucide-react';
+import { Brain, Zap, Play, Copy, Download, ChevronDown, ChevronUp, History, ArrowLeft, MessageSquare, Trash2, RefreshCw, Edit, Check, Settings } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,10 +13,14 @@ import {
   useProcessPrompt, 
   useProcessPromptWithMemory,
   useCancelWorkflow,
-  useWorkflowStatus
+  useWorkflowStatus,
+  clearCacheForRequest,
+  getCacheKey,
+  setCachedResponse
 } from '@/hooks/useApi';
 import { formatDuration } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useNotificationSender } from '@/hooks/useNotifications';
 import type { PromptRequest, PromptResponse } from '@/types/api';
 
 export function PromptProcessor() {
@@ -24,8 +28,7 @@ export function PromptProcessor() {
   const [promptType, setPromptType] = useState<'auto' | 'raw' | 'structured'>('auto');
   const [returnComparison, setReturnComparison] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [useLangGraph, setUseLangGraph] = useState(false);
-  const [useMemory, setUseMemory] = useState(false);
+  const [processingMethod, setProcessingMethod] = useState<'standard' | 'memory' | 'langgraph'>('standard');
   const [userId, setUserId] = useState('');
   const [chatHistory, setChatHistory] = useState<Array<{id: string, prompt: string, response: PromptResponse, timestamp: Date}>>([]);
   const [savedChats, setSavedChats] = useState<Array<{id: string, title: string, messages: Array<{id: string, prompt: string, response: PromptResponse, timestamp: Date}>, lastUpdated: Date}>>([]);
@@ -39,77 +42,203 @@ export function PromptProcessor() {
     const [result, setResult] = useState<PromptResponse | null>(null);
   const [workflowId, setWorkflowId] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [gracePeriodCountdown, setGracePeriodCountdown] = useState(3);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
 
   const processPromptMutation = useProcessPrompt();
   const processPromptWithMemoryMutation = useProcessPromptWithMemory();
   const cancelWorkflowMutation = useCancelWorkflow();
+  const { addNotification } = useNotificationSender();
   
   // Workflow status polling
   const workflowStatusQuery = useWorkflowStatus(workflowId);
   
-  // Handle workflow completion
+  // Handle workflow completion and countdown timer
   useEffect(() => {
+    let timer: NodeJS.Timeout;
+
+    if (isPolling && workflowId && workflowStatusQuery.data?.grace_period_active) {
+      setGracePeriodCountdown(3);
+      timer = setInterval(() => {
+        setGracePeriodCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      setGracePeriodCountdown(0);
+    }
+
     if (workflowStatusQuery.data) {
-      const status = workflowStatusQuery.data.status;
-      
-      if (status === 'completed') {
-        setResult(workflowStatusQuery.data.result);
+      const { status, result: workflowResult, error, grace_period_active } = workflowStatusQuery.data;
+
+      const handleTerminalState = (toastMessage: string, toastType: 'success' | 'info' | 'error') => {
         setIsPolling(false);
         setWorkflowId(null);
+        if (toastType === 'success') toast.success(toastMessage);
+        else if (toastType === 'info') toast.info(toastMessage);
+        else toast.error(toastMessage);
+      };
+
+      if (status === 'completed') {
+        setResult(workflowResult);
         
-        // Add to chat history if using memory mode
-        if (useMemory && workflowStatusQuery.data.result) {
-          const newChatEntry = {
-            id: workflowId || `entry_${Date.now()}`,
-            prompt: useMemory ? currentChatPrompt : prompt,
-            response: workflowStatusQuery.data.result,
-            timestamp: new Date()
-          };
-          
-          // Create new chat if none exists
-          if (!currentChatId) {
-            const newChatId = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            const newChat = {
-              id: newChatId,
-              title: (useMemory ? currentChatPrompt : prompt).trim().substring(0, 50) + ((useMemory ? currentChatPrompt : prompt).trim().length > 50 ? '...' : ''),
-              messages: [newChatEntry],
-              lastUpdated: new Date()
-            };
-            
-            setSavedChats(prev => [newChat, ...prev]);
-            setCurrentChatId(newChatId);
-            setChatHistory([newChatEntry]);
-          } else {
-            // Add to existing chat
-            setChatHistory(prev => [...prev, newChatEntry]);
-          }
-          
-          setCurrentChatPrompt('');
-        } else {
-          setPrompt('');
+        // Cache the successful response
+        const currentRequest: PromptRequest = {
+          prompt: processingMethod === 'memory' ? currentChatPrompt : prompt,
+          prompt_type: promptType,
+          return_comparison: returnComparison,
+          use_langgraph: processingMethod === 'langgraph'
+        };
+        
+        // Add user_id for memory requests
+        if (processingMethod === 'memory' && userId) {
+          (currentRequest as any).user_id = userId;
         }
         
-        toast.success('Prompt processed successfully!');
+        // Cache the successful response
+        const cacheKey = getCacheKey(currentRequest);
+        if (workflowResult) {
+          setCachedResponse(cacheKey, workflowResult);
+        }
+        
+        // Add completion notification
+        addNotification({
+          type: 'success',
+          title: `${processingMethod === 'langgraph' ? 'LangGraph Workflow' : processingMethod === 'memory' ? 'Memory Processing' : 'Standard Processing'} Complete`,
+          message: `Your prompt has been optimized successfully. Quality score: ${workflowResult?.output?.quality_score?.toFixed(2) || 'N/A'}`,
+          action: {
+            label: 'View Results',
+            onClick: () => {
+              window.scrollTo({
+                top: document.body.scrollHeight,
+                behavior: 'smooth'
+              });
+            }
+          }
+        });
+        
+        // Don't show toast here since we already show a notification
+        setIsPolling(false);
+        setWorkflowId(null);
+        if (processingMethod === 'memory') {
+            // Add to chat history for memory mode
+            const chatEntry = {
+              id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              prompt: currentChatPrompt,
+              response: workflowResult,
+              timestamp: new Date()
+            };
+            
+            setChatHistory(prev => [...prev, chatEntry]);
+            setCurrentChatPrompt('');
+            
+            // Create or update saved chat
+            if (!currentChatId) {
+              const newChatId = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+              const newChat = {
+                id: newChatId,
+                title: currentChatPrompt.substring(0, 50) + (currentChatPrompt.length > 50 ? '...' : ''),
+                messages: [chatEntry],
+                lastUpdated: new Date()
+              };
+              setSavedChats(prev => [newChat, ...prev]);
+              setCurrentChatId(newChatId);
+            }
+        } else {
+            setPrompt('');
+        }
       } else if (status === 'cancelled') {
-        setIsPolling(false);
-        setWorkflowId(null);
-        toast.info('Workflow was cancelled');
+        // Clear frontend cache when workflow is cancelled to prevent returning stale results
+        const currentRequest: PromptRequest = {
+          prompt: processingMethod === 'memory' ? currentChatPrompt : prompt,
+          prompt_type: promptType,
+          return_comparison: returnComparison,
+          use_langgraph: processingMethod === 'langgraph'
+        };
+        
+        // Add user_id for memory requests
+        if (processingMethod === 'memory' && userId) {
+          (currentRequest as any).user_id = userId;
+        }
+        
+        clearCacheForRequest(currentRequest);
+        
+        addNotification({
+          type: 'warning',
+          title: 'Workflow Cancelled',
+          message: `${processingMethod === 'langgraph' ? 'LangGraph workflow' : processingMethod === 'memory' ? 'Memory processing' : 'Standard processing'} was cancelled by user.`
+        });
+        handleTerminalState('Workflow was cancelled.', 'info');
       } else if (status === 'failed') {
-        setIsPolling(false);
-        setWorkflowId(null);
-        toast.error(workflowStatusQuery.data.error || 'Workflow failed');
+        setResult(null);
+        
+        // Clear cache for failed workflows to allow retry
+        const currentRequest: PromptRequest = {
+          prompt: processingMethod === 'memory' ? currentChatPrompt : prompt,
+          prompt_type: promptType,
+          return_comparison: returnComparison,
+          use_langgraph: processingMethod === 'langgraph'
+        };
+        
+        // Add user_id for memory requests
+        if (processingMethod === 'memory' && userId) {
+          (currentRequest as any).user_id = userId;
+        }
+        
+        clearCacheForRequest(currentRequest);
+        
+        addNotification({
+          type: 'error',
+          title: 'Workflow Failed',
+          message: `${processingMethod === 'langgraph' ? 'LangGraph workflow' : processingMethod === 'memory' ? 'Memory processing' : 'Standard processing'} encountered an error: ${error || 'Unknown error'}`
+        });
+        handleTerminalState(error || 'Workflow failed', 'error');
+      } else if (status === 'running' && !grace_period_active) {
+        // Remove the toast here as it causes repetitive messages
+        // The grace period countdown visual feedback is enough
       }
     }
-  }, [workflowStatusQuery.data, workflowId, useMemory, currentChatPrompt, prompt, currentChatId]);
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [workflowStatusQuery.data, isPolling, workflowId, processingMethod, currentChatPrompt, prompt, currentChatId]);
 
   // Handle cancellation
   const handleCancel = () => {
     if (workflowId) {
-      cancelWorkflowMutation.mutate(workflowId);
-      setIsPolling(false);
-      setWorkflowId(null);
+      // Clear frontend cache for the current request to prevent stale cached results
+      const currentRequest: PromptRequest = {
+        prompt: processingMethod === 'memory' ? currentChatPrompt : prompt,
+        prompt_type: promptType,
+        return_comparison: returnComparison,
+        use_langgraph: processingMethod === 'langgraph'
+      };
+      
+      // Add user_id for memory requests
+      if (processingMethod === 'memory' && userId) {
+        (currentRequest as any).user_id = userId;
+      }
+      
+      clearCacheForRequest(currentRequest);
+      
+      cancelWorkflowMutation.mutate(workflowId, {
+        onSuccess: () => {
+          toast.info('Workflow cancellation requested.');
+          // The useWorkflowStatus hook will handle the final state change
+        },
+        onError: (error) => {
+          toast.error(`Failed to cancel workflow: ${error.message}`);
+          // If cancellation fails, we might need to reset state here too
+          setIsPolling(false);
+          setWorkflowId(null);
+        }
+      });
     }
   };
 
@@ -266,10 +395,18 @@ export function PromptProcessor() {
     }
   }, [userId]);
 
+  // Clear results when switching processing methods
+  useEffect(() => {
+    setResult(null);
+    setWorkflowId(null);
+    setIsPolling(false);
+    // Don't clear prompt content to preserve user's work
+  }, [processingMethod]);
+
     const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
         
-    const inputPrompt = useMemory ? currentChatPrompt : prompt;
+    const inputPrompt = processingMethod === 'memory' ? currentChatPrompt : prompt;
     
     if (!inputPrompt.trim()) {
       toast.error('Please enter a prompt');
@@ -277,7 +414,7 @@ export function PromptProcessor() {
     }
 
     // Reset previous result for non-memory modes
-    if (!useMemory) {
+    if (processingMethod !== 'memory') {
       setResult(null);
     }
 
@@ -286,11 +423,11 @@ export function PromptProcessor() {
       prompt: inputPrompt.trim(),
       prompt_type: promptType,
       return_comparison: returnComparison,
-      use_langgraph: useLangGraph,
+      use_langgraph: processingMethod === 'langgraph',
     };
 
     // Add memory context if using memory mode
-    if (useMemory) {
+    if (processingMethod === 'memory') {
       if (!userId) {
         toast.error('User ID is required when using memory');
         return;
@@ -323,23 +460,47 @@ export function PromptProcessor() {
     try {
       let response: PromptResponse | undefined;
       
-      if (useMemory) {
+      // Check if this is a retry (same prompt that was previously cached or cancelled)
+      const cacheKey = getCacheKey(request);
+      const existingCache = localStorage.getItem(cacheKey);
+      const isRetry = !!existingCache;
+      
+      // Clear cache if it exists to ensure fresh processing
+      if (isRetry) {
+        localStorage.removeItem(cacheKey);
+      }
+      
+      if (processingMethod === 'memory') {
         if (!userId.trim()) {
           toast.error('User ID is required when using memory');
           return;
         }
         response = await processPromptWithMemoryMutation.mutateAsync({
           request: { ...request, user_id: userId },
+          skipCache: isRetry  // Skip cache check if this is a retry
         });
       } else {
-        response = await processPromptMutation.mutateAsync({ request });
+        // For both standard and langgraph methods, use the standard endpoint
+        // The use_langgraph flag in the request determines the processing type
+        response = await processPromptMutation.mutateAsync({ 
+          request,
+          skipCache: isRetry  // Skip cache check if this is a retry
+        });
       }
       
       if (response) {
         // Start polling for the workflow result
         setWorkflowId(response.workflow_id);
         setIsPolling(true);
-        toast.info('Processing started. Please wait...');
+        
+        // Add start notification
+        addNotification({
+          type: 'info',
+          title: `${processingMethod === 'langgraph' ? 'LangGraph Workflow' : processingMethod === 'memory' ? 'Memory Processing' : 'Standard Processing'} Started`,
+          message: `Processing your prompt with workflow ID: ${response.workflow_id.slice(-8)}`
+        });
+        
+        // Remove duplicate toast since we already show notification
       }
     } catch (error: any) {
       console.error('Processing failed:', error);
@@ -348,8 +509,11 @@ export function PromptProcessor() {
   };
 
   const isLoading = processPromptMutation.isPending || 
-                   processPromptWithMemoryMutation.isPending ||
+                   processPromptWithMemoryMutation.isPending || 
                    isPolling;
+  
+  const canCancel = (isPolling && workflowId && workflowStatusQuery.data?.grace_period_active) || 
+                    (isPolling && workflowId && gracePeriodCountdown > 0);
   
   // Reset form after successful submission
   React.useEffect(() => {
@@ -426,7 +590,7 @@ export function PromptProcessor() {
   };
 
   const switchToStandardMode = () => {
-    setUseMemory(false);
+    setProcessingMethod('standard');
     setShowChatList(false);
     setChatHistory([]);
     setCurrentChatId(null);
@@ -457,8 +621,79 @@ export function PromptProcessor() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Processing Method Selection */}
+            <div className="mb-6">
+              <label className="text-sm font-medium mb-3 block">
+                Processing Method
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Standard Processing */}
+                <div className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                  processingMethod === 'standard' 
+                    ? 'border-primary bg-primary/5' 
+                    : 'border-border hover:border-primary/50'
+                }`}
+                onClick={() => setProcessingMethod('standard')}
+                >
+                  <div className="flex items-center space-x-2 mb-2">
+                    <div className={`w-4 h-4 rounded-full border-2 ${
+                      processingMethod === 'standard' 
+                        ? 'border-primary bg-primary' 
+                        : 'border-muted-foreground'
+                    }`} />
+                    <span className="font-medium">Standard Processing</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Basic prompt optimization with single-agent processing
+                  </p>
+                </div>
+
+                {/* Memory Enhanced */}
+                <div className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                  processingMethod === 'memory' 
+                    ? 'border-primary bg-primary/5' 
+                    : 'border-border hover:border-primary/50'
+                }`}
+                onClick={() => setProcessingMethod('memory')}
+                >
+                  <div className="flex items-center space-x-2 mb-2">
+                    <div className={`w-4 h-4 rounded-full border-2 ${
+                      processingMethod === 'memory' 
+                        ? 'border-primary bg-primary' 
+                        : 'border-muted-foreground'
+                    }`} />
+                    <span className="font-medium">Memory Enhanced</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Maintain conversation context and chat history
+                  </p>
+                </div>
+
+                {/* LangGraph Workflow */}
+                <div className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                  processingMethod === 'langgraph' 
+                    ? 'border-primary bg-primary/5' 
+                    : 'border-border hover:border-primary/50'
+                }`}
+                onClick={() => setProcessingMethod('langgraph')}
+                >
+                  <div className="flex items-center space-x-2 mb-2">
+                    <div className={`w-4 h-4 rounded-full border-2 ${
+                      processingMethod === 'langgraph' 
+                        ? 'border-primary bg-primary' 
+                        : 'border-muted-foreground'
+                    }`} />
+                    <span className="font-medium">LangGraph Workflow</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Complex multi-agent workflow processing
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Memory Mode Chat Interface */}
-            {useMemory ? (
+            {processingMethod === 'memory' ? (
               <div className="space-y-4">
                 {/* Memory Mode Header with Controls */}
                 <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg">
@@ -579,24 +814,65 @@ export function PromptProcessor() {
 
                 {/* Chat History */}
                 {chatHistory.length > 0 && (
-                  <div className="space-y-3 overflow-y-auto border rounded-lg p-3">
-                    <div className="flex items-center text-sm font-medium text-muted-foreground">
-                      <History className="h-4 w-4 mr-2" />
-                      Conversation History
+                  <div className="space-y-4 max-h-96 overflow-y-auto border rounded-lg p-4 bg-muted/20">
+                    <div className="flex items-center justify-between p-2 bg-card rounded border">
+                      <div className="flex items-center text-sm font-medium">
+                        <History className="h-4 w-4 mr-2 text-primary" />
+                        <span>Conversation History</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground bg-primary/10 px-2 py-1 rounded">
+                        {chatHistory.length} message{chatHistory.length !== 1 ? 's' : ''}
+                      </div>
                     </div>
                     {chatHistory.map((chat) => (
-                      <div key={chat.id} className="space-y-2 p-3 bg-muted/30 rounded-lg">
-                        <div className="text-sm">
-                          <span className="font-medium text-blue-600">You:</span> {chat.prompt}
+                      <div key={chat.id} className="space-y-3 p-4 bg-card border rounded-lg shadow-sm">
+                        {/* User Message */}
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <span className="font-semibold text-blue-700 dark:text-blue-300 text-sm">You</span>
+                          </div>
+                          <div className="pl-4 text-sm text-foreground bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg border-l-4 border-blue-500">
+                            {chat.prompt}
+                          </div>
                         </div>
-                                                <div className="text-sm">
-                          <span className="font-medium text-green-600">AI:</span>
-                          <SyntaxHighlighter language="markdown" style={vscDarkPlus} customStyle={{ background: 'transparent', padding: '0', marginTop: '0.5rem' }} codeTagProps={{ style: { fontFamily: 'inherit', fontSize: 'inherit' } }}>
-                            {chat.response.output.optimized_prompt}
-                          </SyntaxHighlighter>
+                        
+                        {/* AI Response */}
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span className="font-semibold text-green-700 dark:text-green-300 text-sm">AI Assistant</span>
+                          </div>
+                          <div className="pl-4">
+                            <div className="bg-green-50 dark:bg-green-950/30 p-4 rounded-lg border-l-4 border-green-500">
+                              <SyntaxHighlighter 
+                                language="markdown" 
+                                style={vscDarkPlus} 
+                                customStyle={{ 
+                                  background: 'transparent', 
+                                  padding: '0',
+                                  margin: '0',
+                                  color: 'inherit'
+                                }} 
+                                codeTagProps={{ 
+                                  style: { 
+                                    fontFamily: 'inherit', 
+                                    fontSize: 'inherit',
+                                    color: 'hsl(var(--foreground))'
+                                  } 
+                                }}
+                              >
+                                {chat.response.output.optimized_prompt}
+                              </SyntaxHighlighter>
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {chat.timestamp.toLocaleString()}
+                        
+                        {/* Timestamp */}
+                        <div className="flex justify-end">
+                          <div className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded">
+                            {chat.timestamp.toLocaleString()}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -604,99 +880,239 @@ export function PromptProcessor() {
                 )}
                 
                 {/* Chat Input */}
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="flex space-x-2">
-                    <Textarea
-                      value={currentChatPrompt}
-                      onChange={(e) => setCurrentChatPrompt(e.target.value)}
-                      placeholder={chatHistory.length === 0 ? "Start a new conversation..." : "Continue the conversation..."}
-                      className="flex-1 min-h-[100px]"
-                      required
-                    />
-                    <div className="flex flex-col space-y-2">
-                      <Button type="submit" disabled={isLoading} className="h-full">
-                        {isLoading ? (
-                          <LoadingSpinner size="sm" />
-                        ) : (
-                          <Send className="h-4 w-4" />
-                        )}
-                      </Button>
-                      {isLoading && (
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          onClick={handleCancel}
-                          className="h-full"
-                        >
-                          Cancel
-                        </Button>
-                      )}
+                <div className="border-t pt-4">
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-3">
+                      <label className="text-sm font-medium text-foreground">
+                        {chatHistory.length === 0 ? '💬 Start New Conversation' : '💭 Continue Conversation'}
+                      </label>
+                      <div className="flex space-x-3">
+                        <div className="flex-1 space-y-2">
+                          <Textarea
+                            value={currentChatPrompt}
+                            onChange={(e) => setCurrentChatPrompt(e.target.value)}
+                            placeholder={chatHistory.length === 0 
+                              ? "Type your message to start a new conversation with context memory..." 
+                              : "Continue the conversation - previous context will be remembered..."
+                            }
+                            className="min-h-[120px] resize-none border-2 transition-colors focus:border-primary"
+                            required
+                          />
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Characters: {currentChatPrompt.length}</span>
+                            <span className="text-primary">Context preserved across messages</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-col space-y-2 min-w-[120px]">
+                          <Button 
+                            type="submit" 
+                            disabled={isLoading}
+                            className="h-full bg-gradient-to-br from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transition-all duration-200"
+                          >
+                            {isLoading ? (
+                              <>
+                                <LoadingSpinner size="sm" className="mr-2" />
+                                <span className="text-xs">Sending...</span>
+                              </>
+                            ) : (
+                              <>
+                                <MessageSquare className="h-4 w-4 mr-2" />
+                                <span className="text-sm">Send</span>
+                              </>
+                            )}
+                          </Button>
+                          
+                          {canCancel && (
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              onClick={handleCancel}
+                              className="text-xs"
+                            >
+                              Cancel ({gracePeriodCountdown}s)
+                            </Button>
+                          )}
+                          
+                          {isLoading && !canCancel && (
+                            <div className="text-xs text-center text-muted-foreground px-2 py-2 bg-muted/50 rounded border">
+                              <div className="animate-pulse">Processing with memory...</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </form>
+                  </form>
+                </div>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">
+              /* Standard and LangGraph Processing */
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Method Info Banner */}
+                {processingMethod === 'langgraph' && (
+                  <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Zap className="h-5 w-5 text-blue-600" />
+                      <span className="font-medium text-blue-700 dark:text-blue-300">LangGraph Workflow Mode</span>
+                    </div>
+                    <p className="text-sm text-blue-600 dark:text-blue-400">
+                      Advanced multi-agent workflow processing for complex prompts with enhanced analysis and optimization capabilities.
+                    </p>
+                  </div>
+                )}
+                
+                {processingMethod === 'standard' && (
+                  <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950 rounded-lg border border-green-200 dark:border-green-800">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Brain className="h-5 w-5 text-green-600" />
+                      <span className="font-medium text-green-700 dark:text-green-300">Standard Processing Mode</span>
+                    </div>
+                    <p className="text-sm text-green-600 dark:text-green-400">
+                      Fast and efficient prompt optimization using our core AI agent for quick results.
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <label className="text-sm font-medium block">
                     Prompt Content
                   </label>
                   <Textarea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    placeholder={
-                      "Enter your prompt here...\n\nExamples:\n- Write a function to sort a list\n- Create a data analysis report\n- Draft a business strategy document"
+                    placeholder={processingMethod === 'langgraph' 
+                      ? "Enter your complex prompt here for advanced multi-agent processing...\n\nExamples:\n- Create a comprehensive business strategy with market analysis\n- Design a complex software architecture with multiple components\n- Develop a detailed research methodology with data collection strategies"
+                      : "Enter your prompt here for optimization...\n\nExamples:\n- Write a function to sort a list\n- Create a data analysis report\n- Draft a business strategy document"
                     }
-                    className="min-h-[200px]"
+                    className="min-h-[200px] resize-none"
                     required
                   />
-                </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">
-                    Prompt Type
-                  </label>
-                  <select
-                    value={promptType}
-                    onChange={(e) => setPromptType(e.target.value as any)}
-                    className="w-full p-2 border border-input rounded-md bg-background"
-                  >
-                    <option value="auto">Auto-detect</option>
-                    <option value="raw">Raw Prompt</option>
-                    <option value="structured">Structured Prompt</option>
-                  </select>
-                </div>
-
-                {useMemory && (
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">
-                      User ID
-                    </label>
-                    <input
-                      type="text"
-                      value={userId}
-                      onChange={(e) => setUserId(e.target.value)}
-                      className="w-full p-2 border border-input rounded-md bg-background"
-                      placeholder="user_001"
-                    />
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Characters: {prompt.length}</span>
+                    {processingMethod === 'langgraph' && prompt.length > 0 && (
+                      <span className="text-blue-600 dark:text-blue-400">
+                        Complex processing will be applied
+                      </span>
+                    )}
                   </div>
-                )}
+                </div>
+
+              <div className="space-y-4">
+                {/* Prompt Type Selection */}
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-foreground">
+                    Prompt Type Configuration
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {/* Auto-detect */}
+                    <div 
+                      onClick={() => setPromptType('auto')}
+                      className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
+                        promptType === 'auto' 
+                          ? 'border-primary bg-primary/5 shadow-md' 
+                          : 'border-border hover:border-primary/50 bg-card'
+                      }`}
+                    >
+                      {promptType === 'auto' && (
+                        <div className="absolute top-2 right-2">
+                          <Check className="h-4 w-4 text-primary" />
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                            <Brain className="h-4 w-4 text-white" />
+                          </div>
+                          <span className="font-medium">Auto-detect</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          AI intelligently determines the optimal prompt type
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Raw Prompt */}
+                    <div 
+                      onClick={() => setPromptType('raw')}
+                      className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
+                        promptType === 'raw' 
+                          ? 'border-primary bg-primary/5 shadow-md' 
+                          : 'border-border hover:border-primary/50 bg-card'
+                      }`}
+                    >
+                      {promptType === 'raw' && (
+                        <div className="absolute top-2 right-2">
+                          <Check className="h-4 w-4 text-primary" />
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                            <Edit className="h-4 w-4 text-white" />
+                          </div>
+                          <span className="font-medium">Raw Prompt</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Process exactly as written without restructuring
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Structured Prompt */}
+                    <div 
+                      onClick={() => setPromptType('structured')}
+                      className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
+                        promptType === 'structured' 
+                          ? 'border-primary bg-primary/5 shadow-md' 
+                          : 'border-border hover:border-primary/50 bg-card'
+                      }`}
+                    >
+                      {promptType === 'structured' && (
+                        <div className="absolute top-2 right-2">
+                          <Check className="h-4 w-4 text-primary" />
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center">
+                            <Settings className="h-4 w-4 text-white" />
+                          </div>
+                          <span className="font-medium">Structured</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Deep analysis with structural optimization
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Basic Options */}
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="returnComparison"
-                    checked={returnComparison}
-                    onChange={(e) => setReturnComparison(e.target.checked)}
-                    className="rounded"
-                  />
-                  <label htmlFor="returnComparison" className="text-sm">
-                    Show before/after comparison
-                  </label>
+              <div className="space-y-4">
+                <div className="p-4 bg-muted/50 rounded-lg border">
+                  <h4 className="text-sm font-medium mb-3 flex items-center">
+                    ⚙️ Processing Options
+                  </h4>
+                  <div className="space-y-3">
+                    <label className="flex items-center space-x-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        id="returnComparison"
+                        checked={returnComparison}
+                        onChange={(e) => setReturnComparison(e.target.checked)}
+                        className="w-4 h-4 text-primary bg-background border-2 border-muted-foreground rounded focus:ring-primary focus:ring-2 transition-colors"
+                      />
+                      <div className="flex-1">
+                        <span className="text-sm font-medium group-hover:text-primary transition-colors">
+                          Show Before/After Comparison
+                        </span>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Display side-by-side comparison of original and optimized prompts
+                        </p>
+                      </div>
+                    </label>
+                  </div>
                 </div>
               </div>
 
@@ -723,102 +1139,81 @@ export function PromptProcessor() {
 
               {/* Advanced Options */}
               {showAdvanced && (
-                <div className="mt-4 space-y-4 pl-4 border-l-2 border-muted">
+                <div className="mt-4 space-y-4 p-4 bg-muted/30 rounded-lg border border-dashed">
                   <div className="space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="useLangGraph"
-                        checked={useLangGraph}
-                        onChange={(e) => setUseLangGraph(e.target.checked)}
-                        className="rounded"
-                      />
-                      <label htmlFor="useLangGraph" className="text-sm">
-                        Enable LangGraph Workflow
-                        <p className="text-xs text-muted-foreground">
-                          For complex prompt processing with multiple agents
-                        </p>
-                      </label>
+                    <div className="flex items-center space-x-2 text-muted-foreground">
+                      <Settings className="h-4 w-4" />
+                      <span className="text-sm font-medium">Advanced Configuration</span>
                     </div>
-
-                    <div className="flex items-start space-x-2 pt-2">
-                      <input
-                        type="radio"
-                        id="standardMode"
-                        name="processingMode"
-                        checked={!useMemory}
-                        onChange={() => setUseMemory(false)}
-                        className="mt-1"
-                      />
-                      <label htmlFor="standardMode" className="text-sm">
-                        <span className="font-medium">Standard Processing</span>
-                        <p className="text-xs text-muted-foreground">
-                          Basic prompt optimization without additional features
-                        </p>
-                      </label>
+                    
+                    <div className="text-center py-4">
+                      <p className="text-xs text-muted-foreground">
+                        No additional advanced options available for {processingMethod} processing method.
+                      </p>
                     </div>
-
-                    <div className="flex items-start space-x-2">
-                      <input
-                        type="radio"
-                        id="useMemory"
-                        name="processingMode"
-                        checked={useMemory}
-                        onChange={() => {
-                          setUseMemory(true);
-                          setShowChatList(false);
-                        }}
-                        className="mt-1"
-                        disabled={false}
-                        title="Use memory to maintain context across requests"
-                      />
-                      <label htmlFor="useMemory" className="text-sm">
-                        <span className="font-medium">Memory-Enhanced Processing</span>
-                        <p className="text-xs text-muted-foreground">
-                          Maintain conversation context and chat history
-                        </p>
-                      </label>
-                    </div>
-
-
-                    {userId && (
-                      <div className="pl-6 pt-2">
-                        <p className="text-xs text-muted-foreground">
-                          Session ID: {userId.slice(-12)}
-                        </p>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
 
-                                <div className="flex items-center space-x-2">
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <>
-                        <LoadingSpinner size="sm" className="mr-2" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="mr-2 h-4 w-4" />
-                        Optimize Prompt
-                      </>
-                    )}
-                  </Button>
-                  {isLoading && (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={handleCancel}
+                <div className="pt-4 border-t">
+                  <div className="flex flex-col space-y-3">
+                    <Button 
+                      type="submit" 
+                      className={`w-full py-3 text-base font-medium transition-all duration-200 ${
+                        processingMethod === 'langgraph' 
+                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700' 
+                          : processingMethod === 'standard'
+                            ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
+                            : 'bg-primary hover:bg-primary/90'
+                      }`}
+                      disabled={isLoading}
                     >
-                      Cancel
+                      {isLoading ? (
+                        <>
+                          <LoadingSpinner size="sm" className="mr-2" />
+                          {processingMethod === 'langgraph' ? 'Running Advanced Workflow...' : 'Processing Prompt...'}
+                        </>
+                      ) : (
+                        <>
+                          {processingMethod === 'langgraph' ? (
+                            <>
+                              <Zap className="mr-2 h-5 w-5" />
+                              Start LangGraph Workflow
+                            </>
+                          ) : (
+                            <>
+                              <Play className="mr-2 h-5 w-5" />
+                              Optimize Prompt
+                            </>
+                          )}
+                        </>
+                      )}
                     </Button>
-                  )}
+                    
+                    {canCancel && (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={handleCancel}
+                        className="w-full"
+                      >
+                        Cancel Workflow ({gracePeriodCountdown}s)
+                      </Button>
+                    )}
+                    
+                    {isLoading && !canCancel && (
+                      <div className="flex items-center justify-center p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+                        <div className="animate-pulse flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                        </div>
+                        <span className="ml-3 text-sm font-medium text-amber-700 dark:text-amber-300">
+                          {processingMethod === 'langgraph' ? 'Multi-agent workflow in progress' : 'Processing cannot be cancelled'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </form>
             )}
@@ -855,13 +1250,76 @@ export function PromptProcessor() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                <LoadingSpinner size="lg" />
-                <div className="text-center">
-                  <h3 className="font-medium">Processing your prompt...</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Our AI agents are analyzing, classifying, improving, and evaluating your prompt.
-                  </p>
+              <div className="space-y-6">
+                {/* Workflow Status Card */}
+                {workflowId && (
+                  <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950 dark:to-purple-950 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin">
+                          <Zap className="h-5 w-5 text-indigo-600" />
+                        </div>
+                        <span className="font-medium text-indigo-700 dark:text-indigo-300">
+                          {processingMethod === 'langgraph' ? 'LangGraph Workflow' : processingMethod === 'memory' ? 'Memory Processing' : 'Standard Processing'} Active
+                        </span>
+                      </div>
+                      {workflowId && (
+                        <code className="text-xs bg-white/50 dark:bg-black/20 px-2 py-1 rounded">
+                          ID: {workflowId.slice(-8)}
+                        </code>
+                      )}
+                    </div>
+                    <div className="text-sm text-indigo-600 dark:text-indigo-400">
+                      Status: {workflowStatusQuery.data?.status || 'Initializing...'}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Processing Animation */}
+                <div className="flex flex-col items-center justify-center py-8 space-y-6">
+                  <div className="relative">
+                    <div className="absolute inset-0 animate-ping">
+                      <div className="h-20 w-20 rounded-full bg-primary/20"></div>
+                    </div>
+                    <LoadingSpinner size="lg" className="relative z-10" />
+                  </div>
+                  
+                  <div className="text-center space-y-2">
+                    <h3 className="text-lg font-semibold">
+                      {processingMethod === 'langgraph' 
+                        ? 'Running Multi-Agent Workflow...'
+                        : processingMethod === 'memory' 
+                          ? 'Processing with Context Memory...'
+                          : 'Optimizing Your Prompt...'
+                      }
+                    </h3>
+                    <p className="text-sm text-muted-foreground max-w-md">
+                      {processingMethod === 'langgraph'
+                        ? 'Multiple specialized AI agents are collaborating to analyze and enhance your complex prompt.'
+                        : processingMethod === 'memory'
+                          ? 'Processing your prompt while maintaining conversation context and history.'
+                          : 'Our AI agent is analyzing, classifying, and optimizing your prompt for better results.'
+                      }
+                    </p>
+                  </div>
+                  
+                  {/* Progress Steps */}
+                  <div className="flex items-center space-x-3 text-sm">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-primary rounded-full animate-pulse"></div>
+                      <span className="text-muted-foreground">Analyzing</span>
+                    </div>
+                    <span className="text-muted-foreground">→</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-primary/60 rounded-full animate-pulse"></div>
+                      <span className="text-muted-foreground">Optimizing</span>
+                    </div>
+                    <span className="text-muted-foreground">→</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-primary/30 rounded-full"></div>
+                      <span className="text-muted-foreground">Finalizing</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : result ? (
@@ -916,11 +1374,80 @@ export function PromptProcessor() {
                     )}
                   </div>
                 ) : (
-                  <div>
-                    <h4 className="font-medium mb-2">✨ Optimized Prompt</h4>
-                    <SyntaxHighlighter language="markdown" style={vscDarkPlus} className="rounded-lg text-sm w-full">
-                      {result.output.optimized_prompt}
-                    </SyntaxHighlighter>
+                  <div className="space-y-4">
+                    {/* Optimized Prompt Header */}
+                    <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950 rounded-lg border border-green-200 dark:border-green-800">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                          <Check className="h-4 w-4 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-green-700 dark:text-green-300">Optimized Prompt</h4>
+                          <p className="text-xs text-green-600 dark:text-green-400">
+                            Enhanced for {result.output.domain || 'general'} domain
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleCopyResult}
+                          className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {/* Optimized Prompt Content */}
+                    <div className="relative group">
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <div className="relative bg-card border-2 border-primary/20 rounded-lg p-6 shadow-lg">
+                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Badge variant="secondary" className="text-xs">
+                            Quality: {result.output.quality_score?.toFixed(2) || 'N/A'}
+                          </Badge>
+                        </div>
+                        <SyntaxHighlighter 
+                          language="markdown" 
+                          style={vscDarkPlus} 
+                          className="!bg-transparent rounded-lg text-sm"
+                          customStyle={{
+                            background: 'transparent',
+                            padding: '0',
+                            margin: '0',
+                            fontSize: '0.95rem',
+                            lineHeight: '1.6',
+                            fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+                          }}
+                        >
+                          {result.output.optimized_prompt}
+                        </SyntaxHighlighter>
+                      </div>
+                    </div>
+                    
+                    {/* Optimization Stats */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-3 bg-muted/50 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-primary">
+                          {result.output.iterations_used || 1}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Iterations</p>
+                      </div>
+                      <div className="p-3 bg-muted/50 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-green-600">
+                          {((result.output.quality_score || 0) * 10).toFixed(0)}/10
+                        </p>
+                        <p className="text-xs text-muted-foreground">Quality Score</p>
+                      </div>
+                      <div className="p-3 bg-muted/50 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-blue-600">
+                          {result.processing_time_seconds ? `${result.processing_time_seconds.toFixed(1)}s` : 'N/A'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Process Time</p>
+                      </div>
+                    </div>
                   </div>
                 )}
 
