@@ -2,15 +2,10 @@ import axios, { AxiosInstance } from 'axios';
 import type {
   PromptRequest,
   PromptResponse,
-  DomainInfo,
   SystemStats,
   WorkflowHistory,
   HealthStatus,
-  PromptMetadata,
-  PromptVersion,
-  Template,
   ExperimentResult,
-  PromptFilters,
   WorkflowFilters,
   PaginatedResponse,
 } from '@/types/api';
@@ -65,10 +60,6 @@ class ApiClient {
 
 
   // System Information
-  async getDomains(signal?: AbortSignal): Promise<DomainInfo[]> {
-    const response = await this.client.get('/api/domains', { signal });
-    return response.data;
-  }
   async getStats(signal?: AbortSignal): Promise<SystemStats> {
     const response = await this.client.get('/api/stats', { signal });
     return response.data;
@@ -84,109 +75,7 @@ class ApiClient {
     return response.data;
   }
 
-  // Prompt Management
-  async getPrompts(filters?: PromptFilters, signal?: AbortSignal): Promise<PaginatedResponse<PromptMetadata>> {
-    const params = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          if (Array.isArray(value)) {
-            value.forEach(v => params.append(key, v));
-          } else {
-            params.append(key, String(value));
-          }
-        }
-      });
-    }
-    
-    const response = await this.client.get(`/api/prompts?${params}`, { signal });
-    return response.data;
-  }
 
-  async getPrompt(id: string, signal?: AbortSignal): Promise<PromptMetadata> {
-    const response = await this.client.get(`/api/prompts/${id}`, { signal });
-    return response.data;
-  }
-
-  async createPrompt(prompt: Omit<PromptMetadata, 'id' | 'created_at' | 'updated_at'>, signal?: AbortSignal): Promise<PromptMetadata> {
-    const response = await this.client.post('/api/prompts', prompt, { signal });
-    return response.data;
-  }
-
-  async updatePrompt(id: string, prompt: Partial<PromptMetadata>, signal?: AbortSignal): Promise<PromptMetadata> {
-    const response = await this.client.put(`/api/prompts/${id}`, prompt, { signal });
-    return response.data;
-  }
-
-  async deletePrompt(id: string, signal?: AbortSignal): Promise<void> {
-    await this.client.delete(`/api/prompts/${id}`, { signal });
-  }
-
-  // Prompt Versions
-  async getPromptVersions(promptId: string, signal?: AbortSignal): Promise<PromptVersion[]> {
-    const response = await this.client.get(`/api/prompts/${promptId}/versions`, { signal });
-    return response.data;
-  }
-
-  async getPromptVersion(promptId: string, version: string, signal?: AbortSignal): Promise<PromptVersion> {
-    const response = await this.client.get(`/api/prompts/${promptId}/versions/${version}`, { signal });
-    return response.data;
-  }
-
-  async createPromptVersion(promptId: string, version: Omit<PromptVersion, 'id' | 'created_at'>, signal?: AbortSignal): Promise<PromptVersion> {
-    const response = await this.client.post(`/api/prompts/${promptId}/versions`, version, { signal });
-    return response.data;
-  }
-
-  // Templates
-  async getTemplates(signal?: AbortSignal): Promise<Template[]> {
-    const response = await this.client.get('/api/templates', { signal });
-    return response.data;
-  }
-
-  async getTemplate(id: string, signal?: AbortSignal): Promise<Template> {
-    const response = await this.client.get(`/api/templates/${id}`, { signal });
-    return response.data;
-  }
-
-  async createTemplate(template: Omit<Template, 'id' | 'created_at' | 'updated_at'>, signal?: AbortSignal): Promise<Template> {
-    const response = await this.client.post('/api/templates', template, { signal });
-    return response.data;
-  }
-
-  async updateTemplate(id: string, template: Partial<Template>, signal?: AbortSignal): Promise<Template> {
-    const response = await this.client.put(`/api/templates/${id}`, template, { signal });
-    return response.data;
-  }
-
-  async deleteTemplate(id: string, signal?: AbortSignal): Promise<void> {
-    await this.client.delete(`/api/templates/${id}`, { signal });
-  }
-
-  // Experiments
-  async getExperiments(signal?: AbortSignal): Promise<ExperimentResult[]> {
-    const response = await this.client.get('/api/experiments', { signal });
-    return response.data;
-  }
-
-  async getExperiment(id: string, signal?: AbortSignal): Promise<ExperimentResult> {
-    const response = await this.client.get(`/api/experiments/${id}`, { signal });
-    return response.data;
-  }
-
-  async createExperiment(experiment: Omit<ExperimentResult, 'experiment_id' | 'created_at' | 'updated_at'>, signal?: AbortSignal): Promise<ExperimentResult> {
-    const response = await this.client.post('/api/experiments', experiment, { signal });
-    return response.data;
-  }
-
-  async updateExperiment(id: string, experiment: Partial<ExperimentResult>, signal?: AbortSignal): Promise<ExperimentResult> {
-    const response = await this.client.put(`/api/experiments/${id}`, experiment, { signal });
-    return response.data;
-  }
-
-  async deleteExperiment(id: string): Promise<void> {
-    await this.client.delete(`/api/experiments/${id}`);
-  }
 
   // Analytics
   async getWorkflowAnalytics(filters?: WorkflowFilters): Promise<any> {

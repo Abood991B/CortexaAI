@@ -5,28 +5,29 @@ import apiClient from '@/api/client';
 import type {
   PromptRequest,
   PromptResponse,
-  PromptMetadata,
-  PromptVersion,
-  Template,
-  ExperimentResult,
-  PromptFilters,
   WorkflowFilters,
 } from '@/types/api';
 
+// Helper to format API errors for display
+const getApiErrorMessage = (error: any): string => {
+  if (axios.isAxiosError(error) && error.response?.data?.detail) {
+    const detail = error.response.data.detail;
+    if (Array.isArray(detail)) {
+      // Handle Pydantic validation errors
+      return detail.map(err => `Error in '${err.loc.join('.')}': ${err.msg}`).join('\n');
+    }
+    if (typeof detail === 'string') {
+      return detail;
+    }
+  }
+  return error.message || 'An unexpected error occurred.';
+};
+
 // Query Keys
 export const queryKeys = {
-  domains: ['domains'] as const,
   stats: ['stats'] as const,
   history: (limit?: number) => ['history', limit] as const,
   health: ['health'] as const,
-  prompts: (filters?: PromptFilters) => ['prompts', filters] as const,
-  prompt: (id: string) => ['prompts', id] as const,
-  promptVersions: (promptId: string) => ['prompts', promptId, 'versions'] as const,
-  promptVersion: (promptId: string, version: string) => ['prompts', promptId, 'versions', version] as const,
-  templates: ['templates'] as const,
-  template: (id: string) => ['templates', id] as const,
-  experiments: ['experiments'] as const,
-  experiment: (id: string) => ['experiments', id] as const,
   workflowAnalytics: (filters?: WorkflowFilters) => ['analytics', 'workflows', filters] as const,
   performanceMetrics: ['analytics', 'performance'] as const,
   domainAnalytics: ['analytics', 'domains'] as const,
@@ -128,33 +129,28 @@ export const useProcessPrompt = () => {
         toast.success('Prompt processed successfully!');
       }
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
+    onError: (error: any) => {
+      toast.error(getApiErrorMessage(error));
     },
   });
 };
 
-export const useDomains = () => {
-  return useQuery({
-    queryKey: queryKeys.domains,
-    queryFn: () => apiClient.getDomains(),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-};
 
 export const useStats = () => {
   return useQuery({
     queryKey: queryKeys.stats,
     queryFn: () => apiClient.getStats(),
-    refetchInterval: 30 * 1000, // 30 seconds
+    staleTime: 30 * 1000, // 30 seconds for real-time updates
+    refetchInterval: 30 * 1000, // Auto-refresh every 30 seconds
   });
 };
 
-export const useHistory = (limit: number = 10) => {
+export const useHistory = (limit?: number) => {
   return useQuery({
     queryKey: queryKeys.history(limit),
     queryFn: () => apiClient.getHistory(limit),
-    refetchInterval: 60 * 1000, // 1 minute
+    staleTime: 15 * 1000, // 15 seconds for real-time updates
+    refetchInterval: 15 * 1000, // Auto-refresh every 15 seconds
   });
 };
 
@@ -166,202 +162,7 @@ export const useHealth = () => {
   });
 };
 
-// Prompt Management Hooks
-export const usePrompts = (filters?: PromptFilters) => {
-  return useQuery({
-    queryKey: queryKeys.prompts(filters),
-    queryFn: () => apiClient.getPrompts(filters),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-  });
-};
 
-export const usePrompt = (id: string) => {
-  return useQuery({
-    queryKey: queryKeys.prompt(id),
-    queryFn: () => apiClient.getPrompt(id),
-    enabled: !!id,
-  });
-};
-
-export const useCreatePrompt = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (prompt: Omit<PromptMetadata, 'id' | 'created_at' | 'updated_at'>) => 
-      apiClient.createPrompt(prompt),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.prompts() });
-      toast.success('Prompt created successfully!');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to create prompt');
-    },
-  });
-};
-
-export const useUpdatePrompt = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: ({ id, prompt }: { id: string; prompt: Partial<PromptMetadata> }) => 
-      apiClient.updatePrompt(id, prompt),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.prompts() });
-      queryClient.setQueryData(queryKeys.prompt(data.id), data);
-      toast.success('Prompt updated successfully!');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update prompt');
-    },
-  });
-};
-
-export const useDeletePrompt = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (id: string) => apiClient.deletePrompt(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.prompts() });
-      toast.success('Prompt deleted successfully!');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to delete prompt');
-    },
-  });
-};
-
-// Prompt Version Hooks
-export const usePromptVersions = (promptId: string) => {
-  return useQuery({
-    queryKey: queryKeys.promptVersions(promptId),
-    queryFn: () => apiClient.getPromptVersions(promptId),
-    enabled: !!promptId,
-  });
-};
-
-export const usePromptVersion = (promptId: string, version: string) => {
-  return useQuery({
-    queryKey: queryKeys.promptVersion(promptId, version),
-    queryFn: () => apiClient.getPromptVersion(promptId, version),
-    enabled: !!promptId && !!version,
-  });
-};
-
-export const useCreatePromptVersion = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: ({ promptId, version }: { promptId: string; version: Omit<PromptVersion, 'id' | 'created_at'> }) => 
-      apiClient.createPromptVersion(promptId, version),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.promptVersions(data.prompt_id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.prompt(data.prompt_id) });
-      toast.success('New version created successfully!');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to create version');
-    },
-  });
-};
-
-// Template Hooks
-export const useTemplates = () => {
-  return useQuery({
-    queryKey: queryKeys.templates,
-    queryFn: () => apiClient.getTemplates(),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-};
-
-export const useTemplate = (id: string) => {
-  return useQuery({
-    queryKey: queryKeys.template(id),
-    queryFn: () => apiClient.getTemplate(id),
-    enabled: !!id,
-  });
-};
-
-export const useCreateTemplate = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (template: Omit<Template, 'id' | 'created_at' | 'updated_at'>) => 
-      apiClient.createTemplate(template),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.templates });
-      toast.success('Template created successfully!');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to create template');
-    },
-  });
-};
-
-export const useUpdateTemplate = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: ({ id, template }: { id: string; template: Partial<Template> }) => 
-      apiClient.updateTemplate(id, template),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.templates });
-      queryClient.setQueryData(queryKeys.template(data.id), data);
-      toast.success('Template updated successfully!');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update template');
-    },
-  });
-};
-
-export const useDeleteTemplate = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (id: string) => apiClient.deleteTemplate(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.templates });
-      toast.success('Template deleted successfully!');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to delete template');
-    },
-  });
-};
-
-// Experiment Hooks
-export const useExperiments = () => {
-  return useQuery({
-    queryKey: queryKeys.experiments,
-    queryFn: () => apiClient.getExperiments(),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-  });
-};
-
-export const useExperiment = (id: string) => {
-  return useQuery({
-    queryKey: queryKeys.experiment(id),
-    queryFn: () => apiClient.getExperiment(id),
-    enabled: !!id,
-  });
-};
-
-export const useCreateExperiment = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (experiment: Omit<ExperimentResult, 'experiment_id' | 'created_at' | 'updated_at'>) => 
-      apiClient.createExperiment(experiment),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.experiments });
-      toast.success('Experiment created successfully!');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to create experiment');
-    },
-  });
-};
 
 // Analytics Hooks
 export const useWorkflowAnalytics = (filters?: WorkflowFilters) => {
@@ -388,6 +189,7 @@ export const useDomainAnalytics = () => {
   });
 };
 
+// Combined Analytics Hook for Analytics page
 // Combined Analytics Hook for Analytics page
 export const useAnalytics = (timeRange: '7d' | '30d' | '90d' = '30d') => {
   return useQuery({
@@ -446,27 +248,27 @@ export const useProcessPromptWithMemory = () => {
         toast.success('Prompt processed with memory successfully!');
       }
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
+    onError: (error: any) => {
+      toast.error(getApiErrorMessage(error));
     },
   });
 };
 
 export const useGeneratePrompt = () => {
   return useMutation({
-    mutationFn: ({ task, domain }: { task: string; domain?: string }) => 
-      apiClient.generatePrompt(task, domain),
+    mutationFn: ({ task }: { task: string }) => 
+      apiClient.generatePrompt(task),
     onSuccess: () => {
       toast.success('Prompt generated successfully!');
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to generate prompt');
+      toast.error(getApiErrorMessage(error));
     },
   });
 };
 
 // Workflow Management Hooks
-export const useWorkflows = (filters?: { status?: string; domain?: string; page?: number; limit?: number }) => {
+export const useWorkflows = (filters?: { status?: string; page?: number; limit?: number }) => {
   return useQuery({
     queryKey: ['workflows', filters],
     queryFn: () => apiClient.getWorkflows(filters),
@@ -493,7 +295,7 @@ export const useCancelWorkflow = () => {
       queryClient.invalidateQueries({ queryKey: ['workflows', workflowId] });
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to cancel workflow');
+      toast.error(getApiErrorMessage(error));
     },
   });
 };

@@ -11,7 +11,6 @@ from config.config import (
     cache_manager, perf_config, generate_evaluation_cache_key, log_cache_performance,
     security_manager, security_config, log_security_event, prompt_generation_config
 )
-from agents.prompt import prompt_generator
 from agents.exceptions import EvaluationError, ImprovementError
 import logging
 import asyncio
@@ -647,100 +646,6 @@ class PromptEvaluator:
                 'comparison_failed': True
             }
 
-    async def run_optimization_evaluation_loop(self, prompt: str, task: str, domain: str,
-                                             max_optimization_iterations: int = None) -> Dict[str, Any]:
-        """
-        Run an evaluation loop for prompt optimization algorithms.
-
-        Args:
-            prompt: The prompt to optimize
-            task: The task the prompt is for
-            domain: The domain context
-            max_optimization_iterations: Maximum optimization iterations
-
-        Returns:
-            Dict containing optimization evaluation results
-        """
-        if not prompt_generation_config.enable_optimization:
-            return {'error': 'Optimization is disabled in configuration'}
-
-        max_iterations = max_optimization_iterations or prompt_generation_config.max_optimization_iterations
-
-        try:
-            logger.info(f"Starting optimization evaluation loop for domain {domain}")
-
-            # Test different optimization algorithms
-            algorithms_to_test = ['evolutionary', 'gradient_based', 'reinforcement_learning']
-            algorithm_results = {}
-
-            for algorithm in algorithms_to_test:
-                if not self._is_algorithm_enabled(algorithm):
-                    continue
-
-                logger.info(f"Testing optimization algorithm: {algorithm}")
-
-                # Run optimization
-                optimization_result = await prompt_generator.optimize_prompt(
-                    prompt=prompt,
-                    task=task,
-                    domain=domain,
-                    algorithm=algorithm,
-                    iterations=max_iterations
-                )
-
-                # Evaluate optimization performance
-                evaluation = await self.evaluate_optimization_performance(
-                    original_prompt=prompt,
-                    optimized_prompt=optimization_result['optimized_prompt'],
-                    algorithm_used=algorithm,
-                    iterations_used=optimization_result['iterations_used'],
-                    improvement_score=optimization_result['final_quality_score'],
-                    domain=domain
-                )
-
-                algorithm_results[algorithm] = {
-                    'optimization_result': optimization_result,
-                    'evaluation': evaluation
-                }
-
-            # Rank algorithms by overall performance
-            ranked_algorithms = sorted(
-                algorithm_results.items(),
-                key=lambda x: x[1]['evaluation']['overall_score'],
-                reverse=True
-            )
-
-            # Generate recommendations
-            recommendations = self._generate_algorithm_recommendations(ranked_algorithms, domain)
-
-            result = {
-                'original_prompt': prompt,
-                'task': task,
-                'domain': domain,
-                'algorithms_tested': list(algorithm_results.keys()),
-                'ranked_algorithms': ranked_algorithms,
-                'best_algorithm': ranked_algorithms[0][0] if ranked_algorithms else None,
-                'best_score': ranked_algorithms[0][1]['evaluation']['overall_score'] if ranked_algorithms else 0,
-                'recommendations': recommendations,
-                'metadata': {
-                    'evaluation_timestamp': datetime.now().isoformat(),
-                    'max_iterations': max_iterations,
-                    'optimization_enabled': prompt_generation_config.enable_optimization
-                }
-            }
-
-            logger.info(f"Optimization evaluation loop completed. Best algorithm: {result['best_algorithm']}")
-            return result
-
-        except Exception as e:
-            logger.error(f"Failed to run optimization evaluation loop: {e}")
-            return {
-                'error': str(e),
-                'original_prompt': prompt,
-                'task': task,
-                'domain': domain,
-                'evaluation_failed': True
-            }
 
     def _assess_generation_quality(self, task: str, generated_prompt: str, domain: str,
                                  generation_metadata: Dict[str, Any]) -> float:
@@ -965,38 +870,6 @@ class PromptEvaluator:
 
         return insights
 
-    def _generate_algorithm_recommendations(self, ranked_algorithms: List[Tuple[str, Dict]], domain: str) -> List[str]:
-        """Generate recommendations for algorithm selection."""
-        recommendations = []
-
-        if ranked_algorithms:
-            best_algorithm = ranked_algorithms[0][0]
-            best_score = ranked_algorithms[0][1]['evaluation']['overall_score']
-
-            recommendations.append(f"Use {best_algorithm} as the primary optimization algorithm")
-
-            if best_score > 0.8:
-                recommendations.append(f"{best_algorithm} shows excellent performance for {domain}")
-            elif best_score > 0.6:
-                recommendations.append(f"{best_algorithm} shows good performance, consider parameter tuning")
-
-            # Suggest algorithm combinations
-            if len(ranked_algorithms) > 1:
-                second_best = ranked_algorithms[1][0]
-                recommendations.append(f"Consider {second_best} as a backup algorithm")
-
-        return recommendations
-
-    def _is_algorithm_enabled(self, algorithm: str) -> bool:
-        """Check if an optimization algorithm is enabled."""
-        if algorithm == 'evolutionary':
-            return prompt_generation_config.enable_evolutionary_optimization
-        elif algorithm == 'reinforcement_learning':
-            return prompt_generation_config.enable_reinforcement_learning
-        elif algorithm == 'ab_testing':
-            return prompt_generation_config.enable_ab_testing
-        else:
-            return True  # gradient_based is always available
 
     def _score_clarity(self, prompt: str) -> float:
         """Score prompt clarity."""

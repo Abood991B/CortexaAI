@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading';
 import { useWorkflows, useWorkflowDetails } from '@/hooks/useApi';
-import { formatDate, formatDuration, getDomainColor } from '@/lib/utils';
+import { formatDate, formatDuration } from '@/lib/utils';
 
 export function Workflows() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -151,10 +151,7 @@ export function Workflows() {
                     <div className="flex items-center gap-2 mb-2">
                       {getStatusIcon(workflow.status)}
                       <span className="font-medium">{workflow.workflow_id}</span>
-                      <Badge 
-                        variant="outline" 
-                        style={{ backgroundColor: getDomainColor(workflow.domain) }}
-                      >
+                      <Badge variant="outline">
                         {workflow.domain}
                       </Badge>
                     </div>

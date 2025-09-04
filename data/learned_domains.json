@@ -1,0 +1,77 @@
+{
+  "software_engineering": {
+    "description": "Learned domain: software_engineering",
+    "keywords": [
+      "sort function",
+      "algorithm",
+      "programming",
+      "sorting",
+      "function",
+      "sorting algorithm",
+      "Python programming",
+      "software development",
+      "time complexity",
+      "space complexity",
+      "unit testing",
+      "docstrings",
+      "code quality",
+      "edge cases"
+    ],
+    "usage_count": 31,
+    "quality_scores": [
+      0.95,
+      0.97,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.94,
+      0.94,
+      0.94,
+      0.94,
+      0.97,
+      0.92,
+      0.98,
+      0.96,
+      0.95
+    ],
+    "avg_quality_score": 0.9503225806451612,
+    "last_used": "2025-09-04T20:07:56.891390",
+    "created_from_workflow": "workflow_1756974410",
+    "learning_metadata": {
+      "first_seen": "2025-09-04T16:27:32.090612",
+      "improvement_patterns": [
+        "Clarified input requirements (list of comparable elements, original list unchanged) and output behavior (returns a *new* sorted list).",
+        "Added a clear problem statement defining the core task.",
+        "Specified the programming language (Python 3.x) and exact function signature with type hints.",
+        "Clarified input and output requirements, including the crucial detail of returning a *new* list and not modifying the original.",
+        "Added a clear problem statement defining the core task of creating a generic sorting function.",
+        "Specified the programming language (Python 3.9+) to remove ambiguity.",
+        "Defined a precise function signature with type hints and an optional `reverse` parameter for sorting order.",
+        "Specified the programming language (Python 3.x) for the implementation.",
+        "Defined a precise function signature (`def sort_list(data: list) -> list:`) including type hints, removing ambiguity about input/output.",
+        "Required the selection of a specific comparison-based sorting algorithm (e.g., Merge Sort, Quick Sort, Heap Sort) and its explicit mention/justification."
+      ],
+      "common_prompt_types": [
+        "raw",
+        "structured"
+      ]
+    }
+  }
+}

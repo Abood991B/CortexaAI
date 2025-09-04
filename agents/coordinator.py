@@ -8,8 +8,6 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import time # Added for time.time()
 
-from agents.prompt.prompt_models import PromptMetadata # Added for PromptMetadata
-
 from agents.classifier import DomainClassifier
 from agents.base_expert import create_expert_agent, BaseExpertAgent
 from agents.evaluator import PromptEvaluator
@@ -24,15 +22,10 @@ from config.config import (
     memory_config, prompt_generation_config
 )
 from agents.memory import memory_manager
-from agents.prompt import prompt_generator
 
-# Import Prompt Management System (optional for hybrid integration)
-try:
-    from agents.prompt import PromptManagementSystem
-    PROMPT_MANAGEMENT_AVAILABLE = True
-except ImportError:
-    PromptManagementSystem = None
-    PROMPT_MANAGEMENT_AVAILABLE = False
+# Prompt Management System removed
+PROMPT_MANAGEMENT_AVAILABLE = False
+PromptManagementSystem = None
 
 # Set up structured logging
 logger = get_logger(__name__)
@@ -47,20 +40,6 @@ class WorkflowCoordinator:
         self.evaluator = evaluator_instance
         self.expert_agents = {}  # Cache for created expert agents
         self.workflow_history = []  # Track workflow executions
-
-        # Hybrid Integration: Prompt Management System
-        self.prompt_manager = None
-        self._enable_prompt_management = False
-        self._enable_performance_tracking = False
-        self._enable_experimentation = False
-        self.migrated_domains = set()  # Domains using new system
-
-        if PROMPT_MANAGEMENT_AVAILABLE:
-            try:
-                self.prompt_manager = PromptManagementSystem()
-                logger.info("Prompt Management System initialized for hybrid integration")
-            except Exception as e:
-                logger.warning(f"Failed to initialize Prompt Management System: {e}")
 
         self._setup_langsmith()
     def _setup_langsmith(self):
@@ -436,260 +415,7 @@ class WorkflowCoordinator:
             return error_result
 
 
-    async def process_prompt_with_generation(self, task: str, user_id: str = None,
-                                           domain: str = None, return_comparison: bool = True,
-                                           client_ip: str = "unknown") -> Dict[str, Any]:
-        """
-        Process a task through the complete prompt generation and optimization workflow.
 
-        Args:
-            task: The task to generate an optimized prompt for
-            user_id: User identifier for context
-            domain: The domain context (auto-detected if None)
-            return_comparison: Whether to include before/after comparison
-            client_ip: IP address of the client making the request
-
-        Returns:
-            Dict containing the generated and optimized prompt with workflow metadata
-        """
-        start_time = datetime.now()
-        workflow_id = f"generation_workflow_{int(start_time.timestamp())}"
-
-        # Security: Rate limiting
-        if security_config.enable_rate_limiting:
-            if not rate_limiter.is_allowed(client_ip):
-                log_security_event(logger, "rate_limit_exceeded", "medium",
-                                 client_ip=client_ip, workflow_id=workflow_id)
-                raise AgenticSystemError(
-                    "Rate limit exceeded. Please try again later.",
-                    error_code="RATE_LIMIT_EXCEEDED",
-                    client_ip=client_ip
-                )
-
-        # Security: Input validation and sanitization
-        if security_config.enable_input_sanitization:
-            sanitized_result = security_manager.sanitize_input(task, "generation")
-
-            # Log security events
-            if sanitized_result['security_events']:
-                log_security_event(logger, "input_security_events", "medium",
-                                 workflow_id=workflow_id, client_ip=client_ip,
-                                 events=sanitized_result['security_events'])
-
-            # Block unsafe content
-            if not sanitized_result['is_safe']:
-                high_severity_events = [e for e in sanitized_result['security_events'] if e['severity'] == 'high']
-                if high_severity_events:
-                    log_security_event(logger, "unsafe_content_blocked", "high",
-                                     workflow_id=workflow_id, client_ip=client_ip,
-                                     events=high_severity_events)
-                    raise AgenticSystemError(
-                        "Input contains potentially unsafe content and has been blocked.",
-                        error_code="UNSAFE_CONTENT_BLOCKED",
-                        security_events=high_severity_events
-                    )
-
-            task = sanitized_result['sanitized_text']
-
-        logger.info(f"Starting prompt generation workflow {workflow_id}", extra={
-            'workflow_id': workflow_id,
-            'user_id': user_id,
-            'client_ip': client_ip,
-            'task_length': len(task)
-        })
-
-        try:
-            # Step 1: Determine domain if not provided
-            if not domain:
-                classification_result = await self.classifier.classify_prompt(task)
-                domain = classification_result["domain"]
-                logger.info(f"Auto-detected domain: {domain}")
-
-            # Step 2: Generate initial prompt using advanced strategies
-            logger.info("Step 1: Generating initial prompt...")
-            generation_result = await prompt_generator.generate_prompt(
-                task=task,
-                domain=domain,
-                strategy=prompt_generation_config.generation_strategy,
-                context={
-                    'user_id': user_id,
-                    'client_ip': client_ip,
-                    'classification_result': classification_result if 'classification_result' in locals() else {}
-                }
-            )
-
-            generated_prompt = generation_result['generated_prompt']
-
-            # Step 3: Evaluate generation quality
-            logger.info("Step 2: Evaluating generation quality...")
-            generation_evaluation = await self.evaluator.evaluate_prompt_generation(
-                task=task,
-                generated_prompt=generated_prompt,
-                domain=domain,
-                strategy_used=generation_result['strategy_used'],
-                generation_metadata={
-                    'quality_score': generation_result.get('quality_score', 0),
-                    'generation_time': generation_result.get('generation_time', 0)
-                }
-            )
-
-            # Step 4: Optimize the generated prompt
-            logger.info("Step 3: Optimizing generated prompt...")
-            optimization_result = await prompt_generator.optimize_prompt(
-                prompt=generated_prompt,
-                task=task,
-                domain=domain,
-                algorithm="auto",  # Let system choose best algorithm
-                context={'generation_evaluation': generation_evaluation}
-            )
-
-            optimized_prompt = optimization_result['optimized_prompt']
-
-            # Step 5: Evaluate optimization performance
-            logger.info("Step 4: Evaluating optimization performance...")
-            optimization_evaluation = await self.evaluator.evaluate_optimization_performance(
-                original_prompt=generated_prompt,
-                optimized_prompt=optimized_prompt,
-                algorithm_used=optimization_result['algorithm_used'],
-                iterations_used=optimization_result['iterations_used'],
-                improvement_score=optimization_result['final_quality_score'],
-                domain=domain
-            )
-
-            # Step 6: Prepare final result with comprehensive metadata
-            workflow_result = self._prepare_generation_final_result(
-                workflow_id=workflow_id,
-                task=task,
-                user_id=user_id,
-                domain=domain,
-                generation_result=generation_result,
-                optimization_result=optimization_result,
-                generation_evaluation=generation_evaluation,
-                optimization_evaluation=optimization_evaluation,
-                return_comparison=return_comparison,
-                start_time=start_time
-            )
-
-            # Step 7: Record workflow
-            self._record_workflow(workflow_result)
-
-            logger.info(f"Prompt generation workflow {workflow_id} completed successfully")
-            return workflow_result
-
-        except ClassificationError as ce:
-            logger.error(f"Classification error in generation workflow {workflow_id}: {ce}")
-            error_result = self._prepare_error_result(
-                workflow_id, task,
-                f"Domain classification failed: {ce.message}",
-                start_time, ce.error_code, ce.to_dict()
-            )
-            self._record_workflow(error_result)
-            return error_result
-
-        except AgenticSystemError as ase:
-            logger.error(f"System error in generation workflow {workflow_id}: {ase}")
-            error_result = self._prepare_error_result(
-                workflow_id, task,
-                f"Agentic system error: {ase.message}",
-                start_time, ase.error_code, ase.to_dict()
-            )
-            self._record_workflow(error_result)
-            return error_result
-
-        except Exception as e:
-            logger.error(f"Unexpected error in generation workflow {workflow_id}: {e}")
-            error_result = self._prepare_error_result(
-                workflow_id, task,
-                f"Unexpected error: {str(e)}",
-                start_time, "UNKNOWN_ERROR", {"cause": str(e)}
-            )
-            self._record_workflow(error_result)
-            return error_result
-
-    async def compare_prompt_generation_strategies(self, task: str, domain: str = None,
-                                                 strategies: List[str] = None) -> Dict[str, Any]:
-        """
-        Compare different prompt generation strategies for the same task.
-
-        Args:
-            task: The task to generate prompts for
-            domain: The domain context
-            strategies: List of strategies to compare
-
-        Returns:
-            Dict containing strategy comparison results
-        """
-        if not strategies:
-            strategies = ['template_based', 'chain_of_prompts', 'contextual_injection', 'hybrid']
-
-        comparison_id = f"comparison_{int(time.time())}"
-        logger.info(f"Starting strategy comparison {comparison_id}")
-
-        try:
-            # Determine domain if not provided
-            if not domain:
-                classification_result = await self.classifier.classify_prompt(task)
-                domain = classification_result["domain"]
-
-            # Generate prompts using different strategies
-            generated_prompts = []
-            for strategy in strategies:
-                try:
-                    result = await prompt_generator.generate_prompt(
-                        task=task,
-                        domain=domain,
-                        strategy=strategy
-                    )
-
-                    generated_prompts.append({
-                        'strategy': strategy,
-                        'prompt': result['generated_prompt'],
-                        'quality_score': result.get('quality_score', 0),
-                        'task': task,
-                        'domain': domain,
-                        'generation_metadata': result.get('metadata', {})
-                    })
-
-                except Exception as e:
-                    logger.warning(f"Failed to generate prompt with strategy {strategy}: {e}")
-                    continue
-
-            if len(generated_prompts) < 2:
-                return {
-                    'error': 'Need at least 2 successful generations for comparison',
-                    'comparison_id': comparison_id
-                }
-
-            # Compare the generated prompts
-            comparison_result = await self.evaluator.compare_prompts(
-                prompts=generated_prompts,
-                criteria=['clarity', 'specificity', 'structure', 'completeness', 'actionability']
-            )
-
-            result = {
-                'comparison_id': comparison_id,
-                'task': task,
-                'domain': domain,
-                'strategies_compared': strategies,
-                'generated_prompts': generated_prompts,
-                'comparison': comparison_result,
-                'best_strategy': comparison_result.get('ranked_prompts', [{}])[0].get('prompt_data', {}).get('strategy'),
-                'metadata': {
-                    'comparison_timestamp': datetime.now().isoformat(),
-                    'successful_generations': len(generated_prompts)
-                }
-            }
-
-            logger.info(f"Strategy comparison {comparison_id} completed")
-            return result
-
-        except Exception as e:
-            logger.error(f"Failed to compare strategies {comparison_id}: {e}")
-            return {
-                'error': str(e),
-                'comparison_id': comparison_id,
-                'task': task
-            }
 
     def _prepare_memory_final_result(self, workflow_id: str, user_id: str,
                                    original_prompt: str, final_prompt: str,
@@ -859,89 +585,6 @@ class WorkflowCoordinator:
         return result
 
 
-    def _prepare_generation_final_result(self, workflow_id: str, task: str, user_id: str,
-                                       domain: str, generation_result: Dict[str, Any],
-                                       optimization_result: Dict[str, Any],
-                                       generation_evaluation: Dict[str, Any],
-                                       optimization_evaluation: Dict[str, Any],
-                                       return_comparison: bool, start_time: datetime) -> Dict[str, Any]:
-        """Prepare the final result dictionary for prompt generation workflow."""
-        processing_time = (datetime.now() - start_time).total_seconds()
-
-        result = {
-            "workflow_id": workflow_id,
-            "status": "completed",
-            "timestamp": datetime.now().isoformat(),
-            "processing_time_seconds": processing_time,
-            "input": {
-                "task": task,
-                "user_id": user_id,
-                "domain": domain
-            },
-            "output": {
-                "generated_prompt": generation_result.get('generated_prompt', ''),
-                "optimized_prompt": optimization_result.get('optimized_prompt', ''),
-                "quality_score": optimization_result.get('final_quality_score', 0),
-                "passes_threshold": optimization_result.get('passes_threshold', False)
-            },
-            "analysis": {
-                "generation": {
-                    "strategy_used": generation_result.get('strategy_used', 'unknown'),
-                    "quality_score": generation_result.get('quality_score', 0),
-                    "generation_time": generation_result.get('generation_time', 0),
-                    "template_used": generation_result.get('template_used', ''),
-                    "persona_applied": generation_result.get('persona_applied', '')
-                },
-                "optimization": {
-                    "algorithm_used": optimization_result.get('algorithm_used', 'unknown'),
-                    "iterations_used": optimization_result.get('iterations_used', 0),
-                    "final_quality_score": optimization_result.get('final_quality_score', 0),
-                    "improvement_score": optimization_result.get('improvement_score', 0),
-                    "optimizations_applied": optimization_result.get('optimizations_applied', [])
-                },
-                "generation_evaluation": {
-                    "overall_score": generation_evaluation.get('overall_score', 0),
-                    "criteria_scores": generation_evaluation.get('criteria_scores', {}),
-                    "strengths": generation_evaluation.get('strengths', []),
-                    "weaknesses": generation_evaluation.get('weaknesses', []),
-                    "recommendations": generation_evaluation.get('recommendations', [])
-                },
-                "optimization_evaluation": {
-                    "overall_score": optimization_evaluation.get('overall_score', 0),
-                    "improvement_metrics": optimization_evaluation.get('improvement_metrics', {}),
-                    "performance_score": optimization_evaluation.get('performance_score', 0),
-                    "efficiency_score": optimization_evaluation.get('efficiency_score', 0),
-                    "final_recommendations": optimization_evaluation.get('final_recommendations', [])
-                }
-            },
-            "metadata": {
-                "langsmith_enabled": bool(settings.langsmith_api_key),
-                "generation_enabled": prompt_generation_config.enable_generation,
-                "optimization_enabled": prompt_generation_config.enable_optimization,
-                "evaluation_enabled": prompt_generation_config.enable_evaluation,
-                "template_library_size": len(prompt_generation_config.templates),
-                "persona_library_size": len(prompt_generation_config.personas)
-            }
-        }
-
-        if return_comparison:
-            generated_prompt = generation_result.get('generated_prompt', '')
-            optimized_prompt = optimization_result.get('optimized_prompt', '')
-            result["comparison"] = {
-                "task_length": len(task),
-                "generated_length": len(generated_prompt),
-                "optimized_length": len(optimized_prompt),
-                "generation_ratio": len(generated_prompt) / len(task) if task else 0,
-                "optimization_ratio": len(optimized_prompt) / len(generated_prompt) if generated_prompt else 0,
-                "side_by_side": {
-                    "task": task,
-                    "generated": generated_prompt,
-                    "optimized": optimized_prompt
-                }
-            }
-
-        return result
-
     def _prepare_error_result(self, workflow_id: str, original_prompt: str,
                             error_message: str, start_time: datetime,
                             error_code: str = "UNKNOWN_ERROR",
@@ -971,12 +614,17 @@ class WorkflowCoordinator:
         }
 
     def _record_workflow(self, workflow_result: Dict[str, Any]):
-        """Record the workflow result in history."""
+        """Record the workflow result in history and update domain learning."""
         self.workflow_history.append(workflow_result)
 
         # Keep only the last 100 workflows to prevent memory issues
         if len(self.workflow_history) > 100:
             self.workflow_history = self.workflow_history[-100:]
+        
+        # Extract domain information for self-learning
+        domain = workflow_result.get("output", {}).get("domain")
+        if domain and workflow_result.get("status") == "completed":
+            self._update_domain_learning(domain, workflow_result)
 
     def get_workflow_history(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Get recent workflow history."""
@@ -1000,16 +648,16 @@ class WorkflowCoordinator:
                 "average_processing_time": 0.0
             }
 
-        quality_scores = [w["output"]["quality_score"] for w in completed_workflows]
-        processing_times = [w["processing_time_seconds"] for w in completed_workflows]
+        quality_scores = [w.get("output", {}).get("quality_score", 0) for w in completed_workflows if w.get("output", {}).get("quality_score")]
+        processing_times = [w.get("processing_time_seconds", w.get("processing_time", 0)) for w in completed_workflows]
 
         return {
             "total_workflows": len(self.workflow_history),
             "completed_workflows": len(completed_workflows),
             "error_workflows": len(error_workflows),
             "success_rate": len(completed_workflows) / len(self.workflow_history),
-            "average_quality_score": sum(quality_scores) / len(quality_scores),
-            "average_processing_time": sum(processing_times) / len(processing_times),
+            "average_quality_score": sum(quality_scores) / len(quality_scores) if quality_scores else 0.0,
+            "average_processing_time": sum(processing_times) / len(processing_times) if processing_times else 0.0,
             "domain_distribution": self._calculate_domain_distribution(completed_workflows)
         }
 
@@ -1017,22 +665,39 @@ class WorkflowCoordinator:
         """Calculate domain distribution across workflows."""
         domain_count = {}
         for workflow in workflows:
-            domain = workflow["output"]["domain"]
-            domain_count[domain] = domain_count.get(domain, 0) + 1
+            domain = workflow.get("output", {}).get("domain")
+            if domain:
+                domain_count[domain] = domain_count.get(domain, 0) + 1
 
         return dict(sorted(domain_count.items(), key=lambda x: x[1], reverse=True))
 
     def get_available_domains(self) -> List[Dict[str, Any]]:
         """Get information about all available domains."""
         domains_info = []
-        for domain_name, domain_info in self.classifier.get_available_domains().items():
+        
+        # Get base domains from classifier
+        base_domains = self.classifier.get_available_domains()
+        
+        # Get learned domains from workflow history
+        learned_domains = self._get_learned_domains()
+        
+        # Combine base and learned domains
+        all_domains = {**base_domains, **learned_domains}
+        
+        for domain_name, domain_info in all_domains.items():
             has_agent = domain_name in self.expert_agents
+            is_learned = domain_name in learned_domains
+            
             domains_info.append({
                 "domain": domain_name,
                 "description": domain_info.get("description", ""),
                 "keywords": domain_info.get("keywords", []),
                 "has_expert_agent": has_agent,
-                "agent_created": has_agent
+                "agent_created": has_agent,
+                "is_learned": is_learned,
+                "usage_count": domain_info.get("usage_count", 0),
+                "avg_quality_score": domain_info.get("avg_quality_score", 0),
+                "last_used": domain_info.get("last_used", "")
             })
 
         return domains_info
@@ -1040,252 +705,195 @@ class WorkflowCoordinator:
     # Hybrid Integration Methods for Prompt Management System
 
     def enable_prompt_management(self, enable: bool = True):
-        """Enable or disable the Prompt Management System features."""
-        if not self.prompt_manager:
-            logger.warning("Prompt Management System not available")
-            return False
+        """Enable or disable prompt management integration."""
+        self.prompt_management_enabled = enable
+        logger.info(f"Prompt management {'enabled' if enable else 'disabled'}")
 
-        self._enable_prompt_management = enable
-        logger.info(f"Prompt Management System {'enabled' if enable else 'disabled'}")
-        return True
-
-    def enable_performance_tracking(self, enable: bool = True):
-        """Enable or disable performance tracking for prompts."""
-        if not self.prompt_manager:
-            logger.warning("Prompt Management System not available for performance tracking")
-            return False
-
-        self._enable_performance_tracking = enable
-        logger.info(f"Performance tracking {'enabled' if enable else 'disabled'}")
-        return True
-
-    def enable_experimentation(self, enable: bool = True):
-        """Enable or disable A/B testing and experimentation."""
-        if not self.prompt_manager:
-            logger.warning("Prompt Management System not available for experimentation")
-            return False
-
-        self._enable_experimentation = enable
-        logger.info(f"Experimentation {'enabled' if enable else 'disabled'}")
-        return True
-
-    def migrate_domain_to_new_system(self, domain: str):
-        """Migrate a domain to use the new Prompt Management System."""
-        if not self.prompt_manager:
-            logger.warning("Prompt Management System not available")
-            return False
-
-        if domain in self.migrated_domains:
-            logger.info(f"Domain '{domain}' already migrated")
-            return True
-
-        self.migrated_domains.add(domain)
-        logger.info(f"Domain '{domain}' migrated to Prompt Management System")
-        return True
-
-    def get_best_prompt_for_domain(self, domain: str, fallback_to_old: bool = True):
-        """Get the best performing prompt for a domain from the new system."""
-        if not self.prompt_manager or not self._enable_prompt_management:
-            if fallback_to_old:
-                logger.info(f"Using fallback system for domain '{domain}'")
-                return None  # Return None to trigger fallback in calling method
-            else:
-                raise AgenticSystemError(
-                    "Prompt Management System not available",
-                    error_code="PROMPT_MANAGEMENT_UNAVAILABLE"
-                )
-
+    def _update_domain_learning(self, domain: str, workflow_result: Dict[str, Any]):
+        """Update domain learning data based on workflow results."""
         try:
-            prompt_data = self.prompt_manager.get_best_prompt_for_domain(domain)
-            if prompt_data:
-                return prompt_data['content']
-
-            if fallback_to_old:
-                logger.info(f"No prompts found for domain '{domain}', using fallback")
-                return None
-
-            raise AgenticSystemError(
-                f"No prompts found for domain '{domain}'",
-                error_code="NO_PROMPTS_FOUND"
-            )
-
-        except Exception as e:
-            if fallback_to_old:
-                logger.warning(f"Error getting prompt from new system for domain '{domain}': {e}")
-                return None
-            else:
-                raise AgenticSystemError(
-                    f"Error retrieving prompt: {e}",
-                    error_code="PROMPT_RETRIEVAL_ERROR"
-                )
-
-    def record_prompt_performance(self, domain: str, prompt_content: str,
-                                performance_score: float, metadata: Dict[str, Any] = None):
-        """Record performance metrics for a prompt."""
-        if not self._enable_performance_tracking or not self.prompt_manager:
-            return False
-
-        try:
-            self.prompt_manager.record_performance(
-                domain=domain,
-                prompt_content=prompt_content,
-                performance_score=performance_score,
-                metadata=metadata or {}
-            )
-            return True
-        except Exception as e:
-            logger.warning(f"Failed to record performance: {e}")
-            return False
-
-    def create_experiment(self, name: str, domain: str, variants: List[str],
-                         traffic_split: List[float] = None):
-        """Create an A/B test experiment for prompt variants."""
-        if not self._enable_experimentation or not self.prompt_manager:
-            raise AgenticSystemError(
-                "Experimentation not enabled or Prompt Management System unavailable",
-                error_code="EXPERIMENTATION_UNAVAILABLE"
-            )
-
-        try:
-            # Create real prompts in the registry for each variant
-            experiment_variants = []
-            for i, variant_content in enumerate(variants):
-                # Create a prompt in the registry for this variant
-                prompt_id = self.prompt_manager.create_prompt(
-                    name=f"Experiment Variant {i} - {name}",
-                    content=variant_content,
-                    metadata=PromptMetadata(
-                        domain=domain,
-                        strategy="experiment_variant",
-                        author="coordinator",
-                        tags=["experiment", f"variant_{i}", domain],
-                        description=f"Experiment variant {i} for {name}"
-                    ),
-                    created_by="coordinator",
-                    commit_message=f"Created experiment variant {i} for {name}"
-                )
-
-                # Get the current version
-                current_version = self.prompt_manager.registry.get_prompt_version(prompt_id)
-                if not current_version:
-                    # Create initial version if none exists
-                    version_id = self.prompt_manager.create_version(
-                        prompt_id=prompt_id,
-                        content=variant_content,
-                        created_by="coordinator",
-                        commit_message=f"Initial version for experiment variant {i}"
-                    )
-                    current_version = self.prompt_manager.registry.get_prompt_version(prompt_id)
-
-                if current_version:
-                    variant = {
-                        'prompt_id': prompt_id,
-                        'prompt_version': current_version.version,
-                        'name': f"Variant {i}",
-                        'weight': traffic_split[i] if traffic_split and i < len(traffic_split) else 1.0 / len(variants)
+            # Load existing learned domains
+            learned_domains = self._load_learned_domains()
+            
+            # Initialize domain if not exists
+            if domain not in learned_domains:
+                learned_domains[domain] = {
+                    "description": f"Learned domain: {domain}",
+                    "keywords": [],
+                    "usage_count": 0,
+                    "quality_scores": [],
+                    "avg_quality_score": 0,
+                    "last_used": "",
+                    "created_from_workflow": workflow_result.get("workflow_id"),
+                    "learning_metadata": {
+                        "first_seen": datetime.now().isoformat(),
+                        "improvement_patterns": [],
+                        "common_prompt_types": []
                     }
-                    experiment_variants.append(variant)
-                else:
-                    logger.warning(f"Failed to create version for variant {i}")
-
-            if not experiment_variants:
-                raise AgenticSystemError(
-                    "Failed to create any experiment variants",
-                    error_code="NO_VARIANTS_CREATED"
-                )
-
-            experiment_id = self.prompt_manager.create_experiment(
-                name=name,
-                description=f"A/B testing experiment for {domain} domain",
-                variants=experiment_variants,
-                created_by="coordinator"
-            )
-            logger.info(f"Created experiment '{name}' with ID {experiment_id}")
-            return experiment_id
+                }
+                logger.info(f"New domain '{domain}' learned from workflow {workflow_result.get('workflow_id')}")
+            
+            # Update domain statistics
+            domain_data = learned_domains[domain]
+            domain_data["usage_count"] += 1
+            domain_data["last_used"] = datetime.now().isoformat()
+            
+            # Update quality scores
+            quality_score = workflow_result.get("output", {}).get("quality_score", 0)
+            if quality_score > 0:
+                domain_data["quality_scores"].append(quality_score)
+                # Keep only last 50 scores to prevent memory bloat
+                if len(domain_data["quality_scores"]) > 50:
+                    domain_data["quality_scores"] = domain_data["quality_scores"][-50:]
+                domain_data["avg_quality_score"] = sum(domain_data["quality_scores"]) / len(domain_data["quality_scores"])
+            
+            # Extract and update keywords from prompt analysis
+            analysis = workflow_result.get("analysis", {})
+            classification = analysis.get("classification", {})
+            key_topics = classification.get("key_topics", [])
+            
+            if key_topics:
+                existing_keywords = set(domain_data["keywords"])
+                new_keywords = [topic for topic in key_topics if topic.lower() not in [k.lower() for k in existing_keywords]]
+                domain_data["keywords"].extend(new_keywords[:5])  # Add up to 5 new keywords
+                # Keep only most recent 20 keywords
+                if len(domain_data["keywords"]) > 20:
+                    domain_data["keywords"] = domain_data["keywords"][-20:]
+            
+            # Update learning metadata
+            prompt_type = workflow_result.get("input", {}).get("prompt_type", "unknown")
+            if prompt_type not in domain_data["learning_metadata"]["common_prompt_types"]:
+                domain_data["learning_metadata"]["common_prompt_types"].append(prompt_type)
+            
+            # Track improvement patterns
+            improvements = analysis.get("improvements", {})
+            improvements_made = improvements.get("improvements_made", [])
+            if improvements_made:
+                domain_data["learning_metadata"]["improvement_patterns"].extend(improvements_made[:3])
+                # Keep only last 10 improvement patterns
+                if len(domain_data["learning_metadata"]["improvement_patterns"]) > 10:
+                    domain_data["learning_metadata"]["improvement_patterns"] = domain_data["learning_metadata"]["improvement_patterns"][-10:]
+            
+            # Save updated learned domains
+            self._save_learned_domains(learned_domains)
+            
         except Exception as e:
-            logger.error(f"Failed to create experiment: {e}")
-            raise AgenticSystemError(
-                f"Experiment creation failed: {e}",
-                error_code="EXPERIMENT_CREATION_FAILED"
-            )
-
-    def get_prompt_management_stats(self) -> Dict[str, Any]:
-        """Get statistics from the Prompt Management System."""
-        if not self.prompt_manager:
-            return {"error": "Prompt Management System not available"}
-
+            logger.error(f"Failed to update domain learning for '{domain}': {e}")
+    
+    def _load_learned_domains(self) -> Dict[str, Any]:
+        """Load learned domains from persistent storage."""
         try:
+            import json
+            from pathlib import Path
+            
+            domains_file = Path("data") / "learned_domains.json"
+            if domains_file.exists():
+                with open(domains_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            return {}
+        except Exception as e:
+            logger.error(f"Failed to load learned domains: {e}")
+            return {}
+    
+    def _save_learned_domains(self, learned_domains: Dict[str, Any]):
+        """Save learned domains to persistent storage."""
+        try:
+            import json
+            from pathlib import Path
+            
+            # Ensure data directory exists
+            data_dir = Path("data")
+            data_dir.mkdir(exist_ok=True)
+            
+            domains_file = data_dir / "learned_domains.json"
+            with open(domains_file, 'w', encoding='utf-8') as f:
+                json.dump(learned_domains, f, indent=2, ensure_ascii=False)
+                
+        except Exception as e:
+            logger.error(f"Failed to save learned domains: {e}")
+    
+    def _get_learned_domains(self) -> Dict[str, Any]:
+        """Get all learned domains."""
+        return self._load_learned_domains()
+    
+    def get_domain_learning_stats(self) -> Dict[str, Any]:
+        """Get statistics about domain learning."""
+        try:
+            learned_domains = self._load_learned_domains()
+            
             stats = {
-                "system_available": True,
-                "prompt_management_enabled": self._enable_prompt_management,
-                "performance_tracking_enabled": self._enable_performance_tracking,
-                "experimentation_enabled": self._enable_experimentation,
-                "migrated_domains": list(self.migrated_domains),
-                "total_migrated_domains": len(self.migrated_domains),
-                "registry_stats": self.prompt_manager.get_registry_stats(),
-                "experiment_stats": self.prompt_manager.get_experiment_stats(),
-                "deployment_stats": self.prompt_manager.get_deployment_stats(),
-                "analytics_stats": self.prompt_manager.get_analytics_stats()
+                "total_learned_domains": len(learned_domains),
+                "domains_by_usage": [],
+                "domains_by_quality": [],
+                "recent_domains": [],
+                "learning_summary": {
+                    "total_keywords_learned": 0,
+                    "total_improvement_patterns": 0,
+                    "avg_domain_quality": 0
+                }
             }
+            
+            if learned_domains:
+                # Sort domains by usage
+                stats["domains_by_usage"] = sorted(
+                    [(domain, data["usage_count"]) for domain, data in learned_domains.items()],
+                    key=lambda x: x[1], reverse=True
+                )[:10]
+                
+                # Sort domains by quality
+                stats["domains_by_quality"] = sorted(
+                    [(domain, data["avg_quality_score"]) for domain, data in learned_domains.items() if data["avg_quality_score"] > 0],
+                    key=lambda x: x[1], reverse=True
+                )[:10]
+                
+                # Recent domains (last 30 days)
+                from datetime import datetime, timedelta
+                thirty_days_ago = datetime.now() - timedelta(days=30)
+                
+                recent_domains = []
+                for domain, data in learned_domains.items():
+                    if data.get("last_used"):
+                        try:
+                            last_used = datetime.fromisoformat(data["last_used"].replace('Z', '+00:00'))
+                            if last_used > thirty_days_ago:
+                                recent_domains.append((domain, data["last_used"]))
+                        except:
+                            continue
+                
+                stats["recent_domains"] = sorted(recent_domains, key=lambda x: x[1], reverse=True)[:10]
+                
+                # Learning summary
+                total_keywords = sum(len(data.get("keywords", [])) for data in learned_domains.values())
+                total_patterns = sum(len(data.get("learning_metadata", {}).get("improvement_patterns", [])) for data in learned_domains.values())
+                avg_quality = sum(data.get("avg_quality_score", 0) for data in learned_domains.values()) / len(learned_domains)
+                
+                stats["learning_summary"] = {
+                    "total_keywords_learned": total_keywords,
+                    "total_improvement_patterns": total_patterns,
+                    "avg_domain_quality": round(avg_quality, 2)
+                }
+            
             return stats
+            
         except Exception as e:
-            logger.error(f"Failed to get system stats: {e}")
-            return {"error": str(e), "system_available": True}
+            logger.error(f"Failed to get domain learning stats: {e}")
+            return {"error": str(e)}
 
-    def create_prompt_from_template(self, template_name: str, variables: Dict[str, str]):
-        """Create a prompt from a template using the new system."""
-        if not self.prompt_manager or not self._enable_prompt_management:
-            raise AgenticSystemError(
-                "Prompt Management System not available",
-                error_code="PROMPT_MANAGEMENT_UNAVAILABLE"
-            )
+def create_coordinator():
+    """Create a new WorkflowCoordinator instance."""
+    from agents.classifier import DomainClassifier
+    from agents.evaluator import PromptEvaluator
+    
+    classifier = DomainClassifier()
+    evaluator = PromptEvaluator()
+    return WorkflowCoordinator(classifier, evaluator)
 
-        try:
-            result = self.prompt_manager.create_prompt_from_template(
-                template_name=template_name,
-                variables=variables
-            )
-            return result
-        except Exception as e:
-            logger.error(f"Failed to create prompt from template: {e}")
-            raise AgenticSystemError(
-                f"Template creation failed: {e}",
-                error_code="TEMPLATE_CREATION_FAILED"
-            )
-
-    def get_available_templates(self) -> List[Dict[str, Any]]:
-        """Get list of available templates from the new system."""
-        if not self.prompt_manager:
-            return []
-
-        try:
-            return self.prompt_manager.get_available_templates()
-        except Exception as e:
-            logger.warning(f"Failed to get templates: {e}")
-            return []
-
-
-# Global coordinator instance factory
-def create_coordinator(classifier_instance=None, evaluator_instance=None):
-    """Factory function to create a coordinator with dependencies."""
-    if classifier_instance is None:
-        from agents.classifier import DomainClassifier
-        classifier_instance = DomainClassifier()
-    if evaluator_instance is None:
-        from agents.evaluator import PromptEvaluator
-        evaluator_instance = PromptEvaluator()
-
-    return WorkflowCoordinator(classifier_instance, evaluator_instance)
-
-# Global coordinator instance (lazy initialization)
-_coordinator_instance = None
-
-def get_coordinator():
-    """Get the global coordinator instance, creating it if necessary."""
+def get_coordinator_instance():
+    """Get the singleton coordinator instance."""
     global _coordinator_instance
     if _coordinator_instance is None:
         _coordinator_instance = create_coordinator()
     return _coordinator_instance
 
 # For backward compatibility, provide a coordinator instance
-coordinator = get_coordinator()
+coordinator = create_coordinator()

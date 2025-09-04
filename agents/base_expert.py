@@ -18,7 +18,6 @@ from config.config import (
     memory_config, prompt_generation_config
 )
 from agents.memory import memory_manager
-from agents.prompt import prompt_generator
 
 # Set up structured logging
 logger = get_logger(__name__)
@@ -340,84 +339,6 @@ class BaseExpertAgent(ABC):
             "reasoning": "Unable to improve prompt due to processing errors"
         }
 
-    async def generate_and_improve_prompt(self, task: str, prompt_type: str = "raw",
-                                        key_topics: List[str] = None, context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """
-        Generate and then improve a prompt using advanced generation strategies.
-
-        Args:
-            task: The task to generate a prompt for
-            prompt_type: Type of prompt ("raw" or "structured")
-            key_topics: Key topics identified by classifier
-            context: Additional context information
-
-        Returns:
-            Dict containing generated and improved prompt with metadata
-        """
-        if not prompt_generation_config.enable_advanced_generation:
-            # Fall back to standard improvement if advanced generation is disabled
-            return await self.improve_prompt(
-                original_prompt=task,
-                prompt_type=prompt_type,
-                key_topics=key_topics
-            )
-
-        try:
-            logger.info(f"Generating and improving prompt for task in domain {self.domain}")
-
-            # Generate initial prompt using advanced strategies
-            generation_result = await prompt_generator.generate_prompt(
-                task=task,
-                domain=self.domain,
-                strategy=prompt_generation_config.generation_strategy,
-                context={
-                    'key_topics': key_topics or [],
-                    'domain_expertise': self.expertise_areas,
-                    'prompt_type': prompt_type
-                }
-            )
-
-            generated_prompt = generation_result['generated_prompt']
-
-            # Improve the generated prompt using domain expertise
-            improvement_result = await self.improve_prompt(
-                original_prompt=generated_prompt,
-                prompt_type=prompt_type,
-                key_topics=key_topics
-            )
-
-            # Combine results
-            combined_result = {
-                'task': task,
-                'domain': self.domain,
-                'generated_prompt': generated_prompt,
-                'final_prompt': improvement_result.get('improved_prompt', generated_prompt),
-                'generation_metadata': {
-                    'strategy_used': generation_result.get('strategy_used'),
-                    'quality_score': generation_result.get('quality_score'),
-                    'generation_time': generation_result.get('generation_time')
-                },
-                'improvement_metadata': {
-                    'improvements_made': improvement_result.get('improvements_made', []),
-                    'key_additions': improvement_result.get('key_additions', []),
-                    'effectiveness_score': improvement_result.get('effectiveness_score', 0)
-                },
-                'overall_quality_score': improvement_result.get('effectiveness_score', generation_result.get('quality_score', 0)),
-                'total_time': generation_result.get('generation_time', 0),
-                'method': 'generate_and_improve'
-            }
-
-            logger.info(f"Generated and improved prompt for {self.domain} with quality score {combined_result['overall_quality_score']:.2f}")
-            return combined_result
-
-        except Exception as e:
-            logger.error(f"Failed to generate and improve prompt for {self.domain}: {e}")
-            # Fall back to standard improvement
-            return await self.improve_prompt(
-                original_prompt=task,
-                prompt_type=prompt_type,
-                key_topics=key_topics
-            )
 
     def _is_retryable_error(self, error: Exception) -> bool:
         """Determine if an error is retryable based on its characteristics."""

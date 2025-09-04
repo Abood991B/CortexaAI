@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Brain, Zap, Play, Copy, Download, ChevronDown, ChevronUp, History, ArrowLeft, MessageSquare, Trash2, RefreshCw, Edit, Check, Settings } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -24,6 +25,7 @@ import { useNotificationSender } from '@/hooks/useNotifications';
 import type { PromptRequest, PromptResponse } from '@/types/api';
 
 export function PromptProcessor() {
+  const location = useLocation();
   const [prompt, setPrompt] = useState('');
   const [promptType, setPromptType] = useState<'auto' | 'raw' | 'structured'>('auto');
   const [returnComparison, setReturnComparison] = useState(true);
@@ -50,6 +52,15 @@ export function PromptProcessor() {
   const processPromptWithMemoryMutation = useProcessPromptWithMemory();
   const cancelWorkflowMutation = useCancelWorkflow();
   const { addNotification } = useNotificationSender();
+
+  // Handle initial prompt from navigation state
+  useEffect(() => {
+    if (location.state?.initialPrompt) {
+      setPrompt(location.state.initialPrompt);
+      // Clear the state to prevent re-setting on re-renders
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
   
   // Workflow status polling
   const workflowStatusQuery = useWorkflowStatus(workflowId);
@@ -148,6 +159,13 @@ export function PromptProcessor() {
               };
               setSavedChats(prev => [newChat, ...prev]);
               setCurrentChatId(newChatId);
+            } else {
+              // Update existing chat
+              setSavedChats(prev => prev.map(chat => 
+                chat.id === currentChatId 
+                  ? { ...chat, messages: [...chat.messages, chatEntry], lastUpdated: new Date() }
+                  : chat
+              ));
             }
         } else {
             setPrompt('');
@@ -293,12 +311,19 @@ export function PromptProcessor() {
     };
 
     const loadCurrentChat = () => {
-      const currentChatIdStored = localStorage.getItem(`promptEngineer_currentChatId_${userId}`);
-      if (currentChatIdStored) {
-        setCurrentChatId(currentChatIdStored);
-        const chat = savedChats.find(c => c.id === currentChatIdStored);
-        if (chat) {
-          setChatHistory(chat.messages);
+      // Only auto-load current chat if we're in memory mode
+      if (processingMethod === 'memory') {
+        const currentChatIdStored = localStorage.getItem(`promptEngineer_currentChatId_${userId}`);
+        if (currentChatIdStored && savedChats.length > 0) {
+          const chat = savedChats.find(c => c.id === currentChatIdStored);
+          if (chat) {
+            setCurrentChatId(currentChatIdStored);
+            setChatHistory(chat.messages);
+          } else {
+            // Chat not found, clear the stored ID
+            localStorage.removeItem(`promptEngineer_currentChatId_${userId}`);
+            setCurrentChatId(null);
+          }
         }
       }
     };
@@ -382,15 +407,24 @@ export function PromptProcessor() {
             }))
           }));
           setSavedChats(chatsWithDates);
+          
+          // Only load current chat if we're in memory mode and user explicitly had one selected
+          if (processingMethod === 'memory') {
+            const currentChatIdStored = localStorage.getItem(`promptEngineer_currentChatId_${userId}`);
+            if (currentChatIdStored) {
+              const chat = chatsWithDates.find((c: any) => c.id === currentChatIdStored);
+              if (chat) {
+                setCurrentChatId(currentChatIdStored);
+                setChatHistory(chat.messages);
+              } else {
+                // Chat not found, clear the stored ID
+                localStorage.removeItem(`promptEngineer_currentChatId_${userId}`);
+              }
+            }
+          }
         } catch (error) {
           console.error('Failed to load saved chats for user', error);
         }
-      }
-      
-      // Load current chat
-      const currentChatIdStored = localStorage.getItem(`promptEngineer_currentChatId_${userId}`);
-      if (currentChatIdStored) {
-        setCurrentChatId(currentChatIdStored);
       }
     }
   }, [userId]);
@@ -400,6 +434,13 @@ export function PromptProcessor() {
     setResult(null);
     setWorkflowId(null);
     setIsPolling(false);
+    
+    // When switching to memory mode, clear current chat selection
+    if (processingMethod === 'memory') {
+      setCurrentChatId(null);
+      setChatHistory([]);
+      // Don't clear saved chats, just the current selection
+    }
     // Don't clear prompt content to preserve user's work
   }, [processingMethod]);
 
@@ -535,6 +576,7 @@ export function PromptProcessor() {
     }
   };
 
+
   const handleDownloadResult = () => {
     if (result) {
       const content = JSON.stringify(result, null, 2);
@@ -551,14 +593,9 @@ export function PromptProcessor() {
     }
   };
 
-  // Chat management functions
-  const startNewChat = () => {
-    setChatHistory([]);
-    setCurrentChatId(null);
-    setResult(null);
-    setCurrentChatPrompt('');
-    setShowChatList(false);
-    localStorage.removeItem(`promptEngineer_currentChatId_${userId}`);
+    const deleteChatHandler = (chatId: string) => {
+    setChatToDelete(chatId);
+    setIsDeleteDialogOpen(true);
   };
 
   const loadChat = (chatId: string) => {
@@ -566,17 +603,18 @@ export function PromptProcessor() {
     if (chat) {
       setChatHistory(chat.messages);
       setCurrentChatId(chatId);
-      setShowChatList(false);
-      // Set result to the last response if available
-      if (chat.messages.length > 0) {
-        setResult(chat.messages[chat.messages.length - 1].response);
-      }
+      localStorage.setItem(`promptEngineer_currentChatId_${userId}`, chatId);
+      // Clear any existing results when switching chats
+      setResult(null);
     }
   };
 
-    const deleteChatHandler = (chatId: string) => {
-    setChatToDelete(chatId);
-    setIsDeleteDialogOpen(true);
+  const startNewChat = () => {
+    setChatHistory([]);
+    setCurrentChatId(null);
+    localStorage.removeItem(`promptEngineer_currentChatId_${userId}`);
+    // Clear any existing results when starting new chat
+    setResult(null);
   };
 
   const handleTitleChange = (chatId: string, newTitle: string) => {
@@ -589,6 +627,7 @@ export function PromptProcessor() {
     setEditingTitle('');
   };
 
+
   const switchToStandardMode = () => {
     setProcessingMethod('standard');
     setShowChatList(false);
@@ -598,7 +637,7 @@ export function PromptProcessor() {
     setCurrentChatPrompt('');
   };
 
-  return (
+    return (
     <div className="space-y-6">
       {/* Page Header */}
       <div>
