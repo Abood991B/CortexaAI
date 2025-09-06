@@ -15,9 +15,15 @@
       "unit testing",
       "docstrings",
       "code quality",
-      "edge cases"
+      "edge cases",
+      "sorting function",
+      "leap sort",
+      "quality criteria",
+      "algorithm implementation",
+      "requirements refinement",
+      "python"
     ],
-    "usage_count": 31,
+    "usage_count": 33,
     "quality_scores": [
       0.95,
       0.97,
@@ -49,24 +55,26 @@
       0.92,
       0.98,
       0.96,
-      0.95
+      0.95,
+      0.96,
+      0.94
     ],
-    "avg_quality_score": 0.9503225806451612,
-    "last_used": "2025-09-04T20:07:56.891390",
+    "avg_quality_score": 0.9503030303030303,
+    "last_used": "2025-09-06T15:10:25.219944",
     "created_from_workflow": "workflow_1756974410",
     "learning_metadata": {
       "first_seen": "2025-09-04T16:27:32.090612",
       "improvement_patterns": [
-        "Clarified input requirements (list of comparable elements, original list unchanged) and output behavior (returns a *new* sorted list).",
-        "Added a clear problem statement defining the core task.",
-        "Specified the programming language (Python 3.x) and exact function signature with type hints.",
-        "Clarified input and output requirements, including the crucial detail of returning a *new* list and not modifying the original.",
-        "Added a clear problem statement defining the core task of creating a generic sorting function.",
-        "Specified the programming language (Python 3.9+) to remove ambiguity.",
         "Defined a precise function signature with type hints and an optional `reverse` parameter for sorting order.",
         "Specified the programming language (Python 3.x) for the implementation.",
         "Defined a precise function signature (`def sort_list(data: list) -> list:`) including type hints, removing ambiguity about input/output.",
-        "Required the selection of a specific comparison-based sorting algorithm (e.g., Merge Sort, Quick Sort, Heap Sort) and its explicit mention/justification."
+        "Required the selection of a specific comparison-based sorting algorithm (e.g., Merge Sort, Quick Sort, Heap Sort) and its explicit mention/justification.",
+        "Added a clear problem statement defining the core task and the role of 'Leap Sort'.",
+        "Specified the programming language (Python 3.9+) for implementation.",
+        "Defined the exact function signature, including type hints for arguments and return value.",
+        "**Correctness:** Added explicit verification methods (unit tests, comparison to expected results) and emphasized strict adherence to the defined algorithm's logic, even if it's not the most performant general sort.",
+        "**Efficiency:** Specified that actual performance should align with theoretical complexities, mentioned profiling, and added a constraint to avoid unnecessary operations that degrade performance beyond the algorithm's inherent nature.",
+        "**Readability & Maintainability:** Reinforced PEP 8 adherence, added requirements for modularity, clear separation of concerns, descriptive naming, and ease of future modification/debugging."
       ],
       "common_prompt_types": [
         "raw",

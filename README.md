@@ -1,12 +1,13 @@
 # 🚀 Multi-Agent Prompt Engineering System
 
-A production-level, enterprise-grade system for intelligent prompt optimization, management, and deployment using multiple AI agents and advanced security frameworks.
+A production-level, enterprise-grade system for intelligent prompt optimization, management, and deployment using multiple AI agents and advanced security frameworks. This system features a FastAPI backend with comprehensive REST API and a modern React frontend for seamless user interaction.
 
 ## 📋 Table of Contents
 
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
+- [Frontend Features](#frontend-features)
 - [Security Framework](#security-framework)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
@@ -48,7 +49,7 @@ This system revolutionizes prompt engineering by providing an intelligent, multi
 
 ### Developer Experience
 - **REST API**: Full programmatic access
-- **Web Interface**: User-friendly dashboard
+- **React Frontend**: Modern, responsive web interface
 - **LangGraph Integration**: Advanced workflow orchestration
 - **Comprehensive Logging**: Structured JSON logging
 - **Hot Reload**: Development-friendly with auto-restart
@@ -57,7 +58,9 @@ This system revolutionizes prompt engineering by providing an intelligent, multi
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Web Interface (FastAPI)                  │
+│                React Frontend (Port 3000)                   │
+├─────────────────────────────────────────────────────────────┤
+│                FastAPI Backend (Port 8000)                  │
 ├─────────────────────────────────────────────────────────────┤
 │                    REST API Layer                           │
 ├─────────────────────────────────────────────────────────────┤
@@ -97,6 +100,34 @@ This system revolutionizes prompt engineering by providing an intelligent, multi
 - **A/B Testing**: Experimentation and optimization framework
 - **Performance Monitor**: Real-time analytics and metrics
 
+## 🎨 Frontend Features
+
+The React frontend provides a modern, intuitive interface for interacting with the prompt engineering system:
+
+### Core Interface Components
+- **Dashboard**: Real-time system statistics and workflow overview
+- **Prompt Optimizer**: Interactive prompt input and optimization interface
+- **Workflow Manager**: Track and manage active and completed workflows
+- **Analytics Dashboard**: Performance metrics and domain distribution charts
+- **Settings Panel**: System configuration and API key management
+
+### Modern UI/UX Features
+- **Responsive Design**: Works seamlessly on desktop, tablet, and mobile
+- **Real-time Updates**: Live workflow status and progress tracking
+- **Dark/Light Mode**: Customizable theme preferences
+- **Syntax Highlighting**: Enhanced code and prompt display
+- **Interactive Charts**: Data visualization with Recharts
+- **Toast Notifications**: User-friendly feedback and alerts
+
+### Technical Stack
+- **React 18**: Latest React with hooks and concurrent features
+- **TypeScript**: Type-safe development experience
+- **Vite**: Fast development server and build tool
+- **Tailwind CSS**: Utility-first CSS framework
+- **Radix UI**: Accessible component primitives
+- **React Query**: Efficient data fetching and caching
+- **Framer Motion**: Smooth animations and transitions
+
 ## 🔒 Security Framework
 
 ### Intelligent Content Filtering
@@ -120,7 +151,7 @@ This system revolutionizes prompt engineering by providing an intelligent, multi
 - Virtual environment (recommended)
 - API keys for LLM providers (Google Gemini, OpenAI, Anthropic)
 
-### Setup Steps
+### Backend Setup
 
 1. **Clone the repository**
    ```bash
@@ -134,7 +165,7 @@ This system revolutionizes prompt engineering by providing an intelligent, multi
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-3. **Install dependencies**
+3. **Install Python dependencies**
    ```bash
    pip install -r requirements.txt
    ```
@@ -146,26 +177,66 @@ This system revolutionizes prompt engineering by providing an intelligent, multi
    ```
 
 5. **Run activation script**
-    ```bash
-    python system_activation.py
-    ```
+   ```bash
+   python system_activation.py
+   ```
+
+### Frontend Setup
+
+1. **Navigate to frontend directory**
+   ```bash
+   cd frontend-react
+   ```
+
+2. **Install Node.js dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Start development server**
+   ```bash
+   npm run dev
+   ```
+
+The frontend will be available at `http://localhost:3000`
 
 ## 📁 Project Structure
 
 ```
 prompt-engineering-agent/
-├── src/                    # Main application code
-├── agents/                 # AI agent implementations
-├── config/                 # Configuration files
-├── tools/                  # Utility scripts and tools
-│   ├── performance_benchmark.py    # System benchmarking
-│   └── run_langgraph_studio.py     # LangGraph studio runner
-├── tests/                  # Test suites
-├── examples/               # Usage examples and demos
-├── data/                   # Data files and templates
-├── templates/              # Prompt templates
-├── docs/                   # Documentation
-└── docker/                 # Docker configuration
+├── src/                           # Backend application code
+│   ├── main.py                   # FastAPI application entry point
+│   └── workflow.py               # LangGraph workflow implementation
+├── agents/                       # AI agent implementations
+│   ├── coordinator.py           # Workflow orchestration
+│   ├── classifier.py            # Domain classification
+│   ├── evaluator.py             # Quality evaluation
+│   ├── base_expert.py           # Expert agent base class
+│   ├── exceptions.py            # Custom exceptions
+│   └── memory/                  # Memory management
+│       ├── __init__.py
+│       └── memory_manager.py
+├── frontend-react/              # React frontend application
+│   ├── src/                     # Frontend source code
+│   │   ├── components/          # React components
+│   │   ├── hooks/               # Custom React hooks
+│   │   ├── api/                 # API integration
+│   │   ├── App.tsx              # Main App component
+│   │   └── main.tsx             # Application entry point
+│   ├── package.json             # Node.js dependencies
+│   └── vite.config.ts           # Vite configuration
+├── config/                      # Configuration files
+│   └── config.py               # Application settings
+├── tools/                       # Utility scripts and tools
+│   ├── performance_benchmark.py # System benchmarking
+│   └── run_langgraph_studio.py  # LangGraph studio runner
+├── tests/                       # Test suites
+├── data/                        # Data files and learned domains
+├── docs/                        # Documentation
+├── docker/                      # Docker configuration
+├── requirements.txt             # Python dependencies
+├── langgraph.json              # LangGraph configuration
+└── system_activation.py        # System activation script
 ```
 
 ## ⚡ Quick Start
@@ -176,10 +247,14 @@ python system_activation.py
 ```
 Choose option 3 for full system activation with all features.
 
-### Option 2: Direct Usage
+### Option 2: Development Mode (Backend + Frontend)
 ```bash
-# Run the main application directly
-python src/main.py
+# Terminal 1: Start backend
+python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 2: Start frontend
+cd frontend-react
+npm run dev
 ```
 
 ### Option 3: Performance Benchmarking
@@ -197,16 +272,17 @@ python tools/run_langgraph_studio.py
 ## 📖 Usage
 
 ### Web Interface
-1. Start the server: `python src/main.py`
-2. Open browser: `http://localhost:8001`
-3. Enter your prompt and click "Optimize Prompt"
+1. Start the backend: `python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000`
+2. Start the frontend: `cd frontend-react && npm run dev`
+3. Open browser: `http://localhost:3000`
+4. Enter your prompt and click "Optimize Prompt"
 
 ### REST API
 ```python
 import requests
 
 response = requests.post(
-    "http://localhost:8001/api/process-prompt",
+    "http://localhost:8000/api/process-prompt",
     json={
         "prompt": "Write a function to sort an array",
         "prompt_type": "auto",
