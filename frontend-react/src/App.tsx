@@ -1,10 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
-import { Layout } from '@/components/layout/Layout';
-import { Dashboard } from '@/pages/Dashboard';
 import { PromptProcessor } from '@/pages/PromptProcessor';
-import { Workflows } from '@/pages/Workflows';
 import { SystemHealth } from '@/pages/SystemHealth';
 
 // Create a client
@@ -23,15 +20,11 @@ function App() {
       <Router>
         <div className="min-h-screen bg-background text-foreground">
           <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Navigate to="/dashboard" replace />} />
-              <Route path="dashboard" element={<Dashboard />} />
-              <Route path="processor" element={<PromptProcessor />} />
-              <Route path="workflows" element={<Workflows />} />
-              <Route path="system-health" element={<SystemHealth />} />
-              {/* 404 Route */}
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Route>
+            <Route index element={<PromptProcessor />} />
+            <Route path="processor" element={<PromptProcessor />} />
+            <Route path="system-health" element={<SystemHealth />} />
+            {/* 404 Route */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <Toaster position="top-right" />
         </div>

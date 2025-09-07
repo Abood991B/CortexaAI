@@ -5,7 +5,7 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 0 0% 0%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
@@ -26,27 +26,6 @@
     --radius: 0.5rem;
   }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 84% 4.9%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 94.1%;
-  }
 }
 
 @layer base {
@@ -91,9 +70,20 @@
 
 /* Code syntax highlighting */
 .code-block {
-  @apply bg-muted p-4 rounded-lg font-mono text-sm overflow-x-auto;
+  @apply bg-muted p-4 rounded-lg font-mono text-sm overflow-x-auto text-black;
 }
 
 .code-inline {
-  @apply bg-muted px-1.5 py-0.5 rounded text-sm font-mono;
+  @apply bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-black;
+}
+
+.bg-assistant-message {
+  @apply bg-gray-100 border border-gray-200 text-black shadow-sm;
+}
+
+.code-block-wrapper pre,
+.code-block-wrapper code {
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  text-align: justify !important;
 }

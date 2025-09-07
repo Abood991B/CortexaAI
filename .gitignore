@@ -2,12 +2,16 @@ node_modules
 
 # Python
 venv/
+env/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
 build/
+htmlcov/
+.coverage
+.pytest_cache/
 develop-eggs/
 dist/
 downloads/
@@ -24,9 +28,23 @@ wheels/
 # Environment variables
 .env
 
+# Data files (runtime generated)
+data/learned_domains.json
+data/cache/
+data/logs/
+
 # Logs
 *.log
 logs/
+
+# ChromaDB data
+chroma_data/
+*.db
+*.sqlite
+
+# Model cache
+.cache/
+models/
 
 # OS generated files
 .DS_Store
@@ -47,3 +65,6 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Docker volumes
+docker-data/

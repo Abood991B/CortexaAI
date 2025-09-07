@@ -83,12 +83,12 @@ export const setCachedResponse = (cacheKey: string, data: PromptResponse): void 
   }
 };
 
-// Core API Hooks
+// Core API Hooks - Unified Processing with Optional Memory
 export const useProcessPrompt = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ request, signal, skipCache = false }: { request: PromptRequest; signal?: AbortSignal; skipCache?: boolean }) => {
+    mutationFn: async ({ request, signal, skipCache = false }: { request: PromptRequest & { user_id?: string }; signal?: AbortSignal; skipCache?: boolean }) => {
       const cacheKey = getCacheKey(request);
       
       // Clear any existing cache for this request when skipCache is true (for retries)
@@ -106,9 +106,10 @@ export const useProcessPrompt = () => {
       }
 
       try {
-        const response = await apiClient.processPrompt(request, signal);
-        // Don't cache here - let the workflow completion handler decide when to cache
-        // setCachedResponse(cacheKey, response);
+        // Use memory-enhanced processing if user_id is provided, otherwise standard processing
+        const response = request.user_id 
+          ? await apiClient.processPromptWithMemory(request as PromptRequest & { user_id: string }, signal)
+          : await apiClient.processPrompt(request, signal);
         return response;
       } catch (error: any) {
         if (axios.isCancel(error)) {
@@ -158,7 +159,12 @@ export const useHealth = () => {
   return useQuery({
     queryKey: queryKeys.health,
     queryFn: () => apiClient.getHealth(),
-    refetchInterval: 30 * 1000, // 30 seconds
+    refetchInterval: 15 * 1000, // 15 seconds for more real-time updates
+    staleTime: 10 * 1000, // 10 seconds
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 };
 
@@ -199,60 +205,8 @@ export const useAnalytics = (timeRange: '7d' | '30d' | '90d' = '30d') => {
   });
 };
 
-// Advanced Processing Hooks
-export const useProcessPromptWithMemory = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async ({ request, signal, skipCache = false }: { request: PromptRequest & { user_id: string }; signal?: AbortSignal; skipCache?: boolean }) => {
-      const cacheKey = getCacheKey(request);
-      
-      // Clear any existing cache for this request when skipCache is true (for retries)
-      if (skipCache) {
-        localStorage.removeItem(cacheKey);
-      }
-      
-      // Check cache only if not explicitly skipping
-      if (!skipCache) {
-        const cachedResponse = getCachedResponse(cacheKey);
-        if (cachedResponse) {
-          toast.info('Returning cached response.');
-          return cachedResponse;
-        }
-      }
-
-      try {
-        if (!request.user_id) {
-          throw new Error('User ID is required for processing with memory');
-        }
-        const response = await apiClient.processPromptWithMemory(request, signal);
-        // Don't cache here - let the workflow completion handler decide when to cache
-        // setCachedResponse(cacheKey, response);
-        return response;
-      } catch (error: any) {
-        if (axios.isCancel(error)) {
-          // Don't show success toast for cancelled requests
-          return;
-        }
-        console.error('API Error (with memory):', error);
-        const errorMessage = error.response?.data?.detail || 
-                           error.message || 
-                           'Failed to process prompt with memory';
-        throw new Error(errorMessage);
-      }
-    },
-    onSuccess: (data) => {
-      if (data) { 
-        queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-        queryClient.invalidateQueries({ queryKey: queryKeys.history() });
-        toast.success('Prompt processed with memory successfully!');
-      }
-    },
-    onError: (error: any) => {
-      toast.error(getApiErrorMessage(error));
-    },
-  });
-};
+// Legacy alias for backward compatibility - will be removed
+export const useProcessPromptWithMemory = useProcessPrompt;
 
 export const useGeneratePrompt = () => {
   return useMutation({
