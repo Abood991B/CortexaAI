@@ -16,7 +16,8 @@ class AgenticSystemError(Exception):
     """
 
     def __init__(self, message: str, error_code: str = "UNKNOWN_ERROR",
-                 details: Optional[Dict[str, Any]] = None, cause: Optional[Exception] = None):
+                 details: Optional[Dict[str, Any]] = None, cause: Optional[Exception] = None,
+                 security_events: Optional[List[Dict[str, Any]]] = None):
         """
         Initialize the exception with detailed context.
 
@@ -25,6 +26,7 @@ class AgenticSystemError(Exception):
             error_code: Machine-readable error code for categorization
             details: Additional context information (agent state, inputs, etc.)
             cause: Original exception that caused this error
+            security_events: List of security events associated with the error
         """
         super().__init__(message)
         self.message = message
@@ -32,6 +34,7 @@ class AgenticSystemError(Exception):
         self.details = details or {}
         self.cause = cause
         self.timestamp = datetime.now()
+        self.security_events = security_events or []
 
     def __str__(self) -> str:
         """String representation including error code and timestamp."""

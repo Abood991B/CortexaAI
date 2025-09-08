@@ -28,7 +28,7 @@ except ImportError:
     print("Warning: matplotlib/seaborn not available, plotting disabled")
 
 try:
-    from agents.coordinator import get_coordinator
+    from agents.coordinator import coordinator as get_coordinator
     from config.config import get_logger, settings
     IMPORTS_AVAILABLE = True
 except ImportError as e:
@@ -82,7 +82,7 @@ class PerformanceBenchmark:
         if not IMPORTS_AVAILABLE:
             raise RuntimeError("Required modules not available")
         logger.info("Setting up benchmark environment...")
-        self.coordinator = get_coordinator()
+        self.coordinator = get_coordinator
         self.start_time = time.time()
 
     def get_memory_usage(self) -> Dict[str, float]:
@@ -529,6 +529,10 @@ async def main():
 
 
 if __name__ == "__main__":
+    # Add the parent directory to the path so we can import agents and config
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from config.config import get_logger
+    logger = get_logger(__name__)
     try:
         report = asyncio.run(main())
     except KeyboardInterrupt:

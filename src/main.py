@@ -175,6 +175,16 @@ class WorkflowDetails(BaseModel):
 @app.post("/api/process-prompt", response_model=PromptResponse)
 async def process_prompt(request: PromptRequest, background_tasks: BackgroundTasks) -> PromptResponse:
     """Process a prompt through the multi-agent workflow."""
+    from config.config import cache_manager, generate_prompt_cache_key, perf_config
+
+    # Check cache first if caching is enabled
+    if perf_config.enable_caching and request.use_langgraph:
+        cache_key = generate_prompt_cache_key(request.prompt, "langgraph_workflow")
+        cached_result = cache_manager.get(cache_key)
+        if cached_result:
+            logger.info(f"Returning cached result for LangGraph workflow: {request.prompt[:100]}...")
+            return PromptResponse(**cached_result)
+
     workflow_id = f"workflow_{uuid.uuid4().hex[:8]}"
     
     # Store the task in active_workflows with cancellation token
@@ -246,6 +256,23 @@ async def process_prompt(request: PromptRequest, background_tasks: BackgroundTas
                 active_workflows[workflow_id]["status"] = "completed"
                 active_workflows[workflow_id]["result"] = result
                 logger.info(f"Workflow {workflow_id} completed successfully")
+
+                # Cache the result if caching is enabled
+                if perf_config.enable_caching and request.use_langgraph:
+                    cache_key = generate_prompt_cache_key(request.prompt, "langgraph_workflow")
+                    # Prepare a cacheable response
+                    cacheable_response = PromptResponse(
+                        workflow_id=workflow_id,
+                        status="completed",
+                        message="Workflow completed successfully.",
+                        timestamp=datetime.now().isoformat(),
+                        processing_time_seconds=result.get("processing_time_seconds", 0),
+                        input=request.dict(),
+                        output=result.get("output", {}),
+                        analysis=result.get("analysis", {}),
+                        metadata=result.get("metadata", {})
+                    )
+                    cache_manager.set(cache_key, cacheable_response.dict(), perf_config.cache_ttl)
                 
             except WorkflowCancellationError:
                 logger.info(f"Workflow {workflow_id} was cancelled during execution")

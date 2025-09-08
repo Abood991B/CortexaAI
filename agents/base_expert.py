@@ -368,7 +368,7 @@ class BaseExpertAgent(ABC):
         self.model = ChatGoogleGenerativeAI(
             model=model_config["model_name"],
             google_api_key=model_config["api_key"],
-            temperature=0.3  # Slightly higher creativity for prompt improvement
+            temperature=0.4  # Slightly higher creativity for prompt improvement
         )
 
         # General improvement prompt template
@@ -384,13 +384,20 @@ class BaseExpertAgent(ABC):
         PROMPT TYPE: {prompt_type}
         KEY TOPICS: {key_topics}
 
+        PROMPT ENGINEERING PRINCIPLES:
+        - **Clarity and Precision:** Leave no room for interpretation. Use precise language.
+        - **Completeness:** Include all necessary context, constraints, and desired output formats.
+        - **Structure:** Organize the prompt logically with clear sections.
+        - **Actionability:** The prompt must be directly usable and lead to a high-quality result.
+        - **Persona and Tone:** Define the persona the model should adopt and the tone of the response.
+
         TASK:
-        Improve this prompt using your domain expertise. Focus on:
-        1. Adding missing context and specificity
-        2. Removing ambiguity and unclear requirements
-        3. Structuring the prompt for better results
-        4. Adding relevant domain-specific best practices
-        5. Optimizing wording for clarity and effectiveness
+        Dramatically improve this prompt using your domain expertise and the principles above. Your goal is to create a world-class prompt that is ready for immediate use. Focus on:
+        1. Injecting deep, domain-specific context and best practices.
+        2. Eliminating all ambiguity and adding precise, actionable requirements.
+        3. Re-structuring the prompt for maximum clarity and effectiveness.
+        4. Specifying the desired output format, tone, and persona.
+        5. Adding examples, edge cases, and constraints to guide the model.
 
         {improvement_instructions}
 
@@ -406,7 +413,7 @@ class BaseExpertAgent(ABC):
                 "Domain-specific best practices included"
             ],
             "structure_analysis": "Analysis of how the prompt was structured and improved",
-            "effectiveness_score": 0.95,
+            "effectiveness_score": 0.98,
             "reasoning": "Explanation of why these improvements will be effective"
         }}
         """)
@@ -563,29 +570,28 @@ class SoftwareEngineeringExpert(BaseExpertAgent):
     def _define_improvement_templates(self) -> Dict[str, str]:
         return {
             "default": """
-            For software engineering prompts, ensure to include:
-            - Specific programming language requirements
-            - Clear input/output specifications
-            - Performance and efficiency considerations
-            - Error handling requirements
-            - Code style and documentation standards
-            - Testing and validation criteria
+            For software engineering prompts, ensure the final prompt is production-ready. It must include:
+            - **Language and Framework:** Specify the exact programming language, version, and any required frameworks.
+            - **Input/Output:** Define the precise format for inputs and outputs, including data structures and examples.
+            - **Performance:** State clear performance constraints (e.g., time complexity, memory usage).
+            - **Error Handling:** Detail how errors and edge cases should be managed.
+            - **Code Style:** Enforce a specific code style (e.g., PEP 8, Google Style Guide) and documentation standard (e.g., JSDoc, Sphinx).
+            - **Testing:** Mandate the inclusion of unit tests, integration tests, and validation criteria.
+            - **Security:** Address potential security vulnerabilities and best practices.
             """,
             "raw": """
-            This appears to be a raw, unstructured prompt. Structure it by adding:
-            - Clear problem statement
-            - Specific technical requirements
-            - Expected deliverables and format
-            - Constraints and edge cases to consider
-            - Quality criteria for the solution
+            This is a raw, unstructured prompt. Re-engineer it into a professional-grade prompt by:
+            - **Defining a Persona:** Start with "You are an expert [Language] developer..."
+            - **Structuring the Task:** Use clear headings like "## Task," "## Requirements," "## Constraints," and "## Output Format."
+            - **Adding Technical Depth:** Inject specific library/framework requirements, version numbers, and architectural patterns.
+            - **Providing Examples:** Include at least one clear example of input and expected output.
             """,
             "structured": """
-            This appears to be a semi-structured prompt. Enhance it by adding:
-            - Missing technical specifications
-            - Best practices for the specific technology
-            - Performance and scalability considerations
-            - Security implications if applicable
-            - Testing and validation requirements
+            This is a semi-structured prompt. Elevate it to an exceptional standard by:
+            - **Enhancing Specificity:** Replace vague terms with precise technical specifications.
+            - **Incorporating Best Practices:** Add requirements for logging, monitoring, and configuration management.
+            - **Considering Scalability:** Introduce considerations for how the solution will perform under load.
+            - **Mandating Documentation:** Require detailed inline comments and a README file.
             """
         }
 
@@ -608,29 +614,28 @@ class DataScienceExpert(BaseExpertAgent):
     def _define_improvement_templates(self) -> Dict[str, str]:
         return {
             "default": """
-            For data science prompts, ensure to include:
-            - Clear data sources and formats
-            - Specific analysis objectives and metrics
-            - Model performance requirements
-            - Data quality and preprocessing needs
-            - Visualization and reporting requirements
-            - Statistical methodology specifications
+            For data science prompts, ensure the final prompt is scientifically rigorous and ready for analysis. It must include:
+            - **Data Source:** Specify the exact source, schema, and format of the data.
+            - **Objective:** State a clear, measurable analytical objective and the key metrics for success.
+            - **Methodology:** Define the required statistical methods, machine learning models, or analytical techniques.
+            - **Data Quality:** Detail preprocessing steps, handling of missing values, and data validation criteria.
+            - **Visualization:** Specify the types of visualizations and the format of the final report or dashboard.
+            - **Reproducibility:** Mandate the use of seeds for random processes and clear documentation of the analysis steps.
+            - **Ethical Considerations:** Address potential biases in the data and the ethical implications of the analysis.
             """,
             "raw": """
-            This appears to be a raw data science prompt. Structure it by adding:
-            - Specific dataset characteristics and sources
-            - Clear analytical objectives and success criteria
-            - Required methodologies and techniques
-            - Expected outputs and deliverables
-            - Data quality and validation requirements
+            This is a raw, unstructured data science prompt. Re-engineer it into a professional-grade analytical request by:
+            - **Defining a Persona:** Start with "You are a senior data scientist..."
+            - **Structuring the Analysis:** Use clear headings like "## Objective," "## Dataset," "## Methodology," and "## Deliverables."
+            - **Adding Analytical Depth:** Inject specific statistical tests, model architectures, or feature engineering techniques.
+            - **Providing a Hypothesis:** State a clear hypothesis to be tested or a question to be answered.
             """,
             "structured": """
-            This appears to be a semi-structured data science prompt. Enhance it by adding:
-            - Missing data specifications and constraints
-            - Statistical rigor and validation methods
-            - Computational efficiency considerations
-            - Reproducibility and documentation requirements
-            - Ethical considerations for data usage
+            This is a semi-structured data science prompt. Elevate it to an exceptional standard by:
+            - **Enhancing Rigor:** Add requirements for cross-validation, hyperparameter tuning, and model interpretability.
+            - **Incorporating Business Context:** Frame the analysis within a broader business problem or goal.
+            - **Considering Deployment:** Introduce considerations for model deployment, monitoring, and maintenance.
+            - **Mandating a Narrative:** Require the final output to be a compelling data story, not just a set of charts.
             """
         }
 
@@ -676,27 +681,26 @@ class GenericExpertAgent(BaseExpertAgent):
     def _define_improvement_templates(self) -> Dict[str, str]:
         return {
             "default": """
-            For general prompts, focus on:
-            - Adding specific context and requirements
-            - Improving clarity and reducing ambiguity
-            - Structuring for better understanding
-            - Adding relevant constraints and criteria
-            - Optimizing for the intended audience and purpose
+            For general prompts, ensure the final prompt is comprehensive and unambiguous. It must include:
+            - **Objective:** A crystal-clear statement of the desired outcome.
+            - **Context:** All relevant background information required to complete the task.
+            - **Audience and Tone:** Specify the target audience and the desired tone of the response.
+            - **Constraints:** List any limitations, constraints, or negative requirements.
+            - **Output Format:** Define the exact structure and format of the expected output.
+            - **Success Criteria:** Provide clear, measurable criteria for what constitutes a successful response.
             """,
             "raw": """
-            This appears to be a raw, unstructured prompt. Structure it by adding:
-            - Clear objectives and goals
-            - Specific requirements and constraints
-            - Expected outcomes and deliverables
-            - Success criteria and evaluation methods
-            - Relevant context and background information
+            This is a raw, unstructured prompt. Re-engineer it into a high-quality, structured prompt by:
+            - **Defining a Persona:** Start with "You are a helpful and knowledgeable assistant..."
+            - **Structuring the Request:** Use clear headings like "## Goal," "## Context," "## Requirements," and "## Deliverable."
+            - **Adding Specificity:** Replace generalities with specific details and examples.
+            - **Clarifying the 'Why':** Briefly explain the purpose behind the request to provide better context.
             """,
             "structured": """
-            This appears to be a semi-structured prompt. Enhance it by adding:
-            - Missing details and specifications
-            - Clearer success criteria
-            - Better organization and flow
-            - Additional context if needed
-            - Quality and completeness improvements
+            This is a semi-structured prompt. Elevate it to an exceptional standard by:
+            - **Enhancing Clarity:** Rephrase any ambiguous sentences for maximum clarity.
+            - **Providing Examples:** Add a clear example of what is expected.
+            - **Adding Negative Constraints:** Specify what should *not* be included in the response.
+            - **Mandating a Review:** Ask the model to review its own response against the requirements before finalizing.
             """
         }

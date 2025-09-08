@@ -9,7 +9,7 @@ import asyncio
 from functools import wraps
 
 from agents.classifier import classifier
-from agents.base_expert import create_expert_agent
+from agents.langgraph_expert import get_langgraph_expert
 from agents.evaluator import evaluator
 from config.config import settings
 
@@ -104,7 +104,7 @@ async def create_expert_node(state: WorkflowState, config: RunnableConfig) -> Di
 
         if not domain:
             # Create generic expert agent
-            expert_agent = create_expert_agent("general", "General prompt optimization")
+            expert_agent = get_langgraph_expert("general", "General prompt optimization")
             return {
                 "expert_agent": expert_agent,
                 "status": "expert_created"
@@ -114,7 +114,7 @@ async def create_expert_node(state: WorkflowState, config: RunnableConfig) -> Di
         domain_description = classification_result.get("reasoning", f"Expert in {domain}")
 
         # Create expert agent
-        expert_agent = create_expert_agent(domain, domain_description)
+        expert_agent = get_langgraph_expert(domain, domain_description)
 
         return {
             "expert_agent": expert_agent,
@@ -124,7 +124,7 @@ async def create_expert_node(state: WorkflowState, config: RunnableConfig) -> Di
     except Exception as e:
         logger.error(f"Error in expert creation node: {e}")
         # Create generic expert agent on error
-        expert_agent = create_expert_agent("general", "General prompt optimization")
+        expert_agent = get_langgraph_expert("general", "General prompt optimization")
         return {
             "expert_agent": expert_agent,
             "status": "expert_created"
@@ -147,16 +147,16 @@ async def improve_prompt_node(state: WorkflowState, config: RunnableConfig) -> D
 
         if not expert_agent:
             # Create a generic expert agent as fallback
-            expert_agent = create_expert_agent("general", "General prompt optimization")
+            expert_agent = get_langgraph_expert("general", "General prompt optimization")
 
-        # Improve the prompt (await the async function)
+        # Improve the prompt using the new expert's process method
         improvement_result = await expert_agent.improve_prompt(
             original_prompt=original_prompt,
             prompt_type=prompt_type,
             key_topics=key_topics
         )
 
-        improved_prompt = improvement_result.get("improved_prompt", original_prompt)
+        improved_prompt = improvement_result.get("solution", original_prompt)
 
         return {
             "improved_prompt": improved_prompt,
@@ -188,7 +188,14 @@ async def evaluate_node(state: WorkflowState, config: RunnableConfig) -> Dict[st
         logger.info("Executing evaluation node")
 
         original_prompt = state["original_prompt"]
-        improved_prompt = state.get("improved_prompt", original_prompt)
+        improvement_result = state.get("improvement_result", {})
+        
+        # Handle both string and dictionary for backward compatibility
+        if isinstance(improvement_result, dict):
+            improved_prompt = improvement_result.get("solution", original_prompt)
+        else:
+            improved_prompt = state.get("improved_prompt", original_prompt)
+
         domain = state.get("domain", "general")
         prompt_type = state.get("prompt_type", "raw")
         current_iterations = state.get("iterations_used", 0)
@@ -198,7 +205,7 @@ async def evaluate_node(state: WorkflowState, config: RunnableConfig) -> Dict[st
 
         if not expert_agent:
             # Create a generic expert agent as fallback
-            expert_agent = create_expert_agent("general", "General prompt optimization")
+            expert_agent = get_langgraph_expert("general", "General prompt optimization")
 
         # Run evaluation loop (await the async function)
         evaluation_result, iterations_used = await evaluator.run_evaluation_loop(

@@ -15,6 +15,8 @@ from agents.exceptions import EvaluationError, ImprovementError
 import logging
 import asyncio
 import time
+import re
+import json
 
 # Set up structured logging
 logger = get_logger(__name__)
@@ -31,7 +33,7 @@ class PromptEvaluator:
 
     def _setup_evaluation_chain(self):
         """Set up the LangChain for prompt evaluation."""
-        model_config = get_model_config()
+        model_config = get_model_config(provider="google")
         self.model = ChatGoogleGenerativeAI(
             model=model_config["model_name"],
             google_api_key=model_config["api_key"],
@@ -65,14 +67,14 @@ class PromptEvaluator:
 
         Respond in JSON format with the following structure:
         {{
-            "overall_score": 0.85,
+            "overall_score": 0.95,
             "criteria_scores": {{
                 "clarity": 0.9,
-                "specificity": 0.8,
+                "specificity": 0.9,
                 "structure": 0.9,
-                "completeness": 0.8,
+                "completeness": 0.95,
                 "actionability": 0.85,
-                "domain_alignment": 0.8
+                "domain_alignment": 0.96
             }},
             "passes_threshold": true,
             "needs_improvement": false,
@@ -108,8 +110,46 @@ class PromptEvaluator:
             }
             | evaluation_prompt
             | self.model
+            | self._sanitize_json_output
             | JsonOutputParser()
         )
+
+    def _sanitize_json_output(self, raw_output: Any) -> str:
+        """
+        Sanitizes the raw output from the language model to extract a clean JSON string.
+        Handles cases where the JSON is wrapped in markdown code fences.
+        """
+        try:
+            # If the output is already a dict, dump it to a string
+            if isinstance(raw_output, dict):
+                return json.dumps(raw_output)
+
+            # If it's a string, attempt to clean and parse
+            if hasattr(raw_output, 'content'):
+                content = raw_output.content
+            else:
+                content = str(raw_output)
+
+            # Use regex to find content within ```json ... ```
+            match = re.search(r"```json\s*([\s\S]*?)\s*```", content)
+            if match:
+                clean_json = match.group(1).strip()
+            else:
+                # Fallback for cases where there are no fences but might be leading/trailing text
+                clean_json = content[content.find('{'):content.rfind('}')+1].strip()
+            
+            # Attempt to fix common JSON errors from LLMs
+            # 1. Replace escaped single quotes that are double-escaped
+            clean_json = clean_json.replace("\\'", "'")
+
+            # Final check to ensure it's valid JSON before passing to the parser
+            json.loads(clean_json)
+            return clean_json
+
+        except (json.JSONDecodeError, AttributeError, TypeError) as e:
+            logger.error(f"Failed to sanitize JSON output. Raw: {raw_output}, Error: {e}")
+            # Return a default JSON object string to prevent downstream failures
+            return '{}'
 
     async def evaluate_prompt(self, original_prompt: str, improved_prompt: str,
                        domain: str, prompt_type: str = "raw",

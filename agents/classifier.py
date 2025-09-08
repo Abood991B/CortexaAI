@@ -54,7 +54,7 @@ class DomainClassifier:
 
     def _setup_classifier_chain(self):
         """Set up the LangChain for domain classification."""
-        model_config = get_model_config()
+        model_config = get_model_config(provider="google")
         model = ChatGoogleGenerativeAI(
             model=model_config["model_name"],
             google_api_key=model_config["api_key"],
