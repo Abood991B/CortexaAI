@@ -1,4 +1,4 @@
-import { Activity, Server, AlertTriangle, CheckCircle, RefreshCw, Cpu, Bot, Bell } from 'lucide-react';
+import { Activity, Server, AlertTriangle, CheckCircle, RefreshCw, Cpu, Bot, Bell, Menu } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading';
@@ -78,47 +78,54 @@ export function SystemHealth() {
     );
   }
 
+  const [showSidebar, setShowSidebar] = useState(true);
+
   return (
     <div className="flex h-screen bg-background">
       {/* Professional Sidebar */}
-      <div className="w-64 border-r border-gray-200 bg-gray-50 flex flex-col">
-        {/* Simple Header */}
-        <div className="flex items-center px-4 py-4 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-black rounded-sm flex items-center justify-center">
-              <Bot className="h-5 w-5 text-white" />
+      <div className={`${showSidebar ? 'w-64' : 'w-20'} transition-all duration-300 border-r border-gray-200 bg-gray-50 flex flex-col items-center py-4`}>
+        <div className="flex items-center justify-center w-full px-4 py-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSidebar(!showSidebar)}
+            className="absolute top-4 left-4"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+          {showSidebar && (
+            <div className="flex items-center space-x-3">
+              <img src="/Cortexa Logo.png" alt="Cortexa Logo" className="w-8 h-8" />
+              <span className="text-lg font-semibold text-gray-900">Cortexa</span>
             </div>
-            <span className="text-lg font-semibold text-gray-900">Prompt Engineer</span>
-          </div>
+          )}
         </div>
 
-        {/* Navigation */}
-        <div className="px-3 py-3 space-y-1">
+        <div className="mt-6 w-full flex flex-col items-center space-y-4 px-3">
           <NavLink
             to="/"
-            className={`flex items-center px-3 py-2 text-sm rounded-md transition-colors ${
+            className={`w-full flex items-center ${showSidebar ? 'justify-start' : 'justify-center'} px-3 py-2 text-sm rounded-md transition-colors ${
               location.pathname === '/' || location.pathname === '/processor'
                 ? 'bg-gray-200 text-gray-900'
                 : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900'
             }`}
           >
-            <Bot className="mr-3 h-4 w-4" />
-            <span>Prompt Processor</span>
+            <Bot className={`${showSidebar ? 'mr-3' : ''} h-4 w-4`} />
+            {showSidebar && <span>Prompt Processor</span>}
           </NavLink>
           
           <NavLink
             to="/system-health"
-            className={`flex items-center px-3 py-2 text-sm rounded-md transition-colors ${
+            className={`w-full flex items-center ${showSidebar ? 'justify-start' : 'justify-center'} px-3 py-2 text-sm rounded-md transition-colors ${
               location.pathname === '/system-health'
                 ? 'bg-gray-200 text-gray-900'
                 : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900'
             }`}
           >
-            <Activity className="mr-3 h-4 w-4" />
-            <span>System Health</span>
+            <Activity className={`${showSidebar ? 'mr-3' : ''} h-4 w-4`} />
+            {showSidebar && <span>System Health</span>}
           </NavLink>
         </div>
-
       </div>
 
       {/* Main Content */}

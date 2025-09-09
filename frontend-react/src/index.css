@@ -70,15 +70,15 @@
 
 /* Code syntax highlighting */
 .code-block {
-  @apply bg-muted p-4 rounded-lg font-mono text-sm overflow-x-auto text-black;
+  @apply bg-gray-800 text-white p-4 rounded-lg font-mono text-sm overflow-x-auto;
 }
 
 .code-inline {
-  @apply bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-black;
+  @apply bg-gray-800 text-white px-1.5 py-0.5 rounded text-sm font-mono;
 }
 
 .bg-assistant-message {
-  @apply bg-gray-100 border border-gray-200 text-black shadow-sm;
+  @apply bg-white border border-gray-200 text-black shadow-sm;
 }
 
 .code-block-wrapper pre,

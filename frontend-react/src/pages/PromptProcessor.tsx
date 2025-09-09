@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Send, Copy, Download, Trash2, Edit, Sparkles, Bot, User, Plus, Menu, X, Activity, Bell } from 'lucide-react';
+import { Send, Copy, Download, Trash2, Edit, Sparkles, Bot, User, Plus, Menu, Activity, Bell, ChevronDown, Check } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Button } from '@/components/ui/button';
@@ -56,6 +56,7 @@ export function PromptProcessor() {
   const [gracePeriodCountdown, setGracePeriodCountdown] = useState(3);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -90,18 +91,26 @@ export function PromptProcessor() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Auto-resize textarea
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
+    }
+  }, [currentInput]);
+
   // Initialize user ID and load saved sessions
   useEffect(() => {
     // Get or create user ID
     const getOrCreateUserId = () => {
-      let storedUserId = localStorage.getItem('promptEngineer_userId');
+      let storedUserId = localStorage.getItem('cortexa_userId');
       if (!storedUserId) {
-        storedUserId = sessionStorage.getItem('promptEngineer_userId');
+        storedUserId = sessionStorage.getItem('cortexa_userId');
       }
       if (!storedUserId) {
         const newUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        localStorage.setItem('promptEngineer_userId', newUserId);
-        sessionStorage.setItem('promptEngineer_userId', newUserId);
+        localStorage.setItem('cortexa_userId', newUserId);
+        sessionStorage.setItem('cortexa_userId', newUserId);
         return newUserId;
       }
       return storedUserId;
@@ -112,7 +121,7 @@ export function PromptProcessor() {
 
     // Load saved sessions
     const loadSessions = () => {
-      const storedSessions = localStorage.getItem(`promptEngineer_sessions_${userId}`);
+      const storedSessions = localStorage.getItem(`cortexa_sessions_${userId}`);
       if (storedSessions) {
         try {
           const parsedSessions = JSON.parse(storedSessions);
@@ -127,7 +136,7 @@ export function PromptProcessor() {
           setSessions(sessionsWithDates);
         } catch (error) {
           console.error('Failed to parse saved sessions', error);
-          localStorage.removeItem(`promptEngineer_sessions_${userId}`);
+          localStorage.removeItem(`cortexa_sessions_${userId}`);
         }
       }
     };
@@ -140,7 +149,7 @@ export function PromptProcessor() {
   // Save sessions to localStorage
   useEffect(() => {
     if (userId && sessions.length >= 0) {
-      localStorage.setItem(`promptEngineer_sessions_${userId}`, JSON.stringify(sessions));
+      localStorage.setItem(`cortexa_sessions_${userId}`, JSON.stringify(sessions));
     }
   }, [sessions, userId]);
 
@@ -438,38 +447,39 @@ export function PromptProcessor() {
   return (
     <div className="flex h-screen bg-background">
       {/* Professional Sidebar */}
-      <div className={`${showSidebar ? 'w-64' : 'w-0'} transition-all duration-300 border-r border-gray-200 bg-gray-50 overflow-hidden flex flex-col`}>
-        {/* Simple Header */}
-        <div className="flex items-center px-4 py-4 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-black rounded-sm flex items-center justify-center">
-              <Bot className="h-5 w-5 text-white" />
+      <div className={`${showSidebar ? 'w-64' : 'w-20'} transition-all duration-300 border-r border-gray-200 bg-gray-50 flex flex-col items-center py-4`}>
+        <div className="flex items-center justify-center w-full px-4 py-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSidebar(!showSidebar)}
+            className="absolute top-4 left-4"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+          {showSidebar && (
+            <div className="flex items-center space-x-3">
+              <img src="/Cortexa Logo.png" alt="Cortexa Logo" className="w-8 h-8" />
+              <span className="text-lg font-semibold text-gray-900">Cortexa</span>
             </div>
-            <span className="text-lg font-semibold text-gray-900">Prompt Engineer</span>
-          </div>
+          )}
         </div>
 
-        {/* New Chat Button */}
-        <div className="px-3 py-3">
+        <div className="mt-6 w-full flex flex-col items-center space-y-4 px-3">
           <Button 
             onClick={createNewSession}
-            className="w-full justify-start bg-white hover:bg-gray-100 text-gray-900 border border-gray-300 shadow-none"
+            className={`w-full ${showSidebar ? 'justify-start' : 'justify-center'} bg-white hover:bg-gray-100 text-gray-900 border border-gray-300 shadow-none`}
             variant="outline"
           >
-            <Plus className="mr-2 h-4 w-4" />
-            New chat
+            <Plus className={`${showSidebar ? 'mr-2' : ''} h-4 w-4`} />
+            {showSidebar && 'New chat'}
           </Button>
         </div>
 
-        {/* Chat Sessions */}
-        <div className="flex-1 flex flex-col min-h-0">
-          <div className="flex-1 overflow-y-auto px-3 space-y-1">
-            {sessions.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-8">
-                No conversations yet
-              </p>
-            ) : (
-              sessions.map(session => (
+        {showSidebar && (
+          <div className="flex-1 flex flex-col min-h-0 w-full mt-4">
+            <div className="flex-1 overflow-y-auto px-3 space-y-1">
+              {sessions.map(session => (
                 <div
                   key={session.id}
                   className={`group relative p-2 rounded-md cursor-pointer hover:bg-gray-200 transition-colors ${
@@ -505,7 +515,7 @@ export function PromptProcessor() {
                           </p>
                         </div>
                       </div>
-                      <div className="absolute right-1 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
+                      <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -534,68 +544,27 @@ export function PromptProcessor() {
                     </>
                   )}
                 </div>
-              ))
-            )}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Simple Footer */}
-        <div className="px-3 py-4 border-t border-gray-200">
-          <div className="flex items-center justify-between">
-            <NavLink
-              to="/system-health"
-              className="flex items-center space-x-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              <Activity className="h-4 w-4" />
-              <span>System Health</span>
-            </NavLink>
-          </div>
+        <div className={`w-full px-3 py-4 ${showSidebar ? 'border-t border-gray-200' : ''}`}>
+          <NavLink
+            to="/system-health"
+            className={`flex items-center space-x-2 text-sm text-gray-600 hover:text-gray-900 transition-colors ${showSidebar ? '' : 'justify-center'}`}
+          >
+            <Activity className="h-4 w-4" />
+            {showSidebar && <span>System Health</span>}
+          </NavLink>
         </div>
       </div>
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="border-b px-6 py-4 flex items-center justify-between bg-background">
-          <div className="flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowSidebar(!showSidebar)}
-            >
-              {showSidebar ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </Button>
-            
-            <div className="flex items-center space-x-2">
-              <Bot className="h-5 w-5 text-primary" />
-              <h1 className="text-xl font-semibold">Prompt Processor</h1>
-            </div>
-          </div>
-
-          {/* Model Selector */}
+        <div className="border-b px-6 py-4 flex items-center justify-end bg-background">
           <div className="flex items-center space-x-2">
-            <span className="text-sm text-muted-foreground">Model:</span>
-            <div className="flex rounded-lg border bg-muted/30 p-1">
-              <Button
-                variant={selectedModel === 'standard' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setSelectedModel('standard')}
-                className="px-4"
-              >
-                <Sparkles className="mr-2 h-4 w-4" />
-                Standard
-              </Button>
-              <Button
-                variant={selectedModel === 'langgraph' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setSelectedModel('langgraph')}
-                className="px-4"
-              >
-                <Bot className="mr-2 h-4 w-4" />
-                LangGraph
-              </Button>
-            </div>
-            
             <div className="flex items-center space-x-2">
               {/* Notification Icon */}
               <div className="relative">
@@ -638,25 +607,38 @@ export function PromptProcessor() {
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-                <Bot className="h-10 w-10 text-primary" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-semibold mb-2">Welcome to Prompt Processor</h2>
-                <p className="text-muted-foreground max-w-md">
-                  I'll help you optimize your prompts using our advanced multi-agent system. 
-                  Choose between Standard (fast) or LangGraph (advanced) models.
-                </p>
-              </div>
-              <div className="flex flex-col space-y-2 text-sm text-muted-foreground">
-                <div className="flex items-center space-x-2">
-                  <Badge variant="outline">Standard Model</Badge>
-                  <span>Memory-enhanced optimization for quick results</span>
+            <div className="flex items-center justify-center h-full">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-4xl mx-auto p-8 rounded-lg bg-gradient-to-br from-background to-muted/20">
+                <div className="flex justify-center">
+                  <img src="/Cortexa Logo.png" alt="Cortexa Logo" className="w-48 h-48" />
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Badge variant="outline">LangGraph Model</Badge>
-                  <span>Complex multi-agent workflow for advanced analysis</span>
+                <div className="text-center md:text-left">
+                  <h2 className="text-4xl font-bold mb-4 text-primary">Welcome to Cortexa</h2>
+                  <p className="text-lg text-muted-foreground mb-6">
+                    Unlock the power of AI with our advanced multi-agent system. Craft, refine, and optimize your prompts for exceptional results.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div 
+                      className="p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer bg-background"
+                      onClick={() => setSelectedModel('standard')}
+                    >
+                      <div className="flex items-center mb-2">
+                        <Sparkles className="h-6 w-6 mr-3 text-primary" />
+                        <h3 className="text-lg font-semibold">Standard Model</h3>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Memory-enhanced optimization for quick, reliable results.</p>
+                    </div>
+                    <div 
+                      className="p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer bg-background"
+                      onClick={() => setSelectedModel('langgraph')}
+                    >
+                      <div className="flex items-center mb-2">
+                        <Bot className="h-6 w-6 mr-3 text-primary" />
+                        <h3 className="text-lg font-semibold">LangGraph Model</h3>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Complex multi-agent workflow for in-depth analysis.</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -699,15 +681,15 @@ export function PromptProcessor() {
                           <div className="space-y-3">
                             <SyntaxHighlighter
                               language="markdown"
+                              style={vscDarkPlus}
                               className="code-block-wrapper"
                               customStyle={{
-                                background: 'transparent',
-                                padding: '0',
                                 margin: '0',
                                 fontSize: '0.875rem',
                                 maxWidth: '100%',
                                 overflowWrap: 'break-word',
-                                whiteSpace: 'pre-wrap'
+                                whiteSpace: 'pre-wrap',
+                                borderRadius: '0.5rem'
                               }}
                               wrapLines={true}
                             >
@@ -762,46 +744,89 @@ export function PromptProcessor() {
         {/* Input Area */}
         <div className="border-t px-6 py-4 bg-background">
           <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
-            <div className="flex space-x-4">
-              <div className="flex-1 relative">
-                <Textarea
-                  ref={inputRef}
-                  value={currentInput}
-                  onChange={(e) => setCurrentInput(e.target.value)}
-                  placeholder={`Message Prompt Processor (${selectedModel === 'langgraph' ? 'LangGraph' : 'Standard'} Model)...`}
-                  className="resize-none pr-12 min-h-[60px] max-h-[200px]"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSubmit();
-                    }
-                  }}
-                  disabled={isLoading}
-                />
-                <div className="absolute bottom-2 right-2">
-                  {canCancel ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="destructive"
-                      onClick={handleCancel}
-                    >
-                      Cancel ({gracePeriodCountdown}s)
-                    </Button>
-                  ) : (
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={isLoading || !currentInput.trim()}
-                    >
-                      {isLoading ? (
-                        <LoadingSpinner size="sm" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
-                    </Button>
+            <div className="relative rounded-lg border bg-background focus-within:ring-2 focus-within:ring-ring">
+              <Textarea
+                ref={inputRef}
+                value={currentInput}
+                onChange={(e) => setCurrentInput(e.target.value)}
+                placeholder="Message Cortexa..."
+                className="resize-none w-full border-0 bg-transparent pt-3 pb-12 pl-3 pr-12 min-h-[60px] max-h-[400px] focus-visible:ring-0 overflow-y-auto"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
+                disabled={isLoading}
+                rows={1}
+              />
+              <div className="absolute bottom-3 left-3">
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                    className="flex items-center space-x-1 text-sm font-semibold"
+                  >
+                    <span>{selectedModel === 'standard' ? 'Standard' : 'LangGraph'}</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                  {isModelDropdownOpen && (
+                    <div className="absolute bottom-full mb-2 w-72 bg-background border rounded-lg shadow-lg z-10">
+                      <div
+                        className="flex items-center justify-between p-3 hover:bg-muted cursor-pointer"
+                        onClick={() => {
+                          setSelectedModel('standard');
+                          setIsModelDropdownOpen(false);
+                        }}
+                      >
+                        <div>
+                          <h4 className="font-semibold">Standard</h4>
+                          <p className="text-xs text-muted-foreground">Memory-enhanced optimization for quick results.</p>
+                        </div>
+                        {selectedModel === 'standard' && <Check className="h-4 w-4 text-primary" />}
+                      </div>
+                      <div
+                        className="flex items-center justify-between p-3 hover:bg-muted cursor-pointer"
+                        onClick={() => {
+                          setSelectedModel('langgraph');
+                          setIsModelDropdownOpen(false);
+                        }}
+                      >
+                        <div>
+                          <h4 className="font-semibold">LangGraph</h4>
+                          <p className="text-xs text-muted-foreground">Complex multi-agent workflow for in-depth analysis.</p>
+                        </div>
+                        {selectedModel === 'langgraph' && <Check className="h-4 w-4 text-primary" />}
+                      </div>
+                    </div>
                   )}
                 </div>
+              </div>
+              <div className="absolute bottom-3 right-3">
+                {canCancel ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleCancel}
+                  >
+                    Cancel ({gracePeriodCountdown}s)
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={isLoading || !currentInput.trim()}
+                  >
+                    {isLoading ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
             <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
