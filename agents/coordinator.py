@@ -8,6 +8,10 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import time # Added for time.time()
 
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.pydantic_v1 import BaseModel, Field
 from agents.classifier import DomainClassifier
 from agents.base_expert import create_expert_agent, BaseExpertAgent
 from agents.evaluator import PromptEvaluator
@@ -31,6 +35,12 @@ PromptManagementSystem = None
 logger = get_logger(__name__)
 
 
+class AdvancedModeOutput(BaseModel):
+    """Pydantic model for structured output from the advanced mode LLM."""
+    status: str = Field(description="Either 'needs_more_info' or 'ready_to_improve'")
+    content: str = Field(description="If status is 'needs_more_info', this contains clarifying questions. If 'ready_to_improve', this contains the synthesized prompt.")
+
+
 class WorkflowCoordinator:
     """Agent responsible for orchestrating the entire prompt engineering workflow."""
 
@@ -40,6 +50,7 @@ class WorkflowCoordinator:
         self.evaluator = evaluator_instance
         self.expert_agents = {}  # Cache for created expert agents
         self.workflow_history = []  # Track workflow executions
+        self.llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0)
 
         self._setup_langsmith()
     def _setup_langsmith(self):
@@ -222,6 +233,39 @@ class WorkflowCoordinator:
             )
             self._record_workflow(error_result)
             return error_result
+
+    async def handle_advanced_mode(self, prompt: str, chat_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+        """
+        Handle the advanced mode by either asking clarifying questions or synthesizing a new prompt.
+        """
+        parser = JsonOutputParser(pydantic_object=AdvancedModeOutput)
+
+        prompt_template = ChatPromptTemplate.from_messages([
+            ("system", """You are a helpful AI assistant. Your task is to manage a conversational prompt engineering session.
+First, determine if you have enough information from the user's prompt and the chat history to create a detailed, effective, and improved prompt.
+
+If you DO NOT have enough information, ask 3-5 critical and relevant clarifying questions to better understand the user's needs.
+If you DO have enough information, synthesize the user's original request and their answers into a new, comprehensive prompt.
+
+You must respond in a JSON format with two keys: 'status' and 'content'.
+- If you need more information, set 'status' to 'needs_more_info' and 'content' to the clarifying questions.
+- If you have enough information, set 'status' to 'ready_to_improve' and 'content' to the new, synthesized prompt.
+
+{format_instructions}"""),
+            ("human", "Chat History:\n{chat_history}\n\nUser Prompt: {prompt}"),
+        ])
+
+        chain = prompt_template | self.llm | parser
+
+        formatted_history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in chat_history]) if chat_history else "No history"
+
+        response = await chain.ainvoke({
+            "chat_history": formatted_history,
+            "prompt": prompt,
+            "format_instructions": parser.get_format_instructions()
+        })
+
+        return response
 
     async def process_prompt_with_memory(self, prompt: str, user_id: str,
                                        prompt_type: str = "auto", return_comparison: bool = True,

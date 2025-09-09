@@ -113,6 +113,7 @@ class PromptRequest(BaseModel):
     chat_history: Optional[List[Dict[str, str]]] = None  # For memory-enhanced processing
     user_id: Optional[str] = None  # User identifier for memory context
     workflow_id: Optional[str] = None  # Add workflow_id for tracking
+    advanced_mode: bool = False
 
 
 
@@ -589,8 +590,39 @@ async def process_prompt_with_memory(request: PromptRequest, background_tasks: B
                     context_parts.append("\nPlease provide a response that takes into account the previous conversation context and continues the discussion appropriately.")
                     
                     context_prompt = "\n".join(context_parts)
-                
-                if request.use_langgraph:
+
+                if request.advanced_mode:
+                    advanced_mode_result = await coordinator.handle_advanced_mode(
+                        prompt=request.prompt,
+                        chat_history=request.chat_history
+                    )
+                    if advanced_mode_result['status'] == 'needs_more_info':
+                        result = {
+                            "output": {
+                                "optimized_prompt": advanced_mode_result['content'],
+                                "quality_score": 0,
+                                "domain": "conversational",
+                                "iterations_used": 1,
+                            },
+                            "analysis": {},
+                            "metadata": {},
+                            "processing_time_seconds": 0.1,
+                        }
+                    else:
+                        context_prompt = advanced_mode_result['content']
+                        if request.use_langgraph:
+                            result = await process_prompt_with_langgraph_cancellable(
+                                prompt=context_prompt,
+                                prompt_type=request.prompt_type,
+                                cancellation_event=cancellation_event
+                            )
+                        else:
+                            result = await coordinator.process_prompt(
+                                prompt=context_prompt,
+                                prompt_type=request.prompt_type,
+                                return_comparison=request.return_comparison
+                            )
+                elif request.use_langgraph:
                     result = await process_prompt_with_langgraph_cancellable(
                         prompt=context_prompt,
                         prompt_type=request.prompt_type,

@@ -1,13 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Send, Copy, Download, Trash2, Edit, Sparkles, Bot, User, Plus, Menu, Activity, Bell, ChevronDown, Check } from 'lucide-react';
+import { Send, Copy, Download, Trash2, Edit, Sparkles, Bot, User, Plus, Menu, Activity, Bell, ChevronDown, Check, HelpCircle } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { LoadingSpinner } from '@/components/ui/loading';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { 
   useProcessPromptWithMemory,
   useCancelWorkflow,
@@ -57,6 +67,8 @@ export function PromptProcessor() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -99,8 +111,15 @@ export function PromptProcessor() {
     }
   }, [currentInput]);
 
-  // Initialize user ID and load saved sessions
+  // Initialize user ID, load saved sessions, and show user guide for first-time visitors
   useEffect(() => {
+    // Show user guide on first visit
+    const hasVisited = localStorage.getItem('cortexa_has_visited');
+    if (!hasVisited) {
+      setIsUserGuideOpen(true);
+      localStorage.setItem('cortexa_has_visited', 'true');
+    }
+
     // Get or create user ID
     const getOrCreateUserId = () => {
       let storedUserId = localStorage.getItem('cortexa_userId');
@@ -289,7 +308,8 @@ export function PromptProcessor() {
       prompt_type: 'auto',
       return_comparison: false,
       use_langgraph: selectedModel === 'langgraph',
-      chat_history: chatHistory
+      chat_history: chatHistory,
+      advanced_mode: isAdvancedMode
     };
 
     try {
@@ -600,6 +620,13 @@ export function PromptProcessor() {
                   <Download className="h-4 w-4" />
                 </Button>
               )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsUserGuideOpen(true)}
+              >
+                <HelpCircle className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
@@ -760,7 +787,7 @@ export function PromptProcessor() {
                 disabled={isLoading}
                 rows={1}
               />
-              <div className="absolute bottom-3 left-3">
+              <div className="absolute bottom-3 left-3 flex items-center space-x-4">
                 <div className="relative">
                   <Button
                     type="button"
@@ -802,6 +829,14 @@ export function PromptProcessor() {
                       </div>
                     </div>
                   )}
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="advanced-mode"
+                    checked={isAdvancedMode}
+                    onCheckedChange={setIsAdvancedMode}
+                  />
+                  <Label htmlFor="advanced-mode" className="text-sm">Advanced</Label>
                 </div>
               </div>
               <div className="absolute bottom-3 right-3">
@@ -850,6 +885,42 @@ export function PromptProcessor() {
         confirmText="Delete"
         cancelText="Cancel"
       />
+
+      {/* User Guide Dialog */}
+      <Dialog open={isUserGuideOpen} onOpenChange={setIsUserGuideOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>User Guide</DialogTitle>
+            <DialogDescription>
+              Welcome to Cortexa! Here's a quick guide to get you started.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4 text-sm">
+            <div className="grid grid-cols-1 gap-2">
+              <h4 className="font-semibold">What is Cortexa?</h4>
+              <p>
+                Cortexa is an advanced multi-agent system designed to help you craft, refine, and optimize your prompts for exceptional results from AI models.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              <h4 className="font-semibold">Choosing a Model</h4>
+              <ul className="list-disc list-inside space-y-1">
+                <li><b>Standard Model:</b> Use this for quick and reliable prompt optimization. It's enhanced with memory to understand the context of your conversation.</li>
+                <li><b>LangGraph Model:</b> This model uses a more complex multi-agent workflow for in-depth analysis and prompt improvement.</li>
+              </ul>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              <h4 className="font-semibold">Advanced Mode</h4>
+              <p>
+                The "Advanced" mode enables a conversational prompt engineering session. When you enable this mode, the AI agent will ask you a series of clarifying questions to better understand your needs before generating an improved prompt. This is useful when your initial idea is broad or you're not sure how to best phrase your prompt.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsUserGuideOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

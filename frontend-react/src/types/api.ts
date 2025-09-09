@@ -6,6 +6,7 @@ export interface PromptRequest {
   return_comparison: boolean;
   use_langgraph: boolean;
   chat_history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  advanced_mode?: boolean;
 }
 
 export interface PromptResponse {
@@ -169,4 +170,3 @@ export interface WorkflowDetails {
     processing_time: number;
   }>;
 }
-

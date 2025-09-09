@@ -14,7 +14,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 export function SystemHealth() {
   const location = useLocation();
   const { data: health, isLoading, refetch: refetchHealth, isFetching } = useHealth();
-  const { refetch: refetchStats } = useStats();
+  const { data: stats, refetch: refetchStats } = useStats();
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
   const {
@@ -48,9 +48,9 @@ export function SystemHealth() {
   };
 
   const getSuccessRate = () => {
-    if (!health?.metrics) return 0;
-    const total = health.metrics.total_workflows;
-    const successful = health.metrics.successful_workflows;
+    if (!stats) return 0;
+    const total = stats.total_workflows;
+    const successful = stats.completed_workflows;
     return total > 0 ? (successful / total) * 100 : 0;
   };
 
@@ -68,6 +68,8 @@ export function SystemHealth() {
     }
   };
 
+  const [showSidebar, setShowSidebar] = useState(true);
+
   if (isLoading) {
     return (
       <div className="flex h-screen bg-background">
@@ -77,8 +79,6 @@ export function SystemHealth() {
       </div>
     );
   }
-
-  const [showSidebar, setShowSidebar] = useState(true);
 
   return (
     <div className="flex h-screen bg-background">
@@ -219,7 +219,7 @@ export function SystemHealth() {
                     <p className="text-sm text-muted-foreground">Uptime</p>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-2xl font-bold">{health?.metrics?.llm_calls_total || 0}</p>
+                    <p className="text-2xl font-bold">{stats?.total_workflows || 0}</p>
                     <p className="text-sm text-muted-foreground">Total Prompts</p>
                   </div>
                   <div className="space-y-2">
@@ -288,13 +288,13 @@ export function SystemHealth() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">Total Workflows</span>
-                      <span className="text-sm text-muted-foreground">{health?.metrics?.total_workflows || 0}</span>
+                      <span className="text-sm text-muted-foreground">{stats?.total_workflows || 0}</span>
                     </div>
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">Failed Workflows</span>
-                      <span className="text-sm text-muted-foreground">{health?.metrics?.failed_workflows || 0}</span>
+                      <span className="text-sm text-muted-foreground">{stats?.error_workflows || 0}</span>
                     </div>
                   </div>
                 </div>

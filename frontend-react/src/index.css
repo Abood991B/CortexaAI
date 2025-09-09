@@ -69,10 +69,6 @@
 }
 
 /* Code syntax highlighting */
-.code-block {
-  @apply bg-gray-800 text-white p-4 rounded-lg font-mono text-sm overflow-x-auto;
-}
-
 .code-inline {
   @apply bg-gray-800 text-white px-1.5 py-0.5 rounded text-sm font-mono;
 }

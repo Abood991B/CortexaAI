@@ -2,14 +2,6 @@
   "software_engineering": {
     "description": "Learned domain: software_engineering",
     "keywords": [
-      "array",
-      "secure",
-      "mobile app",
-      "expense tracker",
-      "Malaysian ringgit",
-      "Saudi riyal",
-      "conversion",
-      "wireframe",
       "dashboard",
       "overview",
       "prompt",
@@ -21,15 +13,21 @@
       "XR Interaction Toolkit",
       "game development",
       "C# scripting",
-      "physics interactions"
+      "physics interactions",
+      "mobile application",
+      "Android",
+      "iOS",
+      "social networking platform",
+      "user interaction",
+      "financial news",
+      "pipeline",
+      "python"
     ],
-    "usage_count": 166,
+    "usage_count": 168,
     "quality_scores": [
       0.95,
       0.96,
       0.95,
-      0.96,
-      0.95,
       0.93,
       0.95,
       0.95,
@@ -74,24 +72,26 @@
       0.95,
       0.95,
       0.95,
-      0.95
+      0.95,
+      0.93,
+      0.93
     ],
-    "avg_quality_score": 0.9456000000000004,
-    "last_used": "2025-09-09T12:21:11.024448",
+    "avg_quality_score": 0.9446000000000003,
+    "last_used": "2025-09-09T16:22:25.936262",
     "created_from_workflow": "workflow_1756974410",
     "learning_metadata": {
       "first_seen": "2025-09-04T16:27:32.090612",
       "improvement_patterns": [
-        "Elaborated on each feature with specific, actionable requirements (e.g., 'display the SAR equivalent of the entered MYR amount *beside* the MYR amount', 'exchange rate used for each transaction should be recorded', 'AI-powered chatbot that can answer natural language queries').",
-        "**Persona Definition:** Explicitly defined the persona as an 'expert Wireframe Designer specializing in intuitive and user-centric software interfaces'.",
-        "**Task Clarity:** Clearly stated the primary task: 'create a comprehensive wireframe for a \"Dashboard Overview\" section'.",
-        "**Contextualization:** Added a 'Project Context' section to specify the application type, which is crucial for tailoring the dashboard's content and focus.",
-        "Defined a clear persona: 'expert Unity VR developer specializing in physics-based interactions and game mechanics'.",
-        "Structured the prompt with clear headings: 'Task', 'Requirements', 'Constraints', and 'Output Format'.",
         "Specified the exact Unity version (2021.3 LTS or later) and the core framework (Unity XR Interaction Toolkit).",
         "**Enhanced Specificity:** Replaced vague terms like 'simple VR environment' with concrete suggestions like 'minimal, flat VR environment (e.g., a simple plane and a few walls)'. Specified component settings like `Rigidbody.Collision Detection` to `Continuous Dynamic` and `XR Grab Interactable.Movement Type` to `Velocity Tracking`.",
         "**Incorporated Best Practices:** Mandated the use of Unity's Input System, recommended `Collision Detection` settings for physics accuracy, and required a `README.md` file for project documentation.",
-        "**Detailed XR Setup:** Broke down XR setup into granular steps, including XR Plugin Management, XR Interaction Toolkit installation, and XR Device Simulator configuration."
+        "**Detailed XR Setup:** Broke down XR setup into granular steps, including XR Plugin Management, XR Interaction Toolkit installation, and XR Device Simulator configuration.",
+        "Defined a specific persona: 'Senior Mobile Software Engineer' with relevant expertise.",
+        "Structured the prompt into logical sections: Project Overview, Core Requirements, Technical Specifications & Best Practices, Constraints, Deliverables, Output Format, and Persona/Tone.",
+        "Specified a cross-platform framework (React Native) and suggested alternatives, including versioning implicitly by referring to 'latest stable version'.",
+        "Defined a clear persona: 'expert Python developer specializing in data engineering and financial technology'.",
+        "Structured the prompt with clear headings: 'Task', 'Requirements', 'Constraints', 'Output Format', 'Example Input', and 'Expected Output'.",
+        "Specified Python version (3.9+)."
       ],
       "common_prompt_types": [
         "raw",
@@ -361,6 +361,32 @@
         "Defined a specific persona: 'master storyteller, specializing in speculative fiction with a keen understanding of causality and the butterfly effect'.",
         "Clearly defined the 'Goal' as writing a short story with specific word count and thematic focus.",
         "Added rich 'Context' about the protagonist's inexperience and the thematic exploration."
+      ],
+      "common_prompt_types": [
+        "raw"
+      ]
+    }
+  },
+  "business_strategy": {
+    "description": "Learned domain: business_strategy",
+    "keywords": [
+      "logo design",
+      "company",
+      "nantis"
+    ],
+    "usage_count": 1,
+    "quality_scores": [
+      0.93
+    ],
+    "avg_quality_score": 0.93,
+    "last_used": "2025-09-09T16:33:20.310205",
+    "created_from_workflow": "workflow_1757406786",
+    "learning_metadata": {
+      "first_seen": "2025-09-09T16:33:20.310205",
+      "improvement_patterns": [
+        "Defined a specific persona (Senior Brand Identity Designer) with relevant expertise.",
+        "Established a clear 'Goal' for the logo design task.",
+        "Added a comprehensive 'Context' section requiring specific details about Nantis's niche, values, target audience, and desired brand image."
       ],
       "common_prompt_types": [
         "raw"

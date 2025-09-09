@@ -5,9 +5,7 @@ import type {
   SystemStats,
   WorkflowHistory,
   HealthStatus,
-  ExperimentResult,
-  WorkflowFilters,
-  PaginatedResponse,
+  WorkflowFilters
 } from '@/types/api';
 
 class ApiClient {
