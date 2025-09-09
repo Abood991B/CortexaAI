@@ -11,7 +11,7 @@ import time # Added for time.time()
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic.v1 import BaseModel, Field
 from agents.classifier import DomainClassifier
 from agents.base_expert import create_expert_agent, BaseExpertAgent
 from agents.evaluator import PromptEvaluator
