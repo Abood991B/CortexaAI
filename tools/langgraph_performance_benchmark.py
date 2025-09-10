@@ -5,7 +5,6 @@ Performance Benchmarking Script for LangGraph Workflow in Multi-Agent Prompt Eng
 
 import asyncio
 import time
-import psutil
 import json
 import sys
 import os

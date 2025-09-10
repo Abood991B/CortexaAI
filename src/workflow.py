@@ -1,6 +1,6 @@
 """LangGraph workflow implementation for the Multi-Agent Prompt Engineering System."""
 
-from typing import Dict, List, Optional, Any, Annotated, TypedDict
+from typing import Dict, List, Optional, Any, TypedDict
 from langgraph.graph import StateGraph, END
 from langchain_core.runnables import RunnableConfig
 import logging

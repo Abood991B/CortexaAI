@@ -24,7 +24,6 @@ from src.main import (
     app,
     PromptRequest,
     PromptResponse,
-    DomainInfo,
     SystemStats,
     classifier_instance,
     evaluator_instance,
@@ -629,19 +628,6 @@ class TestPydanticModels:
         assert response.status == "completed"
         assert response.processing_time_seconds == 1.5
 
-    def test_domain_info_model(self):
-        """Test DomainInfo model validation."""
-        domain = DomainInfo(
-            domain="software_engineering",
-            description="Coding tasks",
-            keywords=["code", "programming"],
-            has_expert_agent=True,
-            agent_created=True
-        )
-
-        assert domain.domain == "software_engineering"
-        assert domain.has_expert_agent is True
-        assert domain.agent_created is True
 
     def test_system_stats_model(self):
         """Test SystemStats model validation."""

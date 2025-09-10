@@ -699,7 +699,7 @@ async def process_prompt_with_memory(request: PromptRequest, background_tasks: B
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve the main web interface."""
-    template_path = Path(__file__).parent.parent / "frontend" / "index.html"
+    template_path = Path(__file__).parent.parent / "frontend-react" / "index.html"
     return template_path.read_text(encoding="utf-8")
 
 
