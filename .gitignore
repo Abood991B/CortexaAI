@@ -1,50 +1,83 @@
-node_modules
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # Python
 venv/
 env/
+ENV/
+.venv/
 __pycache__/
+*.py[cod]
+*$py.class
 *.pyc
 *.pyo
 *.pyd
 .Python
 build/
-htmlcov/
-.coverage
-.pytest_cache/
 develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
+lib/
+lib64/
 parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Testing
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
 
 # Environment variables
 .env
+.env.local
+.env.*.local
 
 # Data files (runtime generated)
 data/learned_domains.json
 data/cache/
 data/logs/
+data/memories/
+data/vectors/
 
 # Logs
 *.log
 logs/
+*.log.*
 
-# ChromaDB data
+# Database files
 chroma_data/
 *.db
 *.sqlite
+*.sqlite3
 
 # Model cache
 .cache/
 models/
+embeddings/
 
 # OS generated files
 .DS_Store
@@ -54,6 +87,7 @@ models/
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
 
 # IDE files
 .vscode/
@@ -61,10 +95,37 @@ Thumbs.db
 *.swp
 *.swo
 *~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
 
 # Temporary files
 *.tmp
 *.temp
+tmp/
+temp/
 
 # Docker volumes
 docker-data/
+.dockerignore
+
+# Frontend build files
+frontend-react/dist/
+frontend-react/build/
+frontend-react/.parcel-cache/
+
+# Benchmarks and reports (keep templates)
+benchmark_report.json
+langgraph_benchmark_report.json
+performance_report.json
+
+# LangGraph/LangSmith
+.langgraph/
+.langsmith/
+
+# Jupyter Notebooks (if used for testing)
+.ipynb_checkpoints/
+*.ipynb

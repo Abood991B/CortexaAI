@@ -7,7 +7,6 @@ providing detailed error information for better debugging and error handling.
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-
 class AgenticSystemError(Exception):
     """Base exception for all agentic system errors.
 

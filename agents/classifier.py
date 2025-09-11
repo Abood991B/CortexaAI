@@ -12,10 +12,9 @@ from config.config import (
     security_manager, security_config, log_security_event
 )
 from agents.exceptions import ClassificationError, LLMServiceError, DomainError
+from agents.utils import is_retryable_error, sanitize_json_response
 import json
-import logging
 import asyncio
-import time
 
 # Set up structured logging
 logger = get_logger(__name__)
@@ -341,16 +340,7 @@ class DomainClassifier:
         return self._get_fallback_classification_result(prompt)
 
     def _is_retryable_error(self, error: Exception) -> bool:
-        """Determine if an error is retryable based on its characteristics."""
-        error_str = str(error).lower()
-        retryable_indicators = [
-            "rate limit", "timeout", "connection", "network",
-            "temporary", "server error", "502", "503", "504",
-            "internal server error", "service unavailable"
-        ]
-
-        # Check if any retryable indicator is in the error message
-        return any(indicator in error_str for indicator in retryable_indicators)
+        return is_retryable_error(error)
 
     def _create_new_domain(self, domain_name: str, description: str, keywords: List[str]):
         """

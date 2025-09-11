@@ -33,21 +33,18 @@ orjson>=3.11.3
 sqlite-vec>=0.1.6
 
 # HTTP & Async
-aiohttp>=3.12.15
 httpx>=0.28.1
 
-# Vector Database & Embeddings
-chromadb>=0.4.22
-sentence-transformers>=2.2.2
+# Vector Database & Embeddings (optional)
+# chromadb>=0.4.22
+# sentence-transformers>=2.2.2
 
 # Development & Testing
 pytest>=8.4.1
-matplotlib>=3.10.5
-seaborn>=0.13.2
+# matplotlib>=3.10.5  # optional (used for plotting in tools)
+# seaborn>=0.13.2    # optional (used for plotting in tools)
 safety>=3.6.0
 
 # System Monitoring
 psutil>=7.0.0
 
-# CORS Support
-fastapi-cors>=0.0.6

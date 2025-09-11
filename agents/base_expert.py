@@ -7,9 +7,8 @@ from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_google_genai import ChatGoogleGenerativeAI
 from agents.exceptions import ImprovementError, LLMServiceError, ConfigurationError
-import logging
+from agents.utils import is_retryable_error, sanitize_json_response
 import asyncio
-import time
 
 from config.config import (
     settings, get_model_config, get_logger, metrics, log_performance,
@@ -341,16 +340,7 @@ class BaseExpertAgent(ABC):
 
 
     def _is_retryable_error(self, error: Exception) -> bool:
-        """Determine if an error is retryable based on its characteristics."""
-        error_str = str(error).lower()
-        retryable_indicators = [
-            "rate limit", "timeout", "connection", "network",
-            "temporary", "server error", "502", "503", "504",
-            "internal server error", "service unavailable"
-        ]
-
-        # Check if any retryable indicator is in the error message
-        return any(indicator in error_str for indicator in retryable_indicators)
+        return is_retryable_error(error)
 
     @abstractmethod
     def _define_expertise_areas(self) -> List[str]:

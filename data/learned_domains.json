@@ -2,11 +2,6 @@
   "software_engineering": {
     "description": "Learned domain: software_engineering",
     "keywords": [
-      "dashboard",
-      "overview",
-      "prompt",
-      "designer",
-      "VR game",
       "Unity",
       "throw boxes",
       "VR development",
@@ -21,11 +16,15 @@
       "user interaction",
       "financial news",
       "pipeline",
-      "python"
+      "python",
+      "repo files",
+      "folders",
+      "coding files",
+      "workspace repo",
+      "GitHub"
     ],
-    "usage_count": 168,
+    "usage_count": 169,
     "quality_scores": [
-      0.95,
       0.96,
       0.95,
       0.93,
@@ -74,24 +73,25 @@
       0.95,
       0.95,
       0.93,
-      0.93
+      0.93,
+      0.95
     ],
     "avg_quality_score": 0.9446000000000003,
-    "last_used": "2025-09-09T16:22:25.936262",
+    "last_used": "2025-09-11T22:21:04.266497",
     "created_from_workflow": "workflow_1756974410",
     "learning_metadata": {
       "first_seen": "2025-09-04T16:27:32.090612",
       "improvement_patterns": [
-        "Specified the exact Unity version (2021.3 LTS or later) and the core framework (Unity XR Interaction Toolkit).",
-        "**Enhanced Specificity:** Replaced vague terms like 'simple VR environment' with concrete suggestions like 'minimal, flat VR environment (e.g., a simple plane and a few walls)'. Specified component settings like `Rigidbody.Collision Detection` to `Continuous Dynamic` and `XR Grab Interactable.Movement Type` to `Velocity Tracking`.",
-        "**Incorporated Best Practices:** Mandated the use of Unity's Input System, recommended `Collision Detection` settings for physics accuracy, and required a `README.md` file for project documentation.",
         "**Detailed XR Setup:** Broke down XR setup into granular steps, including XR Plugin Management, XR Interaction Toolkit installation, and XR Device Simulator configuration.",
         "Defined a specific persona: 'Senior Mobile Software Engineer' with relevant expertise.",
         "Structured the prompt into logical sections: Project Overview, Core Requirements, Technical Specifications & Best Practices, Constraints, Deliverables, Output Format, and Persona/Tone.",
         "Specified a cross-platform framework (React Native) and suggested alternatives, including versioning implicitly by referring to 'latest stable version'.",
         "Defined a clear persona: 'expert Python developer specializing in data engineering and financial technology'.",
         "Structured the prompt with clear headings: 'Task', 'Requirements', 'Constraints', 'Output Format', 'Example Input', and 'Expected Output'.",
-        "Specified Python version (3.9+)."
+        "Specified Python version (3.9+).",
+        "Defined a clear and specific persona: 'expert Software Engineer specializing in codebase hygiene, optimization, and refactoring'.",
+        "Structured the prompt with distinct sections: 'Task', 'Requirements', 'Constraints', and 'Output Format'.",
+        "Elaborated on each type of issue (duplicates, unused methods, etc.) with more precise definitions."
       ],
       "common_prompt_types": [
         "raw",

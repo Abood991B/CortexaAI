@@ -12,10 +12,8 @@ from config.config import (
     security_manager, security_config, log_security_event, prompt_generation_config
 )
 from agents.exceptions import EvaluationError, ImprovementError
-import logging
+from agents.utils import is_retryable_error, sanitize_json_response
 import asyncio
-import time
-import re
 import json
 
 # Set up structured logging
@@ -110,46 +108,10 @@ class PromptEvaluator:
             }
             | evaluation_prompt
             | self.model
-            | self._sanitize_json_output
+            | sanitize_json_response
             | JsonOutputParser()
         )
 
-    def _sanitize_json_output(self, raw_output: Any) -> str:
-        """
-        Sanitizes the raw output from the language model to extract a clean JSON string.
-        Handles cases where the JSON is wrapped in markdown code fences.
-        """
-        try:
-            # If the output is already a dict, dump it to a string
-            if isinstance(raw_output, dict):
-                return json.dumps(raw_output)
-
-            # If it's a string, attempt to clean and parse
-            if hasattr(raw_output, 'content'):
-                content = raw_output.content
-            else:
-                content = str(raw_output)
-
-            # Use regex to find content within ```json ... ```
-            match = re.search(r"```json\s*([\s\S]*?)\s*```", content)
-            if match:
-                clean_json = match.group(1).strip()
-            else:
-                # Fallback for cases where there are no fences but might be leading/trailing text
-                clean_json = content[content.find('{'):content.rfind('}')+1].strip()
-            
-            # Attempt to fix common JSON errors from LLMs
-            # 1. Replace escaped single quotes that are double-escaped
-            clean_json = clean_json.replace("\\'", "'")
-
-            # Final check to ensure it's valid JSON before passing to the parser
-            json.loads(clean_json)
-            return clean_json
-
-        except (json.JSONDecodeError, AttributeError, TypeError) as e:
-            logger.error(f"Failed to sanitize JSON output. Raw: {raw_output}, Error: {e}")
-            # Return a default JSON object string to prevent downstream failures
-            return '{}'
 
     async def evaluate_prompt(self, original_prompt: str, improved_prompt: str,
                        domain: str, prompt_type: str = "raw",
@@ -292,19 +254,7 @@ class PromptEvaluator:
         }
 
     def _is_retryable_error(self, error: Exception) -> bool:
-        """Determine if an error is retryable based on its characteristics."""
-        error_str = str(error).lower()
-        retryable_indicators = [
-            "rate limit", "timeout", "connection", "network",
-            "temporary", "server error", "502", "503", "504",
-            "internal server error", "service unavailable"
-        ]
-
-        # Check if any retryable indicator is in the error message
-        is_retryable = any(indicator in error_str for indicator in retryable_indicators)
-
-        logger.info(f"Error retryability check: {is_retryable} for error: {error_str}")
-        return is_retryable
+        return is_retryable_error(error)
 
     async def run_evaluation_loop(self, original_prompt: str, improved_prompt: str,
                            domain: str, expert_agent: Any,
