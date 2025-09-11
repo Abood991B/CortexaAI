@@ -12,7 +12,7 @@ from config.config import (
     security_manager, security_config, log_security_event
 )
 from agents.exceptions import ClassificationError, LLMServiceError, DomainError
-from agents.utils import is_retryable_error, sanitize_json_response
+from agents.utils import is_retryable_error
 import json
 import asyncio
 

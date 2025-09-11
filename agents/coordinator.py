@@ -3,10 +3,7 @@
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import json
-import logging
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-import time # Added for time.time()
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -26,7 +23,7 @@ from config.config import (
     memory_config, prompt_generation_config
 )
 from agents.memory import memory_manager
-from agents.utils import is_retryable_error, sanitize_json_response
+from agents.utils import is_retryable_error
 
 # Prompt Management System removed
 PROMPT_MANAGEMENT_AVAILABLE = False

@@ -7,7 +7,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_google_genai import ChatGoogleGenerativeAI
 from agents.exceptions import ImprovementError, LLMServiceError, ConfigurationError
-from agents.utils import is_retryable_error, sanitize_json_response
+from agents.utils import is_retryable_error
 import asyncio
 
 from config.config import (

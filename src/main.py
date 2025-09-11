@@ -23,6 +23,7 @@ from agents.classifier import DomainClassifier
 from agents.evaluator import PromptEvaluator
 from src.workflow import process_prompt_with_langgraph
 import psutil
+from inspect import iscoroutinefunction
 
 # Set up structured logging
 logger = get_logger(__name__)
@@ -114,7 +115,7 @@ class PromptRequest(BaseModel):
     user_id: Optional[str] = None  # User identifier for memory context
     workflow_id: Optional[str] = None  # Add workflow_id for tracking
     advanced_mode: bool = False
-
+    synchronous: bool = False  # If true, run inline and return final result
 
 
 class PromptResponse(BaseModel):
@@ -130,7 +131,6 @@ class PromptResponse(BaseModel):
     analysis: Optional[Dict[str, Any]]
     comparison: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any]
-
 
 
 class SystemStats(BaseModel):
@@ -169,15 +169,50 @@ class WorkflowDetails(BaseModel):
     metadata: Dict[str, Any]
 
 
-
-
-
 # API Routes
 @app.post("/api/process-prompt", response_model=PromptResponse)
 async def process_prompt(request: PromptRequest, background_tasks: BackgroundTasks) -> PromptResponse:
-    """Process a prompt through the multi-agent workflow."""
+    """Process a prompt through the multi-agent workflow.
+    If request.synchronous is True, run inline and return final result.
+    """
     from config.config import cache_manager, generate_prompt_cache_key, perf_config
 
+    # Synchronous mode: run inline and return final
+    if request.synchronous:
+        logger.info(f"Processing prompt synchronously: {request.prompt[:100]}...")
+        if request.use_langgraph:
+            result = await process_prompt_with_langgraph(
+                prompt=request.prompt,
+                prompt_type=request.prompt_type,
+            )
+        else:
+            result = await coordinator.process_prompt(
+                prompt=request.prompt,
+                prompt_type=request.prompt_type,
+                return_comparison=request.return_comparison,
+            )
+
+        response = PromptResponse(
+            workflow_id=result.get("workflow_id", f"workflow_{uuid.uuid4().hex[:8]}"),
+            status=result.get("status", "completed"),
+            message="Workflow completed successfully.",
+            timestamp=datetime.now().isoformat(),
+            processing_time_seconds=result.get("processing_time_seconds", 0.0),
+            input=request.dict(),
+            output=result.get("output", {}),
+            analysis=result.get("analysis", {}),
+            comparison=result.get("comparison"),
+            metadata=result.get("metadata", {}),
+        )
+
+        # Cache LangGraph results if enabled
+        if request.use_langgraph and perf_config.enable_caching:
+            cache_key = generate_prompt_cache_key(request.prompt, "langgraph_workflow")
+            cache_manager.set(cache_key, response.dict(), perf_config.cache_ttl)
+
+        return response
+
+    # Default async/background behavior
     # Check cache first if caching is enabled
     if perf_config.enable_caching and request.use_langgraph:
         cache_key = generate_prompt_cache_key(request.prompt, "langgraph_workflow")
@@ -320,6 +355,15 @@ async def process_prompt(request: PromptRequest, background_tasks: BackgroundTas
         raise HTTPException(status_code=500, detail=f"Failed to start workflow: {str(e)}")
 
 
+@app.get("/api/domains")
+async def get_domains():
+    """Return available domains from the coordinator."""
+    try:
+        domains = coordinator.get_available_domains()
+        return domains
+    except Exception as e:
+        logger.error(f"Error getting domains: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get domains: {str(e)}")
 
 
 @app.post("/api/cancel-workflow/{workflow_id}")
@@ -370,7 +414,6 @@ async def get_workflow_status(workflow_id: str):
         response["error"] = workflow["error"]
     
     return response
-
 
 
 @app.get("/api/stats", response_model=SystemStats)
@@ -519,17 +562,97 @@ async def get_workflow_details(workflow_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to get workflow details: {str(e)}")
 
 
-
-
-
-
-
 # Memory Management API
 @app.post("/api/process-prompt-with-memory", response_model=PromptResponse)
 async def process_prompt_with_memory(request: PromptRequest, background_tasks: BackgroundTasks):
-    """Process prompt with memory context using async workflow."""
+    """Process prompt with memory context using async workflow.
+    If request.synchronous is True, run inline and return final result.
+    """
     if not request.user_id:
         raise HTTPException(status_code=400, detail="User ID is required for memory-enhanced processing")
+
+    # Synchronous mode: run inline and return final
+    if request.synchronous:
+        logger.info(f"Processing memory workflow synchronously for user {request.user_id}: {request.prompt[:100]}...")
+
+        # Build context-aware prompt if chat history provided
+        context_prompt = request.prompt
+        if request.chat_history and len(request.chat_history) > 0:
+            context_parts = ["Previous conversation context:"]
+            for message in request.chat_history[-10:]:
+                role = message.get('role', 'user')
+                content = message.get('content', '')
+                prefix = "User" if role == 'user' else "Assistant"
+                context_parts.append(f"{prefix}: {content}")
+            context_parts.append("\nCurrent request:")
+            context_parts.append(f"User: {request.prompt}")
+            context_parts.append("\nPlease provide a response that takes into account the previous conversation context and continues the discussion appropriately.")
+            context_prompt = "\n".join(context_parts)
+
+        if request.advanced_mode:
+            advanced_mode_result = await coordinator.handle_advanced_mode(
+                prompt=request.prompt,
+                chat_history=request.chat_history,
+            )
+            if advanced_mode_result['status'] == 'needs_more_info':
+                result = {
+                    "output": {
+                        "optimized_prompt": advanced_mode_result['content'],
+                        "quality_score": 0,
+                        "domain": "conversational",
+                        "iterations_used": 1,
+                    },
+                    "analysis": {},
+                    "metadata": {},
+                    "processing_time_seconds": 0.1,
+                    "status": "completed",
+                }
+            else:
+                context_prompt = advanced_mode_result['content']
+                if request.use_langgraph:
+                    result = await process_prompt_with_langgraph(
+                        prompt=context_prompt,
+                        prompt_type=request.prompt_type,
+                    )
+                else:
+                    result = await coordinator.process_prompt(
+                        prompt=context_prompt,
+                        prompt_type=request.prompt_type,
+                        return_comparison=request.return_comparison,
+                    )
+        elif request.use_langgraph:
+            result = await process_prompt_with_langgraph(
+                prompt=context_prompt,
+                prompt_type=request.prompt_type,
+            )
+        else:
+            result = await coordinator.process_prompt(
+                prompt=context_prompt,
+                prompt_type=request.prompt_type,
+                return_comparison=request.return_comparison,
+            )
+
+        # Attach original metadata
+        if 'metadata' not in result:
+            result['metadata'] = {}
+        result['metadata']['original_prompt'] = request.prompt
+        result['metadata']['user_id'] = request.user_id
+        result['metadata']['has_context'] = bool(request.chat_history)
+
+        return PromptResponse(
+            workflow_id=result.get("workflow_id", f"workflow_{uuid.uuid4().hex[:8]}"),
+            status=result.get("status", "completed"),
+            message="Workflow completed successfully.",
+            timestamp=datetime.now().isoformat(),
+            processing_time_seconds=result.get("processing_time_seconds", 0.0),
+            input=request.dict(),
+            output=result.get("output", {}),
+            analysis=result.get("analysis", {}),
+            comparison=result.get("comparison"),
+            metadata=result.get("metadata", {}),
+        )
+
+    # Default async/background behavior
     
     # Generate unique workflow ID
     workflow_id = f"workflow_{uuid.uuid4().hex[:8]}"

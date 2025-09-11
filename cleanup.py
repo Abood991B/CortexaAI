@@ -211,7 +211,9 @@ def generate_cleanup_report():
         print(f"  - {file}")
     
     # Save report to file
-    report_path = Path("cleanup_report.json")
+    reports_dir = Path("reports")
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    report_path = reports_dir / "cleanup_report.json"
     with open(report_path, 'w') as f:
         json.dump(report, f, indent=2)
     

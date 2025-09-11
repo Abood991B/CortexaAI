@@ -6,6 +6,7 @@ providing detailed error information for better debugging and error handling.
 
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from agents.utils import is_retryable_error
 
 class AgenticSystemError(Exception):
     """Base exception for all agentic system errors.
@@ -163,22 +164,9 @@ class LLMServiceError(AgenticSystemError):
             "provider": provider,
             "model": model,
             "request_type": request_type,
-            "is_retryable": self._is_retryable_error(cause)
+            "is_retryable": is_retryable_error(cause)
         }
         super().__init__(message, error_code, details, cause)
-
-    def _is_retryable_error(self, cause: Optional[Exception]) -> bool:
-        """Determine if the error is retryable based on the cause."""
-        if not cause:
-            return False
-
-        cause_str = str(cause).lower()
-        retryable_indicators = [
-            "rate limit", "timeout", "connection", "network",
-            "temporary", "server error", "502", "503", "504"
-        ]
-
-        return any(indicator in cause_str for indicator in retryable_indicators)
 
 
 class DomainError(AgenticSystemError):
