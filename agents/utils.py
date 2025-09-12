@@ -5,6 +5,9 @@ This module contains shared functionality to reduce code duplication across agen
 
 from typing import List, Dict, Any
 import logging
+import re
+import json
+from collections import Counter
 from config.config import get_logger
 
 logger = get_logger(__name__)
@@ -51,9 +54,8 @@ def sanitize_json_response(raw_output: Any) -> str:
     Returns:
         str: Clean JSON string
     """
-    import json
-    import re
     
+
     try:
         # If the output is already a dict, dump it to a string
         if isinstance(raw_output, dict):
@@ -129,8 +131,7 @@ def extract_key_topics(text: str, max_topics: int = 10) -> List[str]:
     Returns:
         List of key topics
     """
-    import re
-    from collections import Counter
+    
     
     # Common stop words to exclude
     stop_words = {

@@ -2,7 +2,6 @@
   "software_engineering": {
     "description": "Learned domain: software_engineering",
     "keywords": [
-      "Unity",
       "throw boxes",
       "VR development",
       "XR Interaction Toolkit",
@@ -21,11 +20,11 @@
       "folders",
       "coding files",
       "workspace repo",
-      "GitHub"
+      "GitHub",
+      "GTA 5"
     ],
-    "usage_count": 169,
+    "usage_count": 170,
     "quality_scores": [
-      0.96,
       0.95,
       0.93,
       0.95,
@@ -74,24 +73,25 @@
       0.95,
       0.93,
       0.93,
+      0.95,
       0.95
     ],
-    "avg_quality_score": 0.9446000000000003,
-    "last_used": "2025-09-11T22:21:04.266497",
+    "avg_quality_score": 0.9444000000000004,
+    "last_used": "2025-09-12T10:40:14.136982",
     "created_from_workflow": "workflow_1756974410",
     "learning_metadata": {
       "first_seen": "2025-09-04T16:27:32.090612",
       "improvement_patterns": [
-        "**Detailed XR Setup:** Broke down XR setup into granular steps, including XR Plugin Management, XR Interaction Toolkit installation, and XR Device Simulator configuration.",
-        "Defined a specific persona: 'Senior Mobile Software Engineer' with relevant expertise.",
-        "Structured the prompt into logical sections: Project Overview, Core Requirements, Technical Specifications & Best Practices, Constraints, Deliverables, Output Format, and Persona/Tone.",
         "Specified a cross-platform framework (React Native) and suggested alternatives, including versioning implicitly by referring to 'latest stable version'.",
         "Defined a clear persona: 'expert Python developer specializing in data engineering and financial technology'.",
         "Structured the prompt with clear headings: 'Task', 'Requirements', 'Constraints', 'Output Format', 'Example Input', and 'Expected Output'.",
         "Specified Python version (3.9+).",
         "Defined a clear and specific persona: 'expert Software Engineer specializing in codebase hygiene, optimization, and refactoring'.",
         "Structured the prompt with distinct sections: 'Task', 'Requirements', 'Constraints', and 'Output Format'.",
-        "Elaborated on each type of issue (duplicates, unused methods, etc.) with more precise definitions."
+        "Elaborated on each type of issue (duplicates, unused methods, etc.) with more precise definitions.",
+        "Transformed a vague request into a specific, actionable task for an expert persona.",
+        "Clearly defined the scope: architectural blueprint and strategic plan, not full code generation.",
+        "Explicitly listed core pillars of inspiration from GTA 5 to guide the design."
       ],
       "common_prompt_types": [
         "raw",

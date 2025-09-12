@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/us/bin/env python3
 """
 LangGraph Expert Agent for Multi-Agent Prompt Engineering System
 
@@ -15,7 +15,6 @@ import os
 # Add the parent directory to the path so we can import from config
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from config.config import get_logger, get_model_config
 
 logger = get_logger(__name__)

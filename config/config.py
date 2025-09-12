@@ -29,8 +29,8 @@ class Settings(BaseSettings):
     langsmith_endpoint: str = Field(default="https://api.smith.langchain.com", env="LANGSMITH_ENDPOINT")
 
     # Model Configuration
-    default_model_provider: str = Field(default="openai", env="DEFAULT_MODEL_PROVIDER")
-    default_model_name: str = Field(default="gpt-4", env="DEFAULT_MODEL_NAME")
+    default_model_provider: str = Field(default="google", env="DEFAULT_MODEL_PROVIDER")
+    default_model_name: str = Field(default="gemini-2.5-flash-lite", env="DEFAULT_MODEL_NAME")
 
     # System Configuration
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
@@ -79,7 +79,7 @@ def get_model_config(provider: str = None, model_name: str = None):
         }
     }
 
-    return configs.get(provider, configs["openai"])
+    return configs.get(provider, configs["google"])
 
 
 def setup_langsmith():
@@ -1549,11 +1549,6 @@ class PromptGenerationConfig:
     reward_function = getattr(settings, 'reward_function', 'quality_and_efficiency')
     learning_rate = getattr(settings, 'learning_rate', 0.01)
     discount_factor = getattr(settings, 'discount_factor', 0.9)
-
-    # A/B testing settings
-    enable_ab_testing = getattr(settings, 'enable_ab_testing', True)
-    test_sample_size = getattr(settings, 'test_sample_size', 10)
-    statistical_significance_threshold = getattr(settings, 'statistical_significance_threshold', 0.05)
 
     # Quality and validation
     enable_quality_gates = getattr(settings, 'enable_quality_gates', True)

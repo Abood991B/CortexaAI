@@ -2,19 +2,19 @@
 
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
+import asyncio
+import json
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_google_genai import ChatGoogleGenerativeAI
+from agents.exceptions import EvaluationError, ImprovementError
+from agents.utils import is_retryable_error, sanitize_json_response
 from config.config import (
     settings, get_model_config, get_logger, metrics, log_performance,
     cache_manager, perf_config, generate_evaluation_cache_key, log_cache_performance,
     security_manager, security_config, log_security_event, prompt_generation_config
 )
-from agents.exceptions import EvaluationError, ImprovementError
-from agents.utils import is_retryable_error, sanitize_json_response
-import asyncio
-import json
 
 # Set up structured logging
 logger = get_logger(__name__)
@@ -71,7 +71,7 @@ class PromptEvaluator:
                 "specificity": 0.9,
                 "structure": 0.9,
                 "completeness": 0.95,
-                "actionability": 0.85,
+                "actionability": 0.95,
                 "domain_alignment": 0.96
             }},
             "passes_threshold": true,

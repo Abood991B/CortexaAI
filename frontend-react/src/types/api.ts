@@ -93,24 +93,7 @@ export interface HealthStatus {
   liveness: boolean;
 }
 
-export interface ExperimentResult {
-  id: string;
-  name: string;
-  description: string;
-  status: 'running' | 'completed' | 'failed';
-  variants: Array<{
-    name: string;
-    conversion_rate?: number;
-    traffic_percentage?: number;
-  }>;
-  metrics: {
-    total_samples?: number;
-    confidence_level?: number;
-    winner?: string;
-  };
-  created_at: string;
-  completed_at?: string;
-}
+
 
 // Error Types
 export interface ApiError {
@@ -118,55 +101,4 @@ export interface ApiError {
   error_code?: string;
   timestamp?: string;
   workflow_id?: string;
-}
-
-// Request/Response wrapper types
-export interface ApiResponse<T> {
-  data: T;
-  success: boolean;
-  message?: string;
-}
-
-export interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  page: number;
-  per_page: number;
-  pages: number;
-}
-
-// Filter and search types
-export interface WorkflowFilters {
-  status?: string;
-  domain?: string;
-  date_from?: string;
-  date_to?: string;
-  min_quality_score?: number;
-  max_processing_time?: number;
-}
-
-// Additional types
-export interface WorkflowSummary {
-  workflow_id: string;
-  timestamp: string;
-  status: string;
-  domain: string;
-  quality_score: number;
-  processing_time: number;
-  prompt_preview: string;
-}
-
-export interface WorkflowDetails {
-  workflow_id: string;
-  status: string;
-  original_prompt: string;
-  optimized_prompt?: string;
-  quality_score: number;
-  iterations_used: number;
-  processing_time: number;
-  agent_steps?: Array<{
-    agent_type: string;
-    output: string;
-    processing_time: number;
-  }>;
 }

@@ -5,7 +5,6 @@ import type {
   SystemStats,
   WorkflowHistory,
   HealthStatus,
-  WorkflowFilters
 } from '@/types/api';
 
 class ApiClient {
@@ -75,30 +74,6 @@ class ApiClient {
 
 
 
-  // Analytics
-  async getWorkflowAnalytics(filters?: WorkflowFilters): Promise<any> {
-    const params = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-    }
-    
-    const response = await this.client.get(`/api/analytics/workflows?${params}`);
-    return response.data;
-  }
-
-  async getPerformanceMetrics(): Promise<any> {
-    const response = await this.client.get('/api/analytics/performance');
-    return response.data;
-  }
-
-  async getDomainAnalytics(): Promise<any> {
-    const response = await this.client.get('/api/analytics/domains');
-    return response.data;
-  }
 
   // Memory-enhanced processing
       async processPromptWithMemory(request: PromptRequest & { user_id: string }, signal?: AbortSignal): Promise<PromptResponse> {
@@ -114,36 +89,6 @@ class ApiClient {
   }
 
 
-  async generatePrompt(task: string, domain?: string): Promise<PromptResponse> {
-    const response = await this.client.post<PromptResponse>('/api/generate-prompt', { task, domain });
-    return response.data;
-  }
-
-  // Combined Analytics for Analytics page
-  async getAnalytics(timeRange: '7d' | '30d' | '90d' = '30d'): Promise<any> {
-    const response = await this.client.get(`/api/analytics?time_range=${timeRange}`);
-    return response.data;
-  }
-
-  // Workflow Management
-  async getWorkflows(filters?: { status?: string; domain?: string; page?: number; limit?: number }): Promise<any> {
-    const params = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-    }
-    
-    const response = await this.client.get(`/api/workflows?${params}`);
-    return response.data;
-  }
-
-  async getWorkflowDetails(workflowId: string): Promise<any> {
-    const response = await this.client.get(`/api/workflows/${workflowId}`);
-    return response.data;
-  }
 
   async cancelWorkflow(workflowId: string): Promise<any> {
     const response = await this.client.post(`/api/cancel-workflow/${workflowId}`);

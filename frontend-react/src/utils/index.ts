@@ -5,43 +5,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(date: string | Date): string {
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(date));
-}
-
-export function formatDateTime(date: string | Date): string {
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(date));
-}
-
-export function formatRelativeTime(date: string | Date): string {
-  const now = new Date();
-  const target = new Date(date);
-  const diffInSeconds = Math.floor((now.getTime() - target.getTime()) / 1000);
-
-  if (diffInSeconds < 60) return 'just now';
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-  if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}d ago`;
-  
-  return formatDate(date);
-}
-
-export function formatCurrency(amount: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-  }).format(amount);
-}
 
 export function formatDuration(seconds: number): string {
   // Handle null, undefined, or invalid values
@@ -55,49 +18,6 @@ export function formatDuration(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   return `${minutes}m ${remainingSeconds.toFixed(0)}s`;
-}
-
-export function formatPercentage(value: number): string {
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-export function formatNumber(value: number): string {
-  return new Intl.NumberFormat('en-US').format(value);
-}
-
-
-
-
-
-
-export function getDomainColor(domain?: string | null): string {
-  const colors = [
-    'bg-blue-100 text-blue-800',
-    'bg-green-100 text-green-800',
-    'bg-purple-100 text-purple-800',
-    'bg-orange-100 text-orange-800',
-    'bg-pink-100 text-pink-800',
-    'bg-indigo-100 text-indigo-800',
-    'bg-teal-100 text-teal-800',
-    'bg-red-100 text-red-800',
-  ];
-  
-  // Return a default color if domain is not provided
-  if (!domain) {
-    return colors[0];
-  }
-  
-  try {
-    const hash = domain.split('').reduce((a, b) => {
-      a = ((a << 5) - a) + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-    
-    return colors[Math.abs(hash) % colors.length];
-  } catch (error) {
-    console.error('Error generating domain color:', error);
-    return colors[0];
-  }
 }
 
 

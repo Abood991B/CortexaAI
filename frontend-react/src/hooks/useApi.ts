@@ -5,7 +5,6 @@ import apiClient from '@/api/client';
 import type {
   PromptRequest,
   PromptResponse,
-  WorkflowFilters,
 } from '@/types/api';
 
 // Helper to format API errors for display
@@ -28,10 +27,6 @@ export const queryKeys = {
   stats: ['stats'] as const,
   history: (limit?: number) => ['history', limit] as const,
   health: ['health'] as const,
-  workflowAnalytics: (filters?: WorkflowFilters) => ['analytics', 'workflows', filters] as const,
-  performanceMetrics: ['analytics', 'performance'] as const,
-  domainAnalytics: ['analytics', 'domains'] as const,
-  analytics: (timeRange?: string) => ['analytics', timeRange] as const,
 };
 
 // Caching layer for prompt processing
@@ -171,72 +166,10 @@ export const useHealth = () => {
 
 
 // Analytics Hooks
-export const useWorkflowAnalytics = (filters?: WorkflowFilters) => {
-  return useQuery({
-    queryKey: queryKeys.workflowAnalytics(filters),
-    queryFn: () => apiClient.getWorkflowAnalytics(filters),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-};
-
-export const usePerformanceMetrics = () => {
-  return useQuery({
-    queryKey: queryKeys.performanceMetrics,
-    queryFn: () => apiClient.getPerformanceMetrics(),
-    refetchInterval: 60 * 1000, // 1 minute
-  });
-};
-
-export const useDomainAnalytics = () => {
-  return useQuery({
-    queryKey: queryKeys.domainAnalytics,
-    queryFn: () => apiClient.getDomainAnalytics(),
-    staleTime: 10 * 60 * 1000, // 10 minutes
-  });
-};
-
-// Combined Analytics Hook for Analytics page
-// Combined Analytics Hook for Analytics page
-export const useAnalytics = (timeRange: '7d' | '30d' | '90d' = '30d') => {
-  return useQuery({
-    queryKey: ['analytics', timeRange],
-    queryFn: () => apiClient.getAnalytics(timeRange),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-};
 
 // Legacy alias for backward compatibility - will be removed
 export const useProcessPromptWithMemory = useProcessPrompt;
 
-export const useGeneratePrompt = () => {
-  return useMutation({
-    mutationFn: ({ task }: { task: string }) => 
-      apiClient.generatePrompt(task),
-    onSuccess: () => {
-      toast.success('Prompt generated successfully!');
-    },
-    onError: (error: any) => {
-      toast.error(getApiErrorMessage(error));
-    },
-  });
-};
-
-// Workflow Management Hooks
-export const useWorkflows = (filters?: { status?: string; page?: number; limit?: number }) => {
-  return useQuery({
-    queryKey: ['workflows', filters],
-    queryFn: () => apiClient.getWorkflows(filters),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-  });
-};
-
-export const useWorkflowDetails = (workflowId: string) => {
-  return useQuery({
-    queryKey: ['workflows', workflowId],
-    queryFn: () => apiClient.getWorkflowDetails(workflowId),
-    enabled: !!workflowId,
-  });
-};
 
 export const useCancelWorkflow = () => {
   const queryClient = useQueryClient();

@@ -4,7 +4,6 @@ from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import json
 import asyncio
-
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
@@ -12,6 +11,8 @@ from pydantic.v1 import BaseModel, Field
 from agents.classifier import DomainClassifier
 from agents.base_expert import create_expert_agent, BaseExpertAgent
 from agents.evaluator import PromptEvaluator
+from agents.memory import memory_manager
+from agents.utils import is_retryable_error
 from agents.exceptions import (
     ClassificationError, ImprovementError, EvaluationError,
     WorkflowError, AgenticSystemError
@@ -22,12 +23,6 @@ from config.config import (
     security_manager, security_config, log_security_event, rate_limiter,
     memory_config, prompt_generation_config
 )
-from agents.memory import memory_manager
-from agents.utils import is_retryable_error
-
-# Prompt Management System removed
-PROMPT_MANAGEMENT_AVAILABLE = False
-PromptManagementSystem = None
 
 # Set up structured logging
 logger = get_logger(__name__)
@@ -455,8 +450,6 @@ You must respond in a JSON format with two keys: 'status' and 'content'.
             )
             self._record_workflow(error_result)
             return error_result
-
-
 
 
     def _prepare_memory_final_result(self, workflow_id: str, user_id: str,
