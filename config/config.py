@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
     max_evaluation_iterations: int = Field(default=3, env="MAX_EVALUATION_ITERATIONS")
     evaluation_threshold: float = Field(default=0.8, env="EVALUATION_THRESHOLD")
+    
+    # LLM Configuration
+    max_llm_retries: int = Field(default=3, env="MAX_LLM_RETRIES")
+    llm_retry_delay: float = Field(default=1.0, env="LLM_RETRY_DELAY")
+    llm_timeout_seconds: int = Field(default=60, env="LLM_TIMEOUT_SECONDS")
 
     # Server Configuration
     host: str = Field(default="0.0.0.0", env="HOST")

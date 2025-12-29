@@ -401,7 +401,41 @@ async def process_prompt_with_langgraph(
         # Execute the workflow (use ainvoke for async nodes)
         logger.info(f"Starting LangGraph workflow for prompt processing")
         start_time = time.time()
-        result = await prompt_engineering_app.ainvoke(initial_state, config)
+        
+        try:
+            result = await prompt_engineering_app.ainvoke(initial_state, config)
+        except Exception as workflow_error:
+            logger.error(f"LangGraph workflow execution failed: {workflow_error}", exc_info=True)
+            # Return error result instead of raising
+            return {
+                "workflow_id": initial_state.get("workflow_id"),
+                "status": "error",
+                "timestamp": __import__('datetime').datetime.now().isoformat(),
+                "processing_time_seconds": time.time() - start_time,
+                "input": {
+                    "original_prompt": prompt,
+                    "prompt_type": prompt_type
+                },
+                "output": {
+                    "optimized_prompt": prompt,  # Return original prompt on error
+                    "domain": "unknown",
+                    "quality_score": 0.0,
+                    "iterations_used": 0,
+                    "passes_threshold": False
+                },
+                "analysis": {
+                    "classification": {},
+                    "improvements": {},
+                    "evaluation": {}
+                },
+                "comparison": {},
+                "metadata": {
+                    "langsmith_enabled": bool(settings.langsmith_api_key),
+                    "framework": "langgraph",
+                    "error": str(workflow_error),
+                    "error_type": type(workflow_error).__name__
+                }
+            }
 
         # Convert result to expected format
         processing_time = time.time() - start_time

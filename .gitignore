@@ -112,6 +112,9 @@ temp/
 docker-data/
 .dockerignore
 
+# Note: docker-compose.yml in root should be committed
+# Only docker/docker-compose.yml is ignored
+
 # Frontend build files
 frontend-react/dist/
 frontend-react/build/

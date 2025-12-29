@@ -230,7 +230,12 @@ class WorkflowCoordinator:
     async def handle_advanced_mode(self, prompt: str, chat_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
         """
         Handle the advanced mode by either asking clarifying questions or synthesizing a new prompt.
+        Includes retry logic and timeout handling for reliability.
         """
+        max_retries = getattr(settings, 'max_llm_retries', 3)
+        retry_delay = getattr(settings, 'llm_retry_delay', 1.0)
+        timeout_seconds = getattr(settings, 'llm_timeout_seconds', 60)
+        
         parser = JsonOutputParser(pydantic_object=AdvancedModeOutput)
 
         prompt_template = ChatPromptTemplate.from_messages([
@@ -248,17 +253,105 @@ You must respond in a JSON format with two keys: 'status' and 'content'.
             ("human", "Chat History:\n{chat_history}\n\nUser Prompt: {prompt}"),
         ])
 
-        chain = prompt_template | self.llm | parser
+        # Create LLM with timeout configuration
+        llm_with_timeout = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash-lite", 
+            temperature=0,
+            timeout=timeout_seconds,
+            max_retries=0  # We handle retries manually
+        )
+        
+        chain = prompt_template | llm_with_timeout | parser
 
         formatted_history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in chat_history]) if chat_history else "No history"
 
-        response = await chain.ainvoke({
-            "chat_history": formatted_history,
-            "prompt": prompt,
-            "format_instructions": parser.get_format_instructions()
-        })
-
-        return response
+        # Retry logic with exponential backoff
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"Advanced mode LLM call attempt {attempt + 1}/{max_retries}")
+                
+                # Use asyncio.wait_for for additional timeout protection
+                response = await asyncio.wait_for(
+                    chain.ainvoke({
+                        "chat_history": formatted_history,
+                        "prompt": prompt,
+                        "format_instructions": parser.get_format_instructions()
+                    }),
+                    timeout=timeout_seconds
+                )
+                
+                # Validate response structure
+                if not isinstance(response, dict):
+                    raise ValueError(f"Invalid response type: {type(response)}")
+                
+                if 'status' not in response or 'content' not in response:
+                    raise ValueError(f"Missing required fields in response: {response.keys()}")
+                
+                logger.info(f"Advanced mode LLM call succeeded on attempt {attempt + 1}")
+                return response
+                
+            except asyncio.TimeoutError:
+                error_msg = f"Advanced mode LLM call timed out after {timeout_seconds}s"
+                last_error = Exception(error_msg)
+                logger.warning(f"{error_msg} (attempt {attempt + 1}/{max_retries})")
+                
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    logger.error(f"Advanced mode failed after {max_retries} attempts due to timeout")
+                    raise WorkflowError(
+                        "Advanced mode request timed out. The LLM service may be slow or unavailable. Please try again.",
+                        error_code="ADVANCED_MODE_TIMEOUT"
+                    )
+                    
+            except Exception as e:
+                error_msg = f"Advanced mode LLM call failed: {str(e)}"
+                last_error = e
+                logger.warning(f"{error_msg} (attempt {attempt + 1}/{max_retries})")
+                
+                # Check if error is retryable
+                is_retryable = is_retryable_error(e)
+                
+                if is_retryable and attempt < max_retries - 1:
+                    logger.info(f"Retrying advanced mode call in {retry_delay}s...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    if not is_retryable:
+                        logger.error(f"Advanced mode failed with non-retryable error: {error_msg}")
+                    else:
+                        logger.error(f"Advanced mode failed after {max_retries} attempts: {error_msg}")
+                    
+                    # Provide user-friendly error message
+                    if "disconnected" in str(e).lower() or "connection" in str(e).lower():
+                        raise WorkflowError(
+                            "Connection to the AI service was lost. Please check your internet connection and API key, then try again.",
+                            error_code="ADVANCED_MODE_CONNECTION_ERROR"
+                        )
+                    elif "timeout" in str(e).lower():
+                        raise WorkflowError(
+                            "The AI service took too long to respond. Please try again with a shorter prompt or try again later.",
+                            error_code="ADVANCED_MODE_TIMEOUT"
+                        )
+                    else:
+                        raise WorkflowError(
+                            f"Advanced mode failed: {str(e)}. Please try again or contact support if the issue persists.",
+                            error_code="ADVANCED_MODE_ERROR"
+                        )
+        
+        # Should not reach here, but just in case
+        if last_error:
+            raise WorkflowError(
+                f"Advanced mode failed after all retries: {str(last_error)}",
+                error_code="ADVANCED_MODE_MAX_RETRIES_EXCEEDED"
+            )
+        else:
+            raise WorkflowError(
+                "Advanced mode failed for unknown reason",
+                error_code="ADVANCED_MODE_UNKNOWN_ERROR"
+            )
 
     async def process_prompt_with_memory(self, prompt: str, user_id: str,
                                        prompt_type: str = "auto", return_comparison: bool = True,

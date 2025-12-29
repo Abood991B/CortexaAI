@@ -2,17 +2,6 @@
   "software_engineering": {
     "description": "Learned domain: software_engineering",
     "keywords": [
-      "throw boxes",
-      "VR development",
-      "XR Interaction Toolkit",
-      "game development",
-      "C# scripting",
-      "physics interactions",
-      "mobile application",
-      "Android",
-      "iOS",
-      "social networking platform",
-      "user interaction",
       "financial news",
       "pipeline",
       "python",
@@ -21,16 +10,24 @@
       "coding files",
       "workspace repo",
       "GitHub",
-      "GTA 5"
+      "GTA 5",
+      "report",
+      "implementation",
+      "analysis",
+      "update",
+      "repository",
+      "software documentation",
+      "code analysis",
+      "software architecture",
+      "discrepancy analysis",
+      "technical debt",
+      "software"
     ],
-    "usage_count": 170,
+    "usage_count": 173,
     "quality_scores": [
       0.95,
       0.93,
       0.95,
-      0.95,
-      0.93,
-      0.95,
       0.93,
       0.95,
       0.95,
@@ -74,24 +71,27 @@
       0.93,
       0.93,
       0.95,
-      0.95
+      0.95,
+      0.96,
+      0.95,
+      0.96
     ],
-    "avg_quality_score": 0.9444000000000004,
-    "last_used": "2025-09-12T10:40:14.136982",
+    "avg_quality_score": 0.9452000000000004,
+    "last_used": "2025-12-29T23:02:51.963595",
     "created_from_workflow": "workflow_1756974410",
     "learning_metadata": {
       "first_seen": "2025-09-04T16:27:32.090612",
       "improvement_patterns": [
-        "Specified a cross-platform framework (React Native) and suggested alternatives, including versioning implicitly by referring to 'latest stable version'.",
-        "Defined a clear persona: 'expert Python developer specializing in data engineering and financial technology'.",
-        "Structured the prompt with clear headings: 'Task', 'Requirements', 'Constraints', 'Output Format', 'Example Input', and 'Expected Output'.",
-        "Specified Python version (3.9+).",
-        "Defined a clear and specific persona: 'expert Software Engineer specializing in codebase hygiene, optimization, and refactoring'.",
-        "Structured the prompt with distinct sections: 'Task', 'Requirements', 'Constraints', and 'Output Format'.",
-        "Elaborated on each type of issue (duplicates, unused methods, etc.) with more precise definitions.",
-        "Transformed a vague request into a specific, actionable task for an expert persona.",
-        "Clearly defined the scope: architectural blueprint and strategic plan, not full code generation.",
-        "Explicitly listed core pillars of inspiration from GTA 5 to guide the design."
+        "Explicitly listed core pillars of inspiration from GTA 5 to guide the design.",
+        "Added a clear persona (expert Python developer/architect).",
+        "Structured the prompt into distinct sections (Task, Requirements, Constraints, Output Format).",
+        "Specified the expected input types and formats (text file for report, Git repository link for code).",
+        "Added persona and tone instructions for more consistent output.",
+        "Expanded the analysis scope with more specific technical details and best practices.",
+        "Clarified constraints and prioritization criteria.",
+        "Defined a clear persona (Senior Software Architect) to guide the model's reasoning.",
+        "Specified precise input formats (text file for report, zip file for repository).",
+        "Detailed specific analysis requirements covering architecture, APIs, database, implementation, configuration, and error handling."
       ],
       "common_prompt_types": [
         "raw",
@@ -372,21 +372,32 @@
     "keywords": [
       "logo design",
       "company",
-      "nantis"
+      "nantis",
+      "financial report",
+      "investment",
+      "analysis"
     ],
-    "usage_count": 1,
+    "usage_count": 3,
     "quality_scores": [
-      0.93
+      0.93,
+      0.95,
+      0.96
     ],
-    "avg_quality_score": 0.93,
-    "last_used": "2025-09-09T16:33:20.310205",
+    "avg_quality_score": 0.9466666666666667,
+    "last_used": "2025-12-29T23:31:50.186635",
     "created_from_workflow": "workflow_1757406786",
     "learning_metadata": {
       "first_seen": "2025-09-09T16:33:20.310205",
       "improvement_patterns": [
         "Defined a specific persona (Senior Brand Identity Designer) with relevant expertise.",
         "Established a clear 'Goal' for the logo design task.",
-        "Added a comprehensive 'Context' section requiring specific details about Nantis's niche, values, target audience, and desired brand image."
+        "Added a comprehensive 'Context' section requiring specific details about Nantis's niche, values, target audience, and desired brand image.",
+        "Added a clear goal statement defining the desired outcome.",
+        "Provided detailed context about the company, industry, and market conditions.",
+        "Specified key financial metrics and ratios to analyze.",
+        "Added a clear goal and defined the investor profile (long-term, moderate risk).",
+        "Provided specific financial metrics to analyze and benchmark values.",
+        "Included qualitative considerations and risk assessment requirements."
       ],
       "common_prompt_types": [
         "raw"
