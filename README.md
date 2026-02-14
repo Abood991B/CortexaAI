@@ -12,7 +12,7 @@
   <a href="https://reactjs.org/"><img src="https://img.shields.io/badge/React-18.2+-61DAFB.svg?logo=react&logoColor=white" alt="React 18+"/></a>
   <a href="https://langchain-ai.github.io/langgraph/"><img src="https://img.shields.io/badge/LangGraph-0.6+-purple.svg" alt="LangGraph"/></a>
   <img src="https://img.shields.io/badge/LLM_Providers-6+-orange.svg" alt="6+ LLM Providers"/>
-  <img src="https://img.shields.io/badge/API_Routes-83-brightgreen.svg" alt="83 API Routes"/>
+  <img src="https://img.shields.io/badge/API_Routes-84-brightgreen.svg" alt="84 API Routes"/>
   <a href="#docker-deployment"><img src="https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white" alt="Docker Ready"/></a>
 </p>
 
@@ -61,7 +61,7 @@ CortexaAI is a **production-ready, enterprise-grade multi-agent prompt optimizat
 | 🧬 **Prompt Templates** | Template marketplace with sharing and versioning |
 | 🗄️ **SQLite Database** | Persistent storage for templates, API keys, and analytics |
 | 🐳 **Docker Ready** | One-command deployment with Docker Compose |
-| 📖 **83 API Routes** | Comprehensive REST API with interactive Swagger docs at `/docs` |
+| 📖 **84 API Routes** | Comprehensive REST API with interactive Swagger docs at `/docs` |
 
 ---
 
@@ -72,7 +72,7 @@ CortexaAI is a **production-ready, enterprise-grade multi-agent prompt optimizat
 │                     React Frontend (Vite + Tailwind)           │
 │  Chat Interface │ Analytics Dashboard │ Provider Management    │
 └─────────────────────────────┬──────────────────────────────────┘
-                              │ REST API (87 routes)
+                              │ REST API (84 routes)
 ┌─────────────────────────────▼──────────────────────────────────┐
 │                     FastAPI Backend                             │
 │  ┌──────────────────────────────────────────────────────────┐  │
@@ -362,8 +362,10 @@ CortexaAI/
 │
 ├── .github/workflows/ci.yml     # CI/CD pipeline
 ├── Dockerfile                    # Multi-stage production build
+├── Dockerfile.railway            # Railway-optimized Docker build
 ├── docker-compose.yml            # Docker Compose config
-├── render.yaml                   # Render.com deployment
+├── railway.json                  # Railway deployment configuration
+├── fly.toml                      # Fly.io deployment configuration
 ├── langgraph.json                # LangGraph Studio config
 ├── pyproject.toml                # Project metadata & tool config
 ├── requirements.txt              # Python dependencies
@@ -371,7 +373,6 @@ CortexaAI/
 ├── ARCHITECTURE.md               # System architecture documentation
 ├── CHANGELOG.md                  # Version history
 ├── CONTRIBUTING.md               # Contribution guidelines
-├── DEPLOYMENT.md                 # Render.com deployment guide
 ├── PREFLIGHT_CHECKLIST.md        # Pre-deployment verification
 └── LICENSE                       # MIT License
 ```
@@ -389,7 +390,7 @@ CortexaAI/
 | **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, Radix UI |
 | **Data Layer** | React Query, Recharts, Framer Motion |
 | **Infrastructure** | Docker, GitHub Actions CI/CD |
-| **Deployment** | Render.com (recommended), Docker Compose |
+| **Deployment** | Railway (recommended), Docker Compose, Fly.io |
 | **Quality** | Pytest, Ruff, mypy, Bandit |
 
 ---
