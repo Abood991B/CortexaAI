@@ -18,19 +18,27 @@ load_dotenv()
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    # API Keys
+    # API Keys - Multiple LLM Providers
     openai_api_key: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
     anthropic_api_key: Optional[str] = Field(default=None, env="ANTHROPIC_API_KEY")
     google_api_key: Optional[str] = Field(default=None, env="GOOGLE_API_KEY")
+    groq_api_key: Optional[str] = Field(default=None, env="GROQ_API_KEY")
+    deepseek_api_key: Optional[str] = Field(default=None, env="DEEPSEEK_API_KEY")
+    openrouter_api_key: Optional[str] = Field(default=None, env="OPENROUTER_API_KEY")
 
     # LangSmith Configuration
     langsmith_api_key: Optional[str] = Field(default=None, env="LANGSMITH_API_KEY")
-    langsmith_project: str = Field(default="prompt-engineering-system", env="LANGSMITH_PROJECT")
+    langsmith_project: str = Field(default="cortexaai", env="LANGSMITH_PROJECT")
     langsmith_endpoint: str = Field(default="https://api.smith.langchain.com", env="LANGSMITH_ENDPOINT")
 
     # Model Configuration
     default_model_provider: str = Field(default="google", env="DEFAULT_MODEL_PROVIDER")
-    default_model_name: str = Field(default="gemini-2.5-flash-lite", env="DEFAULT_MODEL_NAME")
+    default_model_name: str = Field(default="gemma-3-27b-it", env="DEFAULT_MODEL_NAME")
+
+    # Prompt Optimization Engine
+    enable_ab_testing: bool = Field(default=True, env="ENABLE_AB_TESTING")
+    enable_prompt_versioning: bool = Field(default=True, env="ENABLE_PROMPT_VERSIONING")
+    optimization_strategy: str = Field(default="iterative", env="OPTIMIZATION_STRATEGY")
 
     # System Configuration
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
@@ -65,23 +73,39 @@ logger = get_logger(__name__)
 
 
 def get_model_config(provider: str = None, model_name: str = None):
-    """Get model configuration for the specified provider."""
+    """Get model configuration for the specified provider.
+    
+    Supports: google, openai, anthropic, groq, deepseek, openrouter.
+    Falls back to google if provider is unknown.
+    """
     provider = provider or settings.default_model_provider
     model_name = model_name or settings.default_model_name
 
     configs = {
         "openai": {
-            "model_name": model_name if provider == "openai" else "gpt-4",
+            "model_name": model_name if provider == "openai" else "gpt-4o-mini",
             "api_key": settings.openai_api_key,
         },
         "anthropic": {
-            "model_name": model_name if provider == "anthropic" else "claude-3-sonnet-20240229",
+            "model_name": model_name if provider == "anthropic" else "claude-3-haiku-20240307",
             "api_key": settings.anthropic_api_key,
         },
         "google": {
-            "model_name": model_name if provider == "google" else "gemini-2.0-flash",
+            "model_name": model_name if provider == "google" else "gemma-3-27b-it",
             "api_key": settings.google_api_key,
-        }
+        },
+        "groq": {
+            "model_name": model_name if provider == "groq" else "llama-3.3-70b-versatile",
+            "api_key": settings.groq_api_key,
+        },
+        "deepseek": {
+            "model_name": model_name if provider == "deepseek" else "deepseek-chat",
+            "api_key": settings.deepseek_api_key,
+        },
+        "openrouter": {
+            "model_name": model_name if provider == "openrouter" else "google/gemini-2.0-flash-exp:free",
+            "api_key": settings.openrouter_api_key,
+        },
     }
 
     return configs.get(provider, configs["google"])
@@ -283,56 +307,93 @@ def generate_evaluation_cache_key(original_prompt: str, improved_prompt: str, do
 
 # Performance and Caching Configuration
 class CacheManager:
-    """Advanced cache manager with multiple storage backends and strategies."""
+    """Advanced cache manager with in-memory LRU and optional Redis backend."""
 
-    def __init__(self, default_ttl: int = 3600, max_size: int = 1000):
+    def __init__(self, default_ttl: int = 3600, max_size: int = 1000, redis_url: Optional[str] = None):
         """
         Initialize the cache manager.
 
         Args:
             default_ttl: Default time-to-live in seconds
-            max_size: Maximum cache size
+            max_size: Maximum cache size (in-memory)
+            redis_url: Optional Redis URL (e.g. ``redis://localhost:6379/0``)
         """
         self.default_ttl = default_ttl
         self.max_size = max_size
-        self._cache = {}
-        self._access_times = {}
+        self._cache: Dict[str, Any] = {}
+        self._access_times: Dict[str, float] = {}
         self._hit_count = 0
         self._miss_count = 0
 
+        # Optional Redis backend
+        self._redis = None
+        self._redis_url = redis_url
+        if redis_url:
+            try:
+                import redis as _redis_lib
+                self._redis = _redis_lib.from_url(redis_url, decode_responses=True)
+                self._redis.ping()
+            except Exception:
+                self._redis = None  # Fall back to in-memory only
+
+    # ── Public API ───────────────────────────────────────────────────────
+
     def get(self, key: str) -> Any:
-        """Get value from cache."""
+        """Get value from cache (memory first, then Redis)."""
+        # In-memory check
         if key in self._cache:
-            # Check if expired
             if self._is_expired(key):
                 self._delete(key)
                 self._miss_count += 1
                 return None
-
             self._access_times[key] = time.time()
             self._hit_count += 1
             return self._cache[key]["value"]
+
+        # Redis fallback
+        if self._redis:
+            try:
+                raw = self._redis.get(f"cxa:{key}")
+                if raw is not None:
+                    import json as _json
+                    value = _json.loads(raw)
+                    # Promote to in-memory cache
+                    self.set(key, value, self.default_ttl)
+                    self._hit_count += 1
+                    return value
+            except Exception:
+                pass
 
         self._miss_count += 1
         return None
 
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        """Set value in cache with optional TTL."""
+        """Set value in cache (memory + optional Redis)."""
         if len(self._cache) >= self.max_size:
             self._evict_oldest()
 
         ttl_value = ttl or self.default_ttl
         expiration = time.time() + ttl_value
 
-        self._cache[key] = {
-            "value": value,
-            "expiration": expiration
-        }
+        self._cache[key] = {"value": value, "expiration": expiration}
         self._access_times[key] = time.time()
 
+        # Mirror to Redis
+        if self._redis:
+            try:
+                import json as _json
+                self._redis.setex(f"cxa:{key}", ttl_value, _json.dumps(value, default=str))
+            except Exception:
+                pass
+
     def delete(self, key: str) -> None:
-        """Delete key from cache."""
+        """Delete key from cache (memory + Redis)."""
         self._delete(key)
+        if self._redis:
+            try:
+                self._redis.delete(f"cxa:{key}")
+            except Exception:
+                pass
 
     def clear(self) -> None:
         """Clear all cache entries."""
@@ -340,36 +401,43 @@ class CacheManager:
         self._access_times.clear()
         self._hit_count = 0
         self._miss_count = 0
+        if self._redis:
+            try:
+                # Only clear cxa-namespaced keys
+                for rkey in self._redis.scan_iter("cxa:*"):
+                    self._redis.delete(rkey)
+            except Exception:
+                pass
 
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
         total_requests = self._hit_count + self._miss_count
         hit_rate = self._hit_count / total_requests if total_requests > 0 else 0
 
-        return {
+        stats = {
             "total_entries": len(self._cache),
             "hit_count": self._hit_count,
             "miss_count": self._miss_count,
             "hit_rate": hit_rate,
-            "total_requests": total_requests
+            "total_requests": total_requests,
+            "backend": "redis+memory" if self._redis else "memory",
         }
+        return stats
+
+    # ── Internals ────────────────────────────────────────────────────────
 
     def _is_expired(self, key: str) -> bool:
-        """Check if cache entry is expired."""
         return time.time() > self._cache[key]["expiration"]
 
     def _delete(self, key: str) -> None:
-        """Delete key from cache."""
         if key in self._cache:
             del self._cache[key]
         if key in self._access_times:
             del self._access_times[key]
 
     def _evict_oldest(self) -> None:
-        """Evict the least recently used entry."""
         if not self._access_times:
             return
-
         oldest_key = min(self._access_times, key=self._access_times.get)
         self._delete(oldest_key)
 

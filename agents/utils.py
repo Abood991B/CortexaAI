@@ -1,6 +1,8 @@
 """Common utility functions for the Multi-Agent Prompt Engineering System.
 
 This module contains shared functionality to reduce code duplication across agents.
+Utilities include JSON sanitisation, retryable-error detection, text similarity,
+keyword extraction, and dict helpers.
 """
 
 from typing import List, Dict, Any
@@ -16,27 +18,38 @@ logger = get_logger(__name__)
 def is_retryable_error(error: Exception) -> bool:
     """Determine if an error is retryable based on its characteristics.
     
-    This function is used by multiple agents to determine if they should
-    retry after encountering an error.
+    Checks the exception message (and, where available, HTTP status codes)
+    against a list of known transient-failure patterns.
     
     Args:
         error: The exception to check
         
     Returns:
-        bool: True if the error is retryable, False otherwise
+        True if the error is likely transient and worth retrying.
     """
     if not error:
         return False
         
     error_str = str(error).lower()
     retryable_indicators = [
-        "rate limit", "timeout", "connection", "network",
-        "temporary", "server error", "502", "503", "504",
-        "internal server error", "service unavailable"
+        "rate limit", "rate_limit", "429",
+        "timeout", "timed out", "deadline exceeded",
+        "connection", "connect", "network",
+        "temporary", "transient",
+        "server error", "internal server error",
+        "502", "503", "504",
+        "service unavailable", "bad gateway",
+        "resource exhausted", "overloaded",
     ]
     
-    # Check if any retryable indicator is in the error message
     is_retryable = any(indicator in error_str for indicator in retryable_indicators)
+
+    # Also check for HTTP status code attributes (e.g. httpx.HTTPStatusError)
+    status_code = getattr(error, "status_code", None) or getattr(
+        getattr(error, "response", None), "status_code", None
+    )
+    if status_code and status_code in (429, 500, 502, 503, 504):
+        is_retryable = True
     
     logger.debug(f"Error retryability check: {is_retryable} for error: {error_str[:100]}")
     return is_retryable
@@ -45,17 +58,18 @@ def is_retryable_error(error: Exception) -> bool:
 def sanitize_json_response(raw_output: Any) -> str:
     """Sanitize raw LLM output to extract clean JSON.
     
-    Handles cases where JSON is wrapped in markdown code fences or
-    contains other formatting issues.
+    Handles common LLM quirks:
+    - JSON wrapped in markdown code fences (```json ... ```)
+    - Leading/trailing prose around a JSON object
+    - Escaped single quotes
+    - Trailing commas before closing braces/brackets (a frequent LLM error)
     
     Args:
-        raw_output: Raw output from LLM
+        raw_output: Raw output from LLM (dict, BaseMessage, or str)
         
     Returns:
-        str: Clean JSON string
+        A valid JSON string, or ``'{}'`` as an absolute fallback.
     """
-    
-
     try:
         # If the output is already a dict, dump it to a string
         if isinstance(raw_output, dict):
@@ -67,21 +81,23 @@ def sanitize_json_response(raw_output: Any) -> str:
         else:
             content = str(raw_output)
         
-        # Use regex to find content within ```json ... ```
-        match = re.search(r"```json\s*([\s\S]*?)\s*```", content)
+        # Strip markdown fences (```json ... ``` or ``` ... ```)
+        match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", content)
         if match:
             clean_json = match.group(1).strip()
         else:
-            # Fallback: find JSON object boundaries
+            # Fallback: find outermost JSON object boundaries
             start_idx = content.find('{')
             end_idx = content.rfind('}')
-            if start_idx != -1 and end_idx != -1:
-                clean_json = content[start_idx:end_idx+1].strip()
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                clean_json = content[start_idx:end_idx + 1].strip()
             else:
                 clean_json = content
         
         # Fix common JSON errors from LLMs
         clean_json = clean_json.replace("\\'", "'")
+        # Remove trailing commas  (e.g. `,"key": "val",}`)
+        clean_json = re.sub(r",\s*([}\]])", r"\1", clean_json)
         
         # Validate JSON
         json.loads(clean_json)

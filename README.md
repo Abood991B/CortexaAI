@@ -1,250 +1,382 @@
-# Cortexa
+<p align="center">
+  <img src="frontend-react/public/Cortexa Logo.png" alt="CortexaAI Logo" width="180"/>
+</p>
 
-<div align="center">
-  <img src="frontend-react/public/Cortexa Logo.png" alt="Cortexa Logo" width="200"/>
-  
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-  [![FastAPI](https://img.shields.io/badge/FastAPI-0.116+-green.svg)](https://fastapi.tiangolo.com/)
-  [![React](https://img.shields.io/badge/React-18.2+-61DAFB.svg)](https://reactjs.org/)
-  
-  **An Advanced Multi-Agent Prompt Engineering System**
-</div>
+<h1 align="center">CortexaAI</h1>
+<p align="center"><strong>Production-Ready Multi-Agent Prompt Engineering Platform — V3.0</strong></p>
 
-## Description
+<p align="center">
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"/></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+"/></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-0.116+-009688.svg?logo=fastapi&logoColor=white" alt="FastAPI"/></a>
+  <a href="https://reactjs.org/"><img src="https://img.shields.io/badge/React-18.2+-61DAFB.svg?logo=react&logoColor=white" alt="React 18+"/></a>
+  <a href="https://langchain-ai.github.io/langgraph/"><img src="https://img.shields.io/badge/LangGraph-0.6+-purple.svg" alt="LangGraph"/></a>
+  <img src="https://img.shields.io/badge/LLM_Providers-6+-orange.svg" alt="6+ LLM Providers"/>
+  <img src="https://img.shields.io/badge/API_Routes-87-brightgreen.svg" alt="87 API Routes"/>
+  <a href="#docker-deployment"><img src="https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white" alt="Docker Ready"/></a>
+</p>
 
-Cortexa is a cutting-edge, production-ready multi-agent prompt engineering system that leverages the power of AI to automatically optimize, enhance, and evaluate prompts across various domains. Built with a sophisticated orchestration framework, Cortexa employs specialized AI agents that work collaboratively to transform raw prompts into highly effective, domain-specific optimized versions.
+<p align="center">
+  Transform raw prompts into optimized, production-grade prompts using AI agents that classify, enhance, evaluate, and A/B test — automatically.
+</p>
 
-### What Problem Does Cortexa Solve?
+---
 
-In the era of Large Language Models (LLMs), the quality of prompts directly impacts the quality of AI-generated responses. Cortexa addresses the challenge of prompt engineering by:
+## What is CortexaAI?
 
-- **Automating prompt optimization** - No more manual trial and error
-- **Domain-specific enhancement** - Tailored improvements for different fields
-- **Quality assurance** - Built-in evaluation and scoring mechanisms
-- **Consistency** - Standardized prompt improvement across teams
-- **Memory-enhanced processing** - Context-aware responses using conversation history
+CortexaAI is a **production-ready, multi-agent prompt optimization platform** that takes any prompt and automatically transforms it into a highly effective, domain-specific prompt through a pipeline of specialized AI agents.
 
-### Why Cortexa?
+**The Problem:** Writing effective prompts for LLMs is time-consuming, inconsistent, and requires expertise. A poorly written prompt can lead to vague, incorrect, or unhelpful AI responses.
 
-- **Save Time**: Reduce prompt engineering time from hours to seconds
-- **Improve Quality**: Get better AI responses with optimized prompts
-- **Scale Efficiently**: Handle multiple prompt optimization requests simultaneously
-- **Learn Continuously**: System improves through memory and feedback loops
+**The Solution:** CortexaAI automates prompt engineering with a multi-agent system that:
 
-## Features
+1. **Classifies** the prompt domain (software engineering, data science, education, etc.)
+2. **Routes** to a domain-specific expert agent
+3. **Optimizes** the prompt with best practices for that domain
+4. **Evaluates** the result against 6 quality criteria
+5. **Iterates** until the quality threshold is met
+6. **Tracks** versions and runs A/B tests between variants
 
-### Core Capabilities
-- **Multi-Agent Architecture** - Specialized agents for classification, improvement, and evaluation
-- **Domain Classification** - Automatic detection of prompt domains (Software Engineering, Data Science, Education, Business Strategy, etc.)
-- **Quality Scoring** - Comprehensive evaluation metrics for prompt effectiveness
-- **Iterative Refinement** - Multiple improvement cycles until quality threshold is met
-- **Memory System** - Context retention across conversations for personalized responses
-- **Async Processing** - Non-blocking workflow execution with background task management
-- **LangGraph Integration** - Advanced workflow orchestration using LangGraph
-- **Performance Monitoring** - Real-time metrics and workflow statistics
-- **Security Features** - Input sanitization, PII detection, and content filtering
-- **Modern React UI** - Beautiful, responsive frontend with real-time updates
+> **Result:** Raw prompts become structured, detailed, actionable prompts that consistently score 90%+ on quality metrics.
 
-### Advanced Features
-- **Caching System** - Intelligent caching for improved performance
-- **Circuit Breakers** - Fault tolerance and graceful degradation
-- **Dead Letter Queue** - Failed request handling and retry mechanisms
-- **Rate Limiting** - API protection and resource management
-- **Workflow Cancellation** - Grace period for cancelling running workflows
-- **Batch Processing** - Handle multiple prompts efficiently
-- **Export Capabilities** - Export optimized prompts and analytics
-- **API Documentation** - Interactive API documentation with FastAPI
+---
 
-## Installation
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| 🧠 **Multi-Agent Architecture** | Classifier → Expert → Evaluator pipeline with LangGraph orchestration |
+| 🔄 **Iterative Optimization** | Automatic refinement loops until quality threshold is met |
+| 📊 **A/B Testing** | Compare prompt variants with statistical confidence scoring |
+| 📝 **Version Control** | Full history tracking with rollback for every prompt |
+| 🤖 **6+ LLM Providers** | Google Gemini, OpenAI, Anthropic, Groq, DeepSeek, OpenRouter |
+| 🔀 **Smart Fallback** | Automatic provider routing when a model is unavailable |
+| 💬 **Chat Interface** | Conversational UI with session management and memory |
+| 🛡️ **Security** | PII detection, injection prevention, API key auth, rate limiting |
+| ⚡ **Performance** | Caching, circuit breakers, dead letter queues, streaming |
+| 🔌 **Plugin System** | Extensible plugin architecture for custom processors |
+| 📈 **Analytics Dashboard** | Real-time metrics, domain distribution, optimization trends |
+| 🌐 **Webhook System** | Event-driven notifications for workflow completion |
+| 📦 **Batch Processing** | Process multiple prompts concurrently with progress tracking |
+| 🧬 **Prompt Templates** | Template marketplace with sharing and versioning |
+| 🗄️ **SQLite Database** | Persistent storage for templates, API keys, and analytics |
+| 🐳 **Docker Ready** | One-command deployment with Docker Compose |
+| 📖 **87 API Routes** | Comprehensive REST API with interactive Swagger docs at `/docs` |
+
+---
+
+## Architecture
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                     React Frontend (Vite + Tailwind)           │
+│  Chat Interface │ Analytics Dashboard │ Provider Management    │
+└─────────────────────────────┬──────────────────────────────────┘
+                              │ REST API (87 routes)
+┌─────────────────────────────▼──────────────────────────────────┐
+│                     FastAPI Backend                             │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │              LangGraph Workflow Orchestrator              │  │
+│  │                                                          │  │
+│  │   ┌──────────┐   ┌──────────┐   ┌──────────────────┐   │  │
+│  │   │Classifier│──▶│  Expert  │──▶│    Evaluator     │   │  │
+│  │   │  Agent   │   │  Agent   │   │     Agent        │   │  │
+│  │   └──────────┘   └──────────┘   └────────┬─────────┘   │  │
+│  │                                    ▼ Passes threshold?  │  │
+│  │                              Yes ──┘    No ──▶ Re-loop  │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                │
+│  ┌───────────────┐ ┌────────────────┐ ┌────────────────────┐  │
+│  │ Optimization  │ │  LLM Provider  │ │    Security &      │  │
+│  │ Engine (A/B,  │ │  Manager (6+   │ │    Caching Layer   │  │
+│  │  Versioning)  │ │  providers)    │ │                    │  │
+│  └───────────────┘ └────────────────┘ └────────────────────┘  │
+│                                                                │
+│  ┌───────────────┐ ┌────────────────┐ ┌────────────────────┐  │
+│  │ Plugin System │ │  Batch Engine  │ │  Template Market   │  │
+│  └───────────────┘ └────────────────┘ └────────────────────┘  │
+└────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Quick Start
 
 ### Prerequisites
-- Python 3.8 or higher
-- Node.js 16+ and npm (for frontend)
-- Git
 
-### Step 1: Clone the Repository
+- Python 3.10+
+- Node.js 18+ (for frontend)
+- At least one LLM API key (Google Gemini recommended — [free tier](https://aistudio.google.com/))
+
+### 1. Clone & Setup
+
 ```bash
-git clone https://github.com/yourusername/cortexa.git
-cd cortexa
-```
+git clone https://github.com/Abood991B/CortexaAI.git
+cd CortexaAI
 
-### Step 2: Set Up Python Backend
-
-#### Create Virtual Environment
-```bash
-# Windows
+# Create Python virtual environment
 python -m venv venv
-venv\Scripts\activate
+source venv/bin/activate   # Linux/Mac
+venv\Scripts\activate      # Windows
 
-# Linux/Mac
-python3 -m venv venv
-source venv/bin/activate
-```
-
-#### Install Python Dependencies
-```bash
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### Step 3: Configure Environment Variables
+### 2. Configure API Keys
+
 ```bash
-# Copy the example environment file
 cp .env.example .env
-
-# Edit .env and add your API keys
-# Required: GOOGLE_API_KEY or OPENAI_API_KEY
-# Optional: LANGSMITH_API_KEY for tracing
+# Edit .env and add your API key(s)
+# Minimum: GOOGLE_API_KEY (free at aistudio.google.com)
 ```
 
-### Step 4: Set Up React Frontend
+### 3. Start the Backend
+
 ```bash
-# Navigate to frontend directory
-cd frontend-react
-
-# Install dependencies
-npm install
-
-# Return to root directory
-cd ..
-```
-
-## Usage
-
-### Starting the Application
-
-#### Run Both Backend and Frontend (Recommended)
-```bash
-# Terminal 1 - Start the backend server
 python src/main.py
+```
 
-# Terminal 2 - Start the frontend development server
+### 4. Start the Frontend
+
+```bash
 cd frontend-react
+npm install
 npm run dev
 ```
 
-The application will be available at:
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
+Open **http://localhost:5173** — start optimizing prompts!
 
+### Docker (Alternative)
 
-### CLI Usage (LangGraph Studio)
 ```bash
-# Run with LangGraph Studio for visual workflow debugging
-python tools/run_langgraph_studio.py
-
-# Performance benchmarking
-python tools/performance_benchmark.py
+cp .env.example .env
+docker compose up --build
 ```
 
-## Technologies Used
+---
 
-### Backend
-- **FastAPI** - Modern, fast web framework for building APIs
-- **LangChain** - Framework for developing LLM applications
-- **LangGraph** - Workflow orchestration and state management
-- **Pydantic** - Data validation using Python type annotations
-- **Google Generative AI** - Primary LLM provider (Gemini models)
-- **OpenAI** - Alternative LLM provider support
-- **SQLite** - Lightweight database for memory storage
-- **Uvicorn** - Lightning-fast ASGI server
-- **Python-dotenv** - Environment variable management
+## Supported LLM Providers
 
-### Frontend
-- **React 18** - Modern UI library
-- **TypeScript** - Type-safe JavaScript
-- **Vite** - Next-generation frontend tooling
-- **Tailwind CSS** - Utility-first CSS framework
-- **Radix UI** - Unstyled, accessible UI components
-- **React Query** - Powerful data synchronization
-- **Framer Motion** - Production-ready animation library
-- **Recharts** - Composable charting library
-- **React Router** - Declarative routing
+CortexaAI supports **6 providers** out of the box, with a modular system for adding more:
 
-### DevOps & Tools
-- **Docker** - Containerization support
-- **LangSmith** - LLM application monitoring and debugging
-- **Pytest** - Testing framework
-- **ESLint** - Code linting
-- **Git** - Version control
+| Provider | Free Tier | Models | Setup |
+|----------|-----------|--------|-------|
+| **Google Gemma / Gemini** ⭐ | ✅ | gemma-3-27b-it (default), gemma-3-12b-it, gemini-2.0-flash | [aistudio.google.com](https://aistudio.google.com/) |
+| **Groq** | ✅ | llama-3.3-70b, mixtral-8x7b | [console.groq.com](https://console.groq.com/) |
+| **OpenRouter** | ✅ | 100+ models (free options) | [openrouter.ai](https://openrouter.ai/) |
+| **DeepSeek** | Affordable | deepseek-chat, deepseek-reasoner | [platform.deepseek.com](https://platform.deepseek.com/) |
+| **OpenAI** | Paid | gpt-4o-mini, gpt-4o | [platform.openai.com](https://platform.openai.com/) |
+| **Anthropic** | Paid | claude-3-haiku, claude-3-sonnet | [console.anthropic.com](https://console.anthropic.com/) |
+
+> **Smart Fallback:** If your primary provider fails, CortexaAI automatically routes to the next available provider — free tiers first.
+
+---
+
+## API Reference
+
+### Core Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/process-prompt` | Optimize a prompt through the agent pipeline |
+| `POST` | `/api/process-prompt-with-memory` | Optimize with conversation context |
+| `GET` | `/api/workflow-status/{id}` | Check workflow status |
+| `POST` | `/api/cancel-workflow/{id}` | Cancel a running workflow |
+
+### Analytics & Optimization
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/optimization/dashboard` | Full optimization dashboard data |
+| `GET` | `/api/optimization/analytics` | Performance metrics and trends |
+| `GET` | `/api/optimization/ab-tests` | A/B test history and statistics |
+| `GET` | `/api/optimization/versions` | Prompt version statistics |
+
+### v3.0 Feature Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/batch/submit` | Submit batch prompt processing jobs |
+| `GET` | `/api/templates` | Browse prompt template marketplace |
+| `POST` | `/api/webhooks` | Register webhook callbacks |
+| `GET` | `/api/plugins` | List installed plugins |
+| `POST` | `/api/auth/keys` | Manage API key authentication |
+| `GET` | `/api/streaming/{id}` | Stream workflow progress via SSE |
+
+### System
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/providers` | LLM provider status and availability |
+| `GET` | `/api/stats` | System statistics |
+| `GET` | `/api/domains` | Available prompt domains |
+| `GET` | `/health` | Health check with component status |
+| `GET` | `/metrics` | Prometheus-compatible metrics |
+| `GET` | `/docs` | Interactive API documentation (Swagger) |
+
+### Example Request
+
+```bash
+curl -X POST http://localhost:8000/api/process-prompt \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Write a Python function to sort data",
+    "prompt_type": "auto",
+    "use_langgraph": true,
+    "synchronous": true
+  }'
+```
+
+---
+
+## Project Structure
+
+```
+CortexaAI/
+├── src/                          # Application entry point
+│   ├── main.py                   #   FastAPI app, 87 routes, middleware
+│   └── workflow.py               #   LangGraph workflow orchestration
+│
+├── agents/                       # Multi-agent system
+│   ├── classifier.py             #   Domain classification (6 domains)
+│   ├── base_expert.py            #   Base expert + domain implementations
+│   ├── langgraph_expert.py       #   LangGraph-specific expert agent
+│   ├── evaluator.py              #   Quality evaluation (6 criteria)
+│   ├── coordinator.py            #   Workflow coordination
+│   ├── exceptions.py             #   Custom exception hierarchy
+│   ├── utils.py                  #   Shared agent utilities
+│   └── memory/                   #   RAG & conversation memory
+│       └── memory_manager.py
+│
+├── core/                         # Feature modules (v3.0)
+│   ├── optimization.py           #   A/B testing & prompt versioning
+│   ├── auth.py                   #   API key authentication
+│   ├── batch.py                  #   Batch prompt processing
+│   ├── complexity.py             #   Prompt complexity analysis
+│   ├── database.py               #   SQLite persistence layer
+│   ├── error_recovery.py         #   Circuit breakers & DLQ
+│   ├── finetuning.py             #   Fine-tuning dataset generation
+│   ├── language.py               #   Multi-language support
+│   ├── marketplace.py            #   Template marketplace
+│   ├── plugins.py                #   Plugin system
+│   ├── prompt_builder.py         #   Visual prompt builder
+│   ├── regression.py             #   Prompt regression testing
+│   ├── similarity.py             #   Prompt similarity search
+│   ├── streaming.py              #   SSE streaming support
+│   ├── templates.py              #   Template management
+│   └── webhooks.py               #   Webhook notifications
+│
+├── config/                       # Configuration
+│   ├── config.py                 #   Settings, security, caching
+│   └── llm_providers.py          #   Multi-LLM provider system
+│
+├── frontend-react/               # React + TypeScript + Tailwind CSS
+│   ├── src/
+│   │   ├── pages/                #   PromptProcessor, SystemHealth
+│   │   ├── components/           #   Reusable UI components
+│   │   ├── hooks/                #   React Query hooks
+│   │   └── api/                  #   API client
+│   └── package.json
+│
+├── tests/                        # Pytest test suite (10 files)
+│   ├── conftest.py               #   Shared fixtures & mocks
+│   ├── test_agents.py
+│   ├── test_classifier.py
+│   ├── test_features.py
+│   ├── test_llm_providers.py
+│   ├── test_main.py
+│   ├── test_optimization.py
+│   ├── test_system.py
+│   └── test_workflow.py
+│
+├── scripts/                      # Development utilities
+│   ├── performance_benchmark.py  #   System benchmark suite
+│   ├── langgraph_performance_benchmark.py
+│   └── run_langgraph_studio.py   #   LangGraph Studio launcher
+│
+├── docs/                         # Documentation
+│   ├── FEATURE_ANALYSIS.md       #   Feature analysis & roadmap
+│   └── PROMPT_SYSTEM_ENHANCEMENT.md
+│
+├── data/                         # Runtime data (gitignored)
+│   └── .gitkeep
+│
+├── .github/workflows/ci.yml     # CI/CD pipeline
+├── Dockerfile                    # Multi-stage production build
+├── docker-compose.yml            # Docker Compose config
+├── render.yaml                   # Render.com deployment
+├── langgraph.json                # LangGraph Studio config
+├── pyproject.toml                # Project metadata & tool config
+├── requirements.txt              # Python dependencies
+├── .env.example                  # Environment variable template
+├── ARCHITECTURE.md               # System architecture documentation
+├── CHANGELOG.md                  # Version history
+├── CONTRIBUTING.md               # Contribution guidelines
+├── DEPLOYMENT.md                 # Render.com deployment guide
+├── PREFLIGHT_CHECKLIST.md        # Pre-deployment verification
+└── LICENSE                       # MIT License
+```
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Backend** | Python 3.10+, FastAPI, Pydantic v2, Uvicorn |
+| **AI Framework** | LangChain, LangGraph, LangSmith |
+| **LLM Providers** | Google Gemini, OpenAI, Anthropic, Groq, DeepSeek, OpenRouter |
+| **Database** | SQLite with WAL mode |
+| **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, Radix UI |
+| **Data Layer** | React Query, Recharts, Framer Motion |
+| **Infrastructure** | Docker, GitHub Actions CI/CD |
+| **Deployment** | Render.com (recommended), Docker Compose |
+| **Quality** | Pytest, Ruff, mypy, Bandit |
+
+---
+
+## Deployment
+
+CortexaAI deploys to **[Render.com](https://render.com)** — free tier, Docker support, auto-deploy from GitHub.
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Abood991B/CortexaAI)
+
+| Platform | Guide | Config File |
+|----------|-------|-------------|
+| **Render.com** ⭐ | [DEPLOYMENT.md](DEPLOYMENT.md) | `render.yaml` |
+| **Docker** (any host) | See [Quick Start](#docker-alternative) | `docker-compose.yml` |
+
+> See [DEPLOYMENT.md](DEPLOYMENT.md) for the full step-by-step guide, environment variables, and rollback procedures.
+>
+> See [ARCHITECTURE.md](ARCHITECTURE.md) for system diagrams, component descriptions, and data flow.
+
+---
 
 ## Contributing
 
-We welcome contributions to Cortexa! Here's how you can help:
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-### Getting Started
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Make your changes
-4. Write or update tests as needed
-5. Ensure all tests pass (`pytest tests/`)
-6. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-7. Push to the branch (`git push origin feature/AmazingFeature`)
-8. Open a Pull Request
+```bash
+# Run tests
+pytest tests/ -v
 
-### Development Guidelines
-- Follow PEP 8 for Python code
-- Use ESLint configuration for TypeScript/JavaScript
-- Write meaningful commit messages
-- Add tests for new features
-- Update documentation as needed
-- Ensure backward compatibility
+# Lint
+ruff check .
 
-### Areas for Contribution
-- Bug fixes and issue resolution
-- New features and enhancements
-- Documentation improvements
-- Test coverage expansion
-- UI/UX improvements
-- Internationalization support
-- Performance optimizations
+# Type check
+mypy agents/ src/ config/ core/
+```
 
-### Code of Conduct
-Please note that this project is released with a Contributor Code of Conduct. By participating in this project, you agree to abide by its terms.
+---
 
 ## License
 
-This project is licensed under the MIT License - see below for details:
-
-```
-MIT License
-
-Copyright (c) 2024 Cortexa
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-## Contact
-
-### Project Maintainer
-- **GitHub**: [GitHub Profile](https://github.com/Abood991B)
-- **Email**: abdulrahman16baidaq@gmail.com
-- **LinkedIn**: [My LinkedIn](https://linkedin.com/in/abdulrahman-baidaq)
-
-### Project Links
-- **Repository**: [https://github.com/Abood991B/cortexa](https://github.com/Abood991B/cortexa)
-
-## Acknowledgments
-
-- Thanks to the LangChain team for the amazing framework
-- Google AI for providing powerful language models
-- The open-source community for continuous inspiration
+MIT License — see [LICENSE](LICENSE) for details.
 
 ---
+
+<p align="center">
+  <strong>Built by <a href="https://github.com/Abood991B">Abdulrahman Baidaq</a></strong><br/>
+  <a href="https://linkedin.com/in/abdulrahman-baidaq">LinkedIn</a> · <a href="mailto:abdulrahman16baidaq@gmail.com">Email</a>
+</p>

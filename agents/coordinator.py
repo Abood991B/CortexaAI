@@ -4,10 +4,10 @@ from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import json
 import asyncio
-from langchain_google_genai import ChatGoogleGenerativeAI
+from config.llm_providers import get_llm
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from pydantic.v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from agents.classifier import DomainClassifier
 from agents.base_expert import create_expert_agent, BaseExpertAgent
 from agents.evaluator import PromptEvaluator
@@ -43,7 +43,7 @@ class WorkflowCoordinator:
         self.evaluator = evaluator_instance
         self.expert_agents = {}  # Cache for created expert agents
         self.workflow_history = []  # Track workflow executions
-        self.llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0)
+        self.llm = get_llm(temperature=0)
 
         self._setup_langsmith()
     def _setup_langsmith(self):
@@ -178,54 +178,19 @@ class WorkflowCoordinator:
             return workflow_result
 
         except ClassificationError as ce:
-            logger.error(f"Classification error in workflow {workflow_id}: {ce}")
-            error_result = self._prepare_error_result(
-                workflow_id, prompt,
-                f"Domain classification failed: {ce.message}",
-                start_time, ce.error_code, ce.to_dict()
-            )
-            self._record_workflow(error_result)
-            return error_result
+            return self._handle_workflow_exception(ce, workflow_id, prompt, start_time)
 
         except ImprovementError as ie:
-            logger.error(f"Improvement error in workflow {workflow_id}: {ie}")
-            error_result = self._prepare_error_result(
-                workflow_id, prompt,
-                f"Prompt improvement failed: {ie.message}",
-                start_time, ie.error_code, ie.to_dict()
-            )
-            self._record_workflow(error_result)
-            return error_result
+            return self._handle_workflow_exception(ie, workflow_id, prompt, start_time)
 
         except EvaluationError as ee:
-            logger.error(f"Evaluation error in workflow {workflow_id}: {ee}")
-            error_result = self._prepare_error_result(
-                workflow_id, prompt,
-                f"Prompt evaluation failed: {ee.message}",
-                start_time, ee.error_code, ee.to_dict()
-            )
-            self._record_workflow(error_result)
-            return error_result
+            return self._handle_workflow_exception(ee, workflow_id, prompt, start_time)
 
         except AgenticSystemError as ase:
-            logger.error(f"System error in workflow {workflow_id}: {ase}")
-            error_result = self._prepare_error_result(
-                workflow_id, prompt,
-                f"Agentic system error: {ase.message}",
-                start_time, ase.error_code, ase.to_dict()
-            )
-            self._record_workflow(error_result)
-            return error_result
+            return self._handle_workflow_exception(ase, workflow_id, prompt, start_time)
 
         except Exception as e:
-            logger.error(f"Unexpected error in workflow {workflow_id}: {e}")
-            error_result = self._prepare_error_result(
-                workflow_id, prompt,
-                f"Unexpected error: {str(e)}",
-                start_time, "UNKNOWN_ERROR", {"cause": str(e)}
-            )
-            self._record_workflow(error_result)
-            return error_result
+            return self._handle_workflow_exception(e, workflow_id, prompt, start_time)
 
     async def handle_advanced_mode(self, prompt: str, chat_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
         """
@@ -239,27 +204,27 @@ class WorkflowCoordinator:
         parser = JsonOutputParser(pydantic_object=AdvancedModeOutput)
 
         prompt_template = ChatPromptTemplate.from_messages([
-            ("system", """You are a helpful AI assistant. Your task is to manage a conversational prompt engineering session.
-First, determine if you have enough information from the user's prompt and the chat history to create a detailed, effective, and improved prompt.
+            ("system", """You are a senior AI prompt-engineering assistant running an interactive
+refinement session.
 
-If you DO NOT have enough information, ask 3-5 critical and relevant clarifying questions to better understand the user's needs.
-If you DO have enough information, synthesize the user's original request and their answers into a new, comprehensive prompt.
+**Workflow:**
+1. Read the user's prompt and the full chat history.
+2. Decide whether you have enough information to write a production-ready prompt.
+   • If **not** → ask 3-5 targeted, non-redundant clarifying questions that will
+     fill the biggest information gaps (audience, constraints, output format,
+     success criteria, edge-cases).
+   • If **yes** → synthesise everything into a single, comprehensive, structured
+     prompt ready for immediate use.
 
-You must respond in a JSON format with two keys: 'status' and 'content'.
-- If you need more information, set 'status' to 'needs_more_info' and 'content' to the clarifying questions.
-- If you have enough information, set 'status' to 'ready_to_improve' and 'content' to the new, synthesized prompt.
+**Output (strict JSON, no markdown fences):**
+{{"status": "needs_more_info" | "ready_to_improve", "content": "<questions or synthesised prompt>"}}
 
 {format_instructions}"""),
             ("human", "Chat History:\n{chat_history}\n\nUser Prompt: {prompt}"),
         ])
 
         # Create LLM with timeout configuration
-        llm_with_timeout = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash-lite", 
-            temperature=0,
-            timeout=timeout_seconds,
-            max_retries=0  # We handle retries manually
-        )
+        llm_with_timeout = get_llm(temperature=0, timeout=timeout_seconds, max_retries=0)
         
         chain = prompt_template | llm_with_timeout | parser
 
@@ -495,54 +460,19 @@ You must respond in a JSON format with two keys: 'status' and 'content'.
             return workflow_result
 
         except ClassificationError as ce:
-            logger.error(f"Classification error in memory workflow {workflow_id}: {ce}")
-            error_result = self._prepare_error_result(
-                workflow_id, prompt,
-                f"Domain classification failed: {ce.message}",
-                start_time, ce.error_code, ce.to_dict()
-            )
-            self._record_workflow(error_result)
-            return error_result
+            return self._handle_workflow_exception(ce, workflow_id, prompt, start_time, "memory-workflow")
 
         except ImprovementError as ie:
-            logger.error(f"Improvement error in memory workflow {workflow_id}: {ie}")
-            error_result = self._prepare_error_result(
-                workflow_id, prompt,
-                f"Prompt improvement failed: {ie.message}",
-                start_time, ie.error_code, ie.to_dict()
-            )
-            self._record_workflow(error_result)
-            return error_result
+            return self._handle_workflow_exception(ie, workflow_id, prompt, start_time, "memory-workflow")
 
         except EvaluationError as ee:
-            logger.error(f"Evaluation error in memory workflow {workflow_id}: {ee}")
-            error_result = self._prepare_error_result(
-                workflow_id, prompt,
-                f"Prompt evaluation failed: {ee.message}",
-                start_time, ee.error_code, ee.to_dict()
-            )
-            self._record_workflow(error_result)
-            return error_result
+            return self._handle_workflow_exception(ee, workflow_id, prompt, start_time, "memory-workflow")
 
         except AgenticSystemError as ase:
-            logger.error(f"System error in memory workflow {workflow_id}: {ase}")
-            error_result = self._prepare_error_result(
-                workflow_id, prompt,
-                f"Agentic system error: {ase.message}",
-                start_time, ase.error_code, ase.to_dict()
-            )
-            self._record_workflow(error_result)
-            return error_result
+            return self._handle_workflow_exception(ase, workflow_id, prompt, start_time, "memory-workflow")
 
         except Exception as e:
-            logger.error(f"Unexpected error in memory workflow {workflow_id}: {e}")
-            error_result = self._prepare_error_result(
-                workflow_id, prompt,
-                f"Unexpected error: {str(e)}",
-                start_time, "UNKNOWN_ERROR", {"cause": str(e)}
-            )
-            self._record_workflow(error_result)
-            return error_result
+            return self._handle_workflow_exception(e, workflow_id, prompt, start_time, "memory-workflow")
 
 
     def _prepare_memory_final_result(self, workflow_id: str, user_id: str,
@@ -627,6 +557,31 @@ You must respond in a JSON format with two keys: 'status' and 'content'.
             }
 
         return result
+
+    def _handle_workflow_exception(
+        self, exc: Exception, workflow_id: str, prompt: str,
+        start_time: datetime, label: str = "workflow"
+    ) -> Dict[str, Any]:
+        """Centralised error handler for workflow exceptions.
+
+        Converts any exception into a structured error result, records it in
+        history, and returns the dict that callers can return directly.
+        """
+        if isinstance(exc, AgenticSystemError):
+            msg = f"{type(exc).__name__}: {exc.message}"
+            code = exc.error_code
+            details = exc.to_dict()
+        else:
+            msg = f"Unexpected error: {str(exc)}"
+            code = "UNKNOWN_ERROR"
+            details = {"cause": str(exc)}
+
+        logger.error(f"Error in {label} {workflow_id}: {msg}")
+        error_result = self._prepare_error_result(
+            workflow_id, prompt, msg, start_time, code, details
+        )
+        self._record_workflow(error_result)
+        return error_result
 
     def _get_or_create_expert_agent(self, domain: str, classification_result: Dict[str, Any]) -> BaseExpertAgent:
         """Get an existing expert agent or create a new one for the domain."""

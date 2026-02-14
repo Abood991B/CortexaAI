@@ -1,4 +1,24 @@
-"""LangGraph workflow implementation for the Multi-Agent Prompt Engineering System."""
+"""LangGraph workflow implementation for the Multi-Agent Prompt Engineering System.
+
+Architecture
+~~~~~~~~~~~~
+A 7-node StateGraph processes every prompt through a deterministic pipeline:
+
+    classify → create_expert → improve → evaluate → check_threshold
+        ↳ (loop) → improve → evaluate → check_threshold
+        ↳ finalize → END
+        ↳ error_handler → END
+
+Key capabilities:
+- **Cancellable nodes** – every node checks an ``asyncio.Event`` before running.
+- **Per-node timing** – wall-clock durations stored in ``node_timings``.
+- **Adaptive iteration** – the evaluator's plateau detector can short-circuit
+  the improve/evaluate loop when gains become marginal.
+- **Optimization pass** – an optional post-evaluation optimisation engine
+  refines the prompt if the score is below 0.95.
+- **Graceful degradation** – each node catches its own errors and returns a
+  best-effort fallback so the pipeline never hard-crashes.
+"""
 
 from typing import Dict, List, Optional, Any
 from typing_extensions import TypedDict
@@ -7,11 +27,13 @@ from langchain_core.runnables import RunnableConfig
 import logging
 import time
 import asyncio
+from datetime import datetime
 from functools import wraps
 
 from agents.classifier import classifier
 from agents.langgraph_expert import get_langgraph_expert
 from agents.evaluator import evaluator
+from core.optimization import optimization_engine
 from config.config import settings
 
 # Set up logging
@@ -41,6 +63,10 @@ class WorkflowState(TypedDict):
     iterations_used: int
     passes_threshold: bool
 
+    # Optimization engine integration
+    optimization_run: Optional[Dict[str, Any]]
+    optimization_enabled: bool
+
     # Final output
     final_prompt: Optional[str]
 
@@ -50,17 +76,32 @@ class WorkflowState(TypedDict):
     error_message: Optional[str]
     next_action: Optional[str]  # For conditional routing
     cancellation_event: Optional[asyncio.Event]
+    node_timings: Optional[Dict[str, float]]  # Per-node timing metrics
 
 
 def cancellable_node(node_func):
-    """Decorator to make a workflow node check for cancellation before running."""
+    """Decorator to make a workflow node check for cancellation before running and track timing."""
     @wraps(node_func)
     async def wrapper(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
         cancellation_event = state.get("cancellation_event")
         if cancellation_event and cancellation_event.is_set():
             logger.info(f"Cancellation detected in node '{node_func.__name__}'. Halting workflow.")
             return {"status": "cancelled"}
-        return await node_func(state, config)
+
+        node_start = time.time()
+        try:
+            result = await node_func(state, config)
+            elapsed = time.time() - node_start
+            # Track per-node timing
+            timings = dict(state.get("node_timings") or {})
+            timings[node_func.__name__] = round(elapsed, 3)
+            result["node_timings"] = timings
+            logger.info(f"Node '{node_func.__name__}' completed in {elapsed:.2f}s")
+            return result
+        except Exception as e:
+            elapsed = time.time() - node_start
+            logger.error(f"Node '{node_func.__name__}' failed after {elapsed:.2f}s: {e}")
+            raise
     return wrapper
 
 @cancellable_node
@@ -184,16 +225,27 @@ async def improve_prompt_node(state: WorkflowState, config: RunnableConfig) -> D
 
 @cancellable_node
 async def evaluate_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
-    """Node for prompt evaluation."""
+    """Node for prompt evaluation.
+    
+    Resolves the improved prompt from multiple possible keys produced by
+    different expert backends (``solution`` from LangGraphExpert,
+    ``improved_prompt`` from BaseExpertAgent).
+    """
     try:
         logger.info("Executing evaluation node")
 
         original_prompt = state["original_prompt"]
         improvement_result = state.get("improvement_result", {})
         
-        # Handle both string and dictionary for backward compatibility
+        # Resolve improved prompt – LangGraphExpert stores it under "solution",
+        # while BaseExpertAgent uses "improved_prompt".  Check both keys.
         if isinstance(improvement_result, dict):
-            improved_prompt = improvement_result.get("solution", original_prompt)
+            improved_prompt = (
+                improvement_result.get("improved_prompt")
+                or improvement_result.get("solution")
+                or state.get("improved_prompt")
+                or original_prompt
+            )
         else:
             improved_prompt = state.get("improved_prompt", original_prompt)
 
@@ -248,32 +300,54 @@ async def check_threshold_node(state: WorkflowState, config: RunnableConfig) -> 
     iterations_used = state.get("iterations_used", 0)
     status = state.get("status", "")
 
-    # Update the state to indicate the next action
+    # Return next_action update — never mutate state directly
     if status == "error":
-        state["next_action"] = "error"
         return {"next_action": "error"}
 
-    # If we pass the threshold or have used max iterations, end
     if passes_threshold or iterations_used >= settings.max_evaluation_iterations:
-        state["next_action"] = "end"
         return {"next_action": "end"}
 
-    # Otherwise, continue with another improvement iteration
-    state["next_action"] = "improve_again"
     return {"next_action": "improve_again"}
 
 
 @cancellable_node
 async def finalize_node(state: WorkflowState, config: RunnableConfig) -> Dict[str, Any]:
-    """Final node to prepare the final result."""
+    """Final node to prepare the final result with optional optimization pass."""
     final_prompt = state.get("final_prompt", state.get("original_prompt", ""))
     evaluation_result = state.get("evaluation_result", {})
     domain = state.get("domain", "unknown")
+    optimization_enabled = state.get("optimization_enabled", False)
+    optimization_run = None
+
+    # Run optimization engine if enabled and score can be improved
+    current_score = evaluation_result.get("overall_score", 0)
+    if optimization_enabled and current_score < 0.95:
+        try:
+            expert_agent = state.get("expert_agent")
+            if expert_agent:
+                optimization_run = await optimization_engine.optimize(
+                    original_prompt=state.get("original_prompt", ""),
+                    domain=domain,
+                    evaluator=evaluator,
+                    expert_agent=expert_agent,
+                    prompt_type=state.get("prompt_type", "raw"),
+                    max_iterations=2,  # Quick optimization pass
+                )
+                optimized_prompt = optimization_run.get("optimized_prompt", final_prompt)
+                if optimization_run.get("final_score", 0) > current_score:
+                    final_prompt = optimized_prompt
+                    logger.info(
+                        f"Optimization improved score: {current_score:.2f} → "
+                        f"{optimization_run['final_score']:.2f}"
+                    )
+        except Exception as e:
+            logger.warning(f"Optimization pass failed (non-critical): {e}")
 
     return {
         "final_prompt": final_prompt,
         "final_evaluation": evaluation_result,
         "final_domain": domain,
+        "optimization_run": optimization_run,
         "status": "workflow_completed"
     }
 
@@ -368,7 +442,8 @@ prompt_engineering_app = create_prompt_engineering_app()
 async def process_prompt_with_langgraph(
     prompt: str, 
     prompt_type: str = "auto", 
-    cancellation_event: Optional[asyncio.Event] = None
+    cancellation_event: Optional[asyncio.Event] = None,
+    enable_optimization: bool = True,
 ) -> Dict[str, Any]:
     """
     Process a prompt using the LangGraph workflow.
@@ -376,6 +451,8 @@ async def process_prompt_with_langgraph(
     Args:
         prompt: The input prompt to process
         prompt_type: Type of prompt ("auto", "raw", or "structured")
+        cancellation_event: Optional event to signal workflow cancellation
+        enable_optimization: Whether to run the optimization engine pass
 
     Returns:
         Dict containing the workflow results
@@ -387,8 +464,10 @@ async def process_prompt_with_langgraph(
             "prompt_type": prompt_type,
             "iterations_used": 0,
             "status": "started",
-            "workflow_id": f"lg_workflow_{int(__import__('time').time())}",
-            "cancellation_event": cancellation_event
+            "workflow_id": f"lg_workflow_{int(time.time())}",
+            "cancellation_event": cancellation_event,
+            "optimization_enabled": enable_optimization,
+            "node_timings": {},
         }
 
         # Configure the run
@@ -410,14 +489,14 @@ async def process_prompt_with_langgraph(
             return {
                 "workflow_id": initial_state.get("workflow_id"),
                 "status": "error",
-                "timestamp": __import__('datetime').datetime.now().isoformat(),
+                "timestamp": datetime.now().isoformat(),
                 "processing_time_seconds": time.time() - start_time,
                 "input": {
                     "original_prompt": prompt,
                     "prompt_type": prompt_type
                 },
                 "output": {
-                    "optimized_prompt": prompt,  # Return original prompt on error
+                    "optimized_prompt": prompt,
                     "domain": "unknown",
                     "quality_score": 0.0,
                     "iterations_used": 0,
@@ -440,10 +519,25 @@ async def process_prompt_with_langgraph(
         # Convert result to expected format
         processing_time = time.time() - start_time
 
+        # Build optimization info if available
+        optimization_info = {}
+        opt_run = result.get("optimization_run")
+        if opt_run:
+            optimization_info = {
+                "enabled": True,
+                "run_id": opt_run.get("run_id"),
+                "initial_score": opt_run.get("initial_score", 0),
+                "final_score": opt_run.get("final_score", 0),
+                "improvement_pct": opt_run.get("improvement_percentage", 0),
+                "iterations": opt_run.get("iterations", 0),
+            }
+        else:
+            optimization_info = {"enabled": enable_optimization, "run_id": None}
+
         return {
             "workflow_id": result.get("workflow_id"),
             "status": result.get("status"),
-            "timestamp": __import__('datetime').datetime.now().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "processing_time_seconds": processing_time,
             "input": {
                 "original_prompt": prompt,
@@ -461,6 +555,7 @@ async def process_prompt_with_langgraph(
                 "improvements": result.get("improvement_result", {}),
                 "evaluation": result.get("evaluation_result", {})
             },
+            "optimization": optimization_info,
             "comparison": {
                 "side_by_side": {
                     "original": prompt,
@@ -470,7 +565,8 @@ async def process_prompt_with_langgraph(
             },
             "metadata": {
                 "langsmith_enabled": bool(settings.langsmith_api_key),
-                "framework": "langgraph"
+                "framework": "langgraph",
+                "node_timings": result.get("node_timings", {}),
             }
         }
 
@@ -478,9 +574,9 @@ async def process_prompt_with_langgraph(
         logger.error(f"Error in LangGraph processing: {e}")
         # Return proper format expected by API
         return {
-            "workflow_id": f"lg_error_{int(__import__('time').time())}",
+            "workflow_id": f"lg_error_{int(time.time())}",
             "status": "error",
-            "timestamp": __import__('datetime').datetime.now().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "processing_time_seconds": 0.0,
             "input": {
                 "original_prompt": prompt,

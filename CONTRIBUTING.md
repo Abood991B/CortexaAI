@@ -1,6 +1,6 @@
-# Contributing to Cortexa
+# Contributing to CortexaAI
 
-Thank you for your interest in contributing to Cortexa! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to CortexaAI! This document provides guidelines and information for contributors.
 
 ## Table of Contents
 
@@ -30,18 +30,18 @@ This project adheres to a code of conduct that we expect all contributors to fol
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- Node.js 16 or higher
+- Python 3.10 or higher
+- Node.js 18 or higher
 - Git
-- API keys for LLM providers (Google Gemini, OpenAI, Anthropic)
+- At least one LLM API key (Google Gemini recommended — [free tier](https://aistudio.google.com/))
 
 ### Fork and Clone
 
 1. Fork the repository on GitHub
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/Abood991B/cortexa.git
-   cd cortexa
+   git clone https://github.com/Abood991B/CortexaAI.git
+   cd CortexaAI
    ```
 
 ## Development Setup
@@ -269,7 +269,7 @@ const PromptProcessor: React.FC<PromptProcessorProps> = ({
 
 Run tests:
 ```bash
-python -m pytest tests/ --cov=src --cov-report=html
+python -m pytest tests/ -v --cov=agents --cov=src --cov=config --cov=core --cov-report=html
 ```
 
 ### Frontend Testing
@@ -283,6 +283,19 @@ Run tests:
 ```bash
 npm test
 npm run test:coverage
+```
+
+### Linting & Type Checking
+
+```bash
+# Python lint
+ruff check .
+
+# Python type check
+mypy agents/ src/ config/ core/
+
+# Frontend lint
+cd frontend-react && npm run lint
 ```
 
 ### Test Guidelines
@@ -348,7 +361,8 @@ We use Semantic Versioning (SemVer):
 - [Project Documentation](README.md)
 - [API Documentation](http://localhost:8000/docs)
 - [Frontend Application](http://localhost:5173)
-- [LangGraph Studio](tools/run_langgraph_studio.py)
+- [Deployment Guides](docs/deployment/)
+- [Changelog](CHANGELOG.md)
 
 ## Recognition
 
@@ -363,4 +377,4 @@ By contributing to this project, you agree that your contributions will be licen
 
 ---
 
-Thank you for contributing to Cortexa! Your contributions help make this project better for everyone.
+Thank you for contributing to CortexaAI! Your contributions help make this project better for everyone.

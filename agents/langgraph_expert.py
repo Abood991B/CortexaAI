@@ -1,14 +1,17 @@
-#!/us/bin/env python3
+#!/usr/bin/env python3
 """
 LangGraph Expert Agent for Multi-Agent Prompt Engineering System
 
 This module defines a sophisticated expert agent for the LangGraph workflow,
 featuring dynamic tool selection, enhanced reasoning, and structured output.
+
+The agent supports both JSON-mode models (Gemini) and text-only models (Gemma)
+with automatic fallback for maximum compatibility.
 """
 
-from pydantic.v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.language_models import BaseChatModel
 from typing import List, Dict, Any, Optional
 import os
 import json
@@ -17,7 +20,8 @@ import re
 # Add the parent directory to the path so we can import from config
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.config import get_logger, get_model_config
+from config.config import get_logger, settings
+from config.llm_providers import get_llm
 
 logger = get_logger(__name__)
 
@@ -48,13 +52,8 @@ class LangGraphExpert:
     def __init__(self, name: str, expertise: str):
         self.name = name
         self.expertise = expertise
-        model_config = get_model_config(provider="google")
-        self.model_name = model_config["model_name"]
-        self.llm = ChatGoogleGenerativeAI(
-            model=self.model_name,
-            google_api_key=model_config["api_key"],
-            temperature=0.1
-        )
+        self.model_name = settings.default_model_name
+        self.llm = get_llm(temperature=0.1)
         # Check if model supports system instructions and JSON mode
         # Models that don't support system instructions: gemma-*-27b-*, gemma-*-2b-*, etc.
         # Models that don't support JSON mode: gemma-*-27b-*, gemma-*-2b-*, etc.
@@ -97,57 +96,73 @@ class LangGraphExpert:
 
     def _create_prompt_template(self) -> ChatPromptTemplate:
         """Creates the prompt template for the expert agent."""
-        system_prompt = """
-You are a world-class expert in {expertise}. Your role is to transform vague, high-level prompts into detailed, actionable, and high-quality prompts that will achieve a score of 0.96 or higher based on the evaluation criteria.
+        system_prompt = """You are a world-class prompt engineer specialising in **{expertise}**.
 
-**Evaluation Criteria to Optimize For:**
-- **Actionability (Score: 0.96+):** The prompt must be immediately usable and executable. Use strong action verbs.
-- **Clarity (Score: 0.96+):** The prompt must be unambiguous and easy to understand. Avoid jargon where possible, or explain it.
-- **Specificity (Score: 0.96+):** The prompt must contain enough detail to guide the desired output. Include constraints, desired formats, and examples.
-- **Structure (Score: 0.96+):** The prompt should be well-organized with clear sections.
-- **Completeness (Score: 0.96+):** The prompt should include all necessary context for the task.
-- **Domain Alignment (Score: 0.96+):** The prompt should align with best practices for the given domain.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ MISSION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Transform the user's prompt into a **production-ready, high-quality** prompt that
+scores ≥ 0.96 on every evaluation criterion below. You MUST substantially
+improve the original — never return it unchanged.
 
-**Example of a High-Quality Transformation:**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ EVALUATION CRITERIA (target ≥ 0.96 each)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. **Actionability** – immediately usable; strong action verbs; no ambiguity
+   about *what* to do.
+2. **Clarity** – crystal-clear language; jargon explained or replaced.
+3. **Specificity** – constraints, desired format, examples, edge-cases
+   explicitly stated.
+4. **Structure** – logical sections with headings/numbered lists; easy to scan.
+5. **Completeness** – all context needed to fulfil the task is present;
+   no implicit assumptions left unstated.
+6. **Domain Alignment** – reflects best practices of **{expertise}**.
 
-*   **Vague Prompt:** "Analyze data with Python"
-*   **High-Quality Solution (Score > 0.96):**
-    "You are a data scientist. Your task is to perform an exploratory data analysis (EDA) on a given dataset using Python.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ TRANSFORMATION STEPS (follow in order)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. **Summarise** the user's intent in 1-2 sentences (→ `problem_summary`).
+2. **Reason step-by-step** about what the prompt lacks measured against every
+   criterion above (→ `reasoning_steps`).
+3. **Assess your confidence** that the rewritten prompt will score ≥ 0.96
+   (→ `confidence_score`, float 0.0 – 1.0).
+4. **Produce the final solution** — a *completely rewritten* prompt that is
+   significantly more detailed, structured, and actionable than the input
+   (→ `solution`).
 
-    **Dataset:** A CSV file will be provided with columns: 'Date', 'Sales', 'Region', 'Product_Category'.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ EXAMPLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+**Input prompt:** "Analyze data with Python"
 
-    **Requirements:**
-    1.  **Load the data:** Use the pandas library to load the CSV file into a DataFrame.
-    2.  **Data Cleaning:** Handle any missing values and correct any obvious data entry errors.
-    3.  **Descriptive Statistics:** Calculate and present summary statistics (mean, median, std, etc.) for the 'Sales' column.
-    4.  **Sales Trends:** Analyze and visualize the sales trends over time. Create a line plot of sales by date.
-    5.  **Regional Performance:** Analyze sales performance by region. Create a bar chart showing total sales for each region.
-    6.  **Product Analysis:** Analyze sales by product category. Create a pie chart showing the proportion of sales for each category.
+**High-quality solution (score > 0.96):**
+> You are a data scientist. Perform an exploratory data analysis (EDA) on a
+> CSV dataset with columns: Date, Sales, Region, Product_Category.
+>
+> **Requirements:**
+> 1. Load data with pandas; validate schema on load.
+> 2. Clean missing values (document strategy chosen).
+> 3. Compute descriptive statistics for Sales.
+> 4. Visualise sales trends over time (line plot) and by region (bar chart).
+> 5. Analyse product-category proportions (pie chart).
+>
+> **Output format:** Markdown report with embedded code and labelled plots.
+> **Libraries:** pandas, matplotlib, seaborn.
+> **Constraint:** Single self-contained script; set random seed = 42.
 
-    **Output Format:**
-    -   Provide a summary of your findings in a markdown format.
-    -   Include all Python code used for the analysis.
-    -   All plots should be clearly labeled.
-
-    **Constraints:**
-    -   Use the following Python libraries: pandas, matplotlib, seaborn.
-    -   The analysis should be self-contained in a single script."
-
-Your final output MUST be a JSON object with the following flat structure:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ OUTPUT FORMAT (strict JSON)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Return **only** a JSON object — no markdown fences, no commentary:
 {{
-    "problem_summary": "A brief summary of the problem",
-    "reasoning_steps": ["A list of strings representing the step-by-step reasoning process"],
-    "confidence_score": 0.98,
-    "solution": "The final, complete solution or response that meets the high-quality standard shown in the example."
+    "problem_summary": "<string>",
+    "reasoning_steps": ["<step 1>", "<step 2>", "..."],
+    "confidence_score": <float 0.0-1.0>,
+    "solution": "<the fully rewritten prompt>"
 }}
 
-**CRITICAL INSTRUCTION**: You MUST transform and improve the prompt. The `solution` field must contain a NEW, IMPROVED, and ENHANCED version that is significantly more detailed and actionable. DO NOT simply copy the original prompt - you must expand, clarify, and enhance it.
-
-To generate your response, follow these steps:
-1.  **Summarize the Problem**: Fill in the `problem_summary` field.
-2.  **Reason Step-by-Step**: Fill in the `reasoning_steps` array, explaining how you will transform the prompt to meet all the criteria with a score of 0.96+.
-3.  **Assess Confidence**: Fill in the `confidence_score` with a float between 0.0 and 1.0.
-4.  **Provide the Final Solution**: Fill in the `solution` field with a NEW, IMPROVED, and ENHANCED prompt that is significantly better than the original. The solution must be different from the input prompt - add details, structure, examples, and clarity.
+⚠️ The `solution` field MUST be a **new, improved, and enhanced** version.
+   Copying the original verbatim is a failure case.
 """
         
         if self.supports_system_instructions:

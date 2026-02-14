@@ -1,19 +1,12 @@
-# Node modules
-node_modules/
-npm-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# ============================================================
+# CortexaAI V3.0 — .gitignore
+# ============================================================
 
-# Python
-venv/
-env/
-ENV/
-.venv/
+# ─── Python ─────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
-*.pyc
-*.pyo
+*.so
 *.pyd
 .Python
 build/
@@ -35,14 +28,37 @@ share/python-wheels/
 MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
+*.whl
 
-# Testing
+# ─── Virtual Environments ──────────────────────────────────
+venv/
+env/
+ENV/
+.venv/
+.conda/
+
+# ─── Node.js ───────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.yarn/
+
+# ─── Frontend Build Output ─────────────────────────────────
+frontend-react/dist/
+frontend-react/build/
+frontend-react/.parcel-cache/
+frontend-react/.vite/
+
+# ─── Testing & Coverage ────────────────────────────────────
 htmlcov/
 .tox/
 .nox/
 .coverage
 .coverage.*
-.cache
+.cache/
 nosetests.xml
 coverage.xml
 *.cover
@@ -50,36 +66,45 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+test-results/
+junit.xml
 
-# Environment variables
+# ─── Environment Variables ─────────────────────────────────
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
 
-# Data files (runtime generated)
+# ─── Data & Runtime Files ──────────────────────────────────
 data/learned_domains.json
 data/cache/
 data/logs/
 data/memories/
 data/vectors/
-
-# Logs
-*.log
-logs/
-*.log.*
-
-# Database files
-chroma_data/
 *.db
 *.sqlite
 *.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+chroma_data/
 
-# Model cache
-.cache/
+# ─── Logs ───────────────────────────────────────────────────
+logs/
+*.log
+*.log.*
+
+# ─── Model & Embedding Cache ───────────────────────────────
 models/
 embeddings/
 
-# OS generated files
+# ─── Benchmark & Report Outputs ────────────────────────────
+benchmark_report.json
+langgraph_benchmark_report.json
+performance_report.json
+
+# ─── OS Files ───────────────────────────────────────────────
 .DS_Store
 .DS_Store?
 ._*
@@ -88,8 +113,9 @@ embeddings/
 ehthumbs.db
 Thumbs.db
 desktop.ini
+$RECYCLE.BIN/
 
-# IDE files
+# ─── IDE / Editor ──────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
@@ -101,34 +127,37 @@ desktop.ini
 *.launch
 .settings/
 *.sublime-workspace
+*.sublime-project
+*.code-workspace
 
-# Temporary files
+# ─── Temporary Files ───────────────────────────────────────
 *.tmp
 *.temp
 tmp/
 temp/
+*.bak
+*.orig
 
-# Docker volumes
+# ─── Docker ─────────────────────────────────────────────────
 docker-data/
-.dockerignore
 
-# Note: docker-compose.yml in root should be committed
-# Only docker/docker-compose.yml is ignored
-
-# Frontend build files
-frontend-react/dist/
-frontend-react/build/
-frontend-react/.parcel-cache/
-
-# Benchmarks and reports (keep templates)
-benchmark_report.json
-langgraph_benchmark_report.json
-performance_report.json
-
-# LangGraph/LangSmith
+# ─── LangGraph / LangSmith ─────────────────────────────────
 .langgraph/
+.langgraph_api/
 .langsmith/
 
-# Jupyter Notebooks (if used for testing)
+# ─── Linting & Type Checking ───────────────────────────────
+.ruff_cache/
+.mypy_cache/
+.pytype/
+.pyre/
+
+# ─── Jupyter ────────────────────────────────────────────────
 .ipynb_checkpoints/
 *.ipynb
+
+# ─── Secrets & Credentials ─────────────────────────────────
+*.pem
+*.key
+*.cert
+secrets/

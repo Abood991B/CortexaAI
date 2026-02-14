@@ -4,9 +4,9 @@ from typing import Dict, List, Optional, Any
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from langchain_google_genai import ChatGoogleGenerativeAI
+from config.llm_providers import get_llm
 from config.config import (
-    settings, get_model_config, get_logger, metrics, log_performance,
+    settings, get_logger, metrics, log_performance,
     cache_manager, perf_config, generate_prompt_cache_key, log_cache_performance,
     circuit_breakers, reliability_config, log_circuit_breaker_event, CircuitBreakerOpenException,
     security_manager, security_config, log_security_event
@@ -27,24 +27,28 @@ class DomainClassifier:
         """Initialize the classifier with known domains and their characteristics."""
         self.known_domains = {
             "software_engineering": {
-                "keywords": ["code", "programming", "software", "development", "algorithm", "function", "class", "api", "database", "debug", "refactor"],
+                "keywords": ["code", "programming", "software", "development", "algorithm", "function", "class", "api", "database", "debug", "refactor", "deploy", "devops", "testing"],
                 "description": "Software development, coding, and programming tasks"
             },
             "data_science": {
-                "keywords": ["data", "analysis", "machine learning", "statistics", "visualization", "dataset", "model", "prediction", "analytics"],
+                "keywords": ["data", "analysis", "machine learning", "statistics", "visualization", "dataset", "model", "prediction", "analytics", "deep learning", "neural network"],
                 "description": "Data analysis, machine learning, and statistical tasks"
             },
             "report_writing": {
-                "keywords": ["report", "summary", "analysis", "findings", "conclusion", "executive", "presentation", "documentation"],
+                "keywords": ["report", "summary", "analysis", "findings", "conclusion", "executive", "presentation", "documentation", "white paper", "brief"],
                 "description": "Report writing, documentation, and presentation tasks"
             },
             "education": {
-                "keywords": ["teaching", "learning", "student", "lesson", "curriculum", "educational", "tutorial", "explanation"],
+                "keywords": ["teaching", "learning", "student", "lesson", "curriculum", "educational", "tutorial", "explanation", "course", "assessment", "rubric"],
                 "description": "Educational content creation and teaching materials"
             },
             "business_strategy": {
-                "keywords": ["business", "strategy", "marketing", "management", "growth", "market", "competitive", "analysis"],
-                "description": "Business strategy, and management tasks"
+                "keywords": ["business", "strategy", "marketing", "management", "growth", "market", "competitive", "analysis", "revenue", "roi", "stakeholder"],
+                "description": "Business strategy, planning, and management tasks"
+            },
+            "creative_writing": {
+                "keywords": ["write", "story", "creative", "content", "blog", "article", "narrative", "copy", "brand", "audience", "engagement", "social media", "seo"],
+                "description": "Creative writing, content creation, and copywriting tasks"
             }
         }
 
@@ -53,40 +57,38 @@ class DomainClassifier:
 
     def _setup_classifier_chain(self):
         """Set up the LangChain for domain classification."""
-        model_config = get_model_config(provider="google")
-        model = ChatGoogleGenerativeAI(
-            model=model_config["model_name"],
-            google_api_key=model_config["api_key"],
-            temperature=0.1
-        )
+        model = get_llm(temperature=0.1)
 
-        classification_prompt = PromptTemplate.from_template("""
-        You are a domain classification expert. Analyze the following prompt and determine its primary domain.
+        classification_prompt = PromptTemplate.from_template("""You are a **domain classification expert**. Analyse the prompt below and
+determine its primary domain.
 
-        PROMPT TO ANALYZE:
-        {prompt}
+━━━  PROMPT TO ANALYSE  ━━━
+{prompt}
 
-        KNOWN DOMAINS:
-        {domains}
+━━━  KNOWN DOMAINS  ━━━
+{domains}
 
-        TASK:
-        1. Determine the most appropriate domain for this prompt from the known domains above
-        2. If none of the known domains fit well, suggest a new domain name and description
-        3. Provide a confidence score (0.0 to 1.0) for your classification
-        4. Extract key topics/keywords from the prompt
+━━━  INSTRUCTIONS  ━━━
+1. Pick the single best-matching domain from the list above.
+   → If none fits with ≥ 0.6 confidence, set `is_new_domain` to true and
+     propose a concise `new_domain_name` (snake_case) plus a one-line
+     `new_domain_description`.
+2. Assign a **confidence** score (0.0 – 1.0) reflecting how well the prompt
+   maps to the chosen domain.
+3. Extract up to 5 **key_topics** — the most important nouns / noun-phrases
+   that characterise the prompt's intent.
+4. Write a brief **reasoning** (1-2 sentences) justifying your choice.
 
-        Respond in JSON format with the following structure:
-        {{
-            "domain": "domain_name",
-            "confidence": 0.95,
-            "is_new_domain": false,
-            "new_domain_name": null,
-            "new_domain_description": null,
-            "key_topics": ["topic1", "topic2"],
-            "reasoning": "Brief explanation of classification"
-        }}
-
-        If suggesting a new domain, set is_new_domain to true and provide new_domain_name and new_domain_description.
+━━━  OUTPUT (strict JSON, no markdown fences)  ━━━
+{{
+    "domain": "<domain_name>",
+    "confidence": <float>,
+    "is_new_domain": <bool>,
+    "new_domain_name": "<string or null>",
+    "new_domain_description": "<string or null>",
+    "key_topics": ["topic1", "topic2"],
+    "reasoning": "<1-2 sentence justification>"
+}}
         """)
 
         self.classifier_chain = (
@@ -240,39 +242,33 @@ class DomainClassifier:
         return self._get_fallback_classification_result(sanitized_prompt)
 
     def _get_fallback_classification_result(self, prompt: str) -> Dict[str, Any]:
-        """Get a fallback classification result when all else fails."""
-        # Simple keyword-based fallback classification
+        """Keyword-based fallback classification covering all known domains.
+        
+        Returns the domain with the highest keyword overlap.  Falls back to
+        ``general`` if no domain scores above zero.
+        """
         prompt_lower = prompt.lower()
 
-        # Check for software engineering keywords
-        se_keywords = ["code", "programming", "software", "development", "algorithm", "function", "class", "api", "database", "debug"]
-        if any(keyword in prompt_lower for keyword in se_keywords):
-            return {
-                "domain": "software_engineering",
-                "confidence": reliability_config.fallback_response_quality,
-                "is_new_domain": False,
-                "key_topics": ["programming"],
-                "reasoning": "Fallback classification based on keywords"
-            }
+        best_domain = "general"
+        best_score = 0
 
-        # Check for data science keywords
-        ds_keywords = ["data", "analysis", "machine learning", "statistics", "visualization", "dataset", "model"]
-        if any(keyword in prompt_lower for keyword in ds_keywords):
-            return {
-                "domain": "data_science",
-                "confidence": reliability_config.fallback_response_quality,
-                "is_new_domain": False,
-                "key_topics": ["data", "analysis"],
-                "reasoning": "Fallback classification based on keywords"
-            }
+        for domain_name, domain_info in self.known_domains.items():
+            keywords = domain_info.get("keywords", [])
+            # Count distinct keyword matches (not repeated hits)
+            score = sum(1 for kw in keywords if kw in prompt_lower)
+            if score > best_score:
+                best_score = score
+                best_domain = domain_name
 
-        # Default fallback
+        confidence = min(0.3 + best_score * 0.08, reliability_config.fallback_response_quality)
+
         return {
-            "domain": "general",
-            "confidence": reliability_config.fallback_response_quality,
+            "domain": best_domain,
+            "confidence": round(confidence, 2),
             "is_new_domain": False,
-            "key_topics": [],
-            "reasoning": "Fallback classification - unable to determine specific domain"
+            "key_topics": [kw for kw in self.known_domains.get(best_domain, {}).get("keywords", [])[:3]
+                           if kw in prompt_lower] or [],
+            "reasoning": f"Fallback keyword classification (matched {best_score} keywords)"
         }
 
     async def _classify_with_fallback(self, prompt: str, cache_key: str,
@@ -365,25 +361,44 @@ class DomainClassifier:
         logger.info(f"New domain created: {domain_name}")
 
     async def classify_prompt_type(self, prompt: str) -> str:
-        """Classify whether a prompt is raw or structured based on heuristics."""
-        # Simple heuristic: if it has clear sections, formatting, or specific keywords, it's structured
-        structured_indicators = [
-            "requirements:", "specifications:", "please", "i need", "create",
-            "develop", "build", "implement", "task:", "objective:",
-            "1.", "2.", "3.", "-", "*", "•"
-        ]
-
+        """Classify whether a prompt is ``raw`` or ``structured``.
+        
+        Uses a weighted heuristic that checks for:
+        - Structural markers (headings, numbered/bullet lists, colons)
+        - Task-oriented vocabulary
+        - Multi-line formatting
+        - Overall length
+        """
         prompt_lower = prompt.lower()
-        structured_score = sum(1 for indicator in structured_indicators if indicator in prompt_lower)
 
-        # Check for structured formatting
+        # Weighted structural indicators
+        structural_keywords = [
+            "requirements:", "specifications:", "objective:", "task:",
+            "constraints:", "deliverables:", "output format:",
+            "context:", "background:", "instructions:"
+        ]
+        keyword_hits = sum(1 for kw in structural_keywords if kw in prompt_lower)
+
+        # Line-level formatting signals
         lines = prompt.split('\n')
-        formatted_lines = sum(1 for line in lines if line.strip().startswith(('-', '*', '•', '1.', '2.', '3.')))
+        non_empty_lines = [l.strip() for l in lines if l.strip()]
+        list_lines = sum(
+            1 for line in non_empty_lines
+            if line.startswith(('-', '*', '•'))
+            or (len(line) >= 2 and line[0].isdigit() and line[1] in '.)')
+        )
+        heading_lines = sum(1 for line in non_empty_lines if line.startswith('#') or line.endswith(':'))
 
-        if structured_score > 3 or formatted_lines > 2 or len(lines) > 5:
-            return "structured"
-        else:
-            return "raw"
+        # Composite score (each feature worth 1 point)
+        score = (
+            keyword_hits
+            + min(list_lines, 4)     # cap list contribution at 4
+            + min(heading_lines, 3)  # cap heading contribution at 3
+            + (1 if len(non_empty_lines) > 5 else 0)
+            + (1 if len(prompt) > 300 else 0)
+        )
+
+        return "structured" if score >= 3 else "raw"
 
     def get_available_domains(self) -> Dict[str, Dict]:
         """Get all available domains (known + dynamically created)."""
