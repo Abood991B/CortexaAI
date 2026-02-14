@@ -396,18 +396,47 @@ CortexaAI/
 
 ## Deployment
 
-CortexaAI deploys to **[Render.com](https://render.com)** — free tier, Docker support, auto-deploy from GitHub.
+CortexaAI deploys easily to multiple cloud platforms with Docker support.
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Abood991B/CortexaAI)
+### 🚀 Recommended: Railway (Free Tier)
+**Best choice:** Generous free tier, Docker support, PostgreSQL included
 
-| Platform | Guide | Config File |
-|----------|-------|-------------|
-| **Render.com** ⭐ | [DEPLOYMENT.md](DEPLOYMENT.md) | `render.yaml` |
-| **Docker** (any host) | See [Quick Start](#docker-alternative) | `docker-compose.yml` |
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template/cortexaai)
 
-> See [DEPLOYMENT.md](DEPLOYMENT.md) for the full step-by-step guide, environment variables, and rollback procedures.
->
-> See [ARCHITECTURE.md](ARCHITECTURE.md) for system diagrams, component descriptions, and data flow.
+**Why Railway?**
+- $5/month credit (enough for small projects)
+- 512MB RAM, 1GB disk free forever
+- Auto-deploy from GitHub
+- PostgreSQL database included
+- Custom domains with SSL
+
+**Quick Deploy:**
+1. Click the button above
+2. Connect your GitHub repo
+3. Set `GOOGLE_API_KEY` in dashboard
+4. Deploy!
+
+### Alternative Platforms
+
+| Platform | Free Tier | Docker | Database | Guide |
+|----------|-----------|--------|----------|-------|
+| **Railway** ⭐ | $5 credit | ✅ | PostgreSQL | [RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md) |
+| **Fly.io** | 256MB RAM | ✅ | External | [ALTERNATIVE_DEPLOYMENTS.md](docs/ALTERNATIVE_DEPLOYMENTS.md) |
+| **Google Cloud Run** | 2M requests | ✅ | Cloud SQL | [ALTERNATIVE_DEPLOYMENTS.md](docs/ALTERNATIVE_DEPLOYMENTS.md) |
+| **DigitalOcean** | 3 sites | ✅ | PostgreSQL | [ALTERNATIVE_DEPLOYMENTS.md](docs/ALTERNATIVE_DEPLOYMENTS.md) |
+
+### Docker (Any Platform)
+
+```bash
+# Local development
+docker compose up --build
+
+# Production deploy (any Docker host)
+docker build -t cortexaai .
+docker run -p 8000:8000 -e GOOGLE_API_KEY=your_key cortexaai
+```
+
+> See [ALTERNATIVE_DEPLOYMENTS.md](docs/ALTERNATIVE_DEPLOYMENTS.md) for complete deployment guides.
 
 ---
 
