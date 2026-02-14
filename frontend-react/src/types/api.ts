@@ -1,4 +1,4 @@
-// API Types for Multi-Agent Prompt Engineering System
+// API Types for Cortexa Prompt Optimization Tool
 
 export interface PromptRequest {
   prompt: string;
@@ -7,6 +7,15 @@ export interface PromptRequest {
   use_langgraph: boolean;
   chat_history?: Array<{ role: 'user' | 'assistant'; content: string }>;
   advanced_mode?: boolean;
+}
+
+export interface CriteriaScores {
+  clarity: number;
+  specificity: number;
+  structure: number;
+  completeness: number;
+  actionability: number;
+  domain_alignment: number;
 }
 
 export interface PromptResponse {
@@ -20,11 +29,26 @@ export interface PromptResponse {
     quality_score: number;
     iterations_used: number;
     optimized_prompt: string;
+    passes_threshold?: boolean;
   };
   analysis?: {
     classification: {
+      domain?: string;
+      confidence?: number;
       reasoning: string;
       key_topics: string[];
+    };
+    improvements?: {
+      improvements_made: string[];
+      key_additions: string[];
+      effectiveness_score: number;
+    };
+    evaluation?: {
+      overall_score: number;
+      criteria_scores: CriteriaScores;
+      strengths: string[];
+      weaknesses: string[];
+      reasoning: string;
     };
   };
   comparison?: {
@@ -35,6 +59,20 @@ export interface PromptResponse {
     improvement_ratio: number;
   };
   metadata: Record<string, any>;
+}
+
+export interface ComplexityResult {
+  score: number;
+  level: 'simple' | 'medium' | 'complex';
+  signals: Record<string, number>;
+  recommended_iterations: number;
+  skip_evaluation: boolean;
+  token_count: number;
+}
+
+export interface SSEEvent {
+  event: string;
+  data: any;
 }
 
 export interface SystemStats {
@@ -93,7 +131,16 @@ export interface HealthStatus {
   liveness: boolean;
 }
 
-
+// Template Types
+export interface PromptTemplate {
+  id?: string;
+  name: string;
+  description?: string;
+  template: string;
+  variables?: string[];
+  domain?: string;
+  category?: string;
+}
 
 // Error Types
 export interface ApiError {

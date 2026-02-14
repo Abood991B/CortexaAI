@@ -5,13 +5,13 @@ from typing import Dict, List, Optional, Any, Tuple
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from langchain_google_genai import ChatGoogleGenerativeAI
+from config.llm_providers import get_llm
 from agents.exceptions import ImprovementError, LLMServiceError, ConfigurationError
 from agents.utils import is_retryable_error
 import asyncio
 
 from config.config import (
-    settings, get_model_config, get_logger, metrics, log_performance,
+    settings, get_logger, metrics, log_performance,
     cache_manager, perf_config, generate_prompt_cache_key, log_cache_performance,
     security_manager, security_config, log_security_event,
     memory_config, prompt_generation_config
@@ -354,58 +354,93 @@ class BaseExpertAgent(ABC):
 
     def _setup_improvement_chain(self):
         """Set up the LangChain for prompt improvement."""
-        model_config = get_model_config()
-        self.model = ChatGoogleGenerativeAI(
-            model=model_config["model_name"],
-            google_api_key=model_config["api_key"],
-            temperature=0.4  # Slightly higher creativity for prompt improvement
-        )
+        self.model = get_llm(temperature=0.4)
 
         # General improvement prompt template
-        improvement_prompt = PromptTemplate.from_template("""
-        You are an expert prompt engineer specializing in {domain}.
+        improvement_prompt = PromptTemplate.from_template("""You are an **elite prompt engineer** — one of the world's foremost experts —
+specialising in **{domain}**.
 
-        DOMAIN EXPERTISE: {domain_description}
-        EXPERTISE AREAS: {expertise_areas}
+━━━  DOMAIN CONTEXT  ━━━
+Description : {domain_description}
+Expertise   : {expertise_areas}
 
-        ORIGINAL PROMPT:
-        {original_prompt}
+━━━  ORIGINAL PROMPT  ━━━
+{original_prompt}
 
-        PROMPT TYPE: {prompt_type}
-        KEY TOPICS: {key_topics}
+━━━  METADATA  ━━━
+Prompt type : {prompt_type}
+Key topics  : {key_topics}
 
-        PROMPT ENGINEERING PRINCIPLES:
-        - **Clarity and Precision:** Leave no room for interpretation. Use precise language.
-        - **Completeness:** Include all necessary context, constraints, and desired output formats.
-        - **Structure:** Organize the prompt logically with clear sections.
-        - **Actionability:** The prompt must be directly usable and lead to a high-quality result.
-        - **Persona and Tone:** Define the persona the model should adopt and the tone of the response.
+━━━  STEP-BY-STEP APPROACH (Chain-of-Thought)  ━━━
+Before writing the improved prompt, work through these phases **internally**:
 
-        TASK:
-        Dramatically improve this prompt using your domain expertise and the principles above. Your goal is to create a world-class prompt that is ready for immediate use. Focus on:
-        1. Injecting deep, domain-specific context and best practices.
-        2. Eliminating all ambiguity and adding precise, actionable requirements.
-        3. Re-structuring the prompt for maximum clarity and effectiveness.
-        4. Specifying the desired output format, tone, and persona.
-        5. Adding examples, edge cases, and constraints to guide the model.
+**Phase 1 — DIAGNOSE:** Identify every flaw in the original prompt.
+  • What is ambiguous, vague, or missing context?
+  • Which constraints, edge-cases, or output formats are absent?
+  • Does it lack a persona, tone, or audience definition?
 
-        {improvement_instructions}
+**Phase 2 — PLAN:** Decide exactly what to add, remove, or restructure.
+  • Map each weakness to a specific fix.
+  • Decide the optimal prompt structure: sections, order, hierarchy.
+  • Choose a persona and voice anchor.
 
-        Respond in JSON format with the following structure:
-        {{
-            "improved_prompt": "The fully improved and optimized prompt",
-            "improvements_made": [
-                "Specific improvement 1",
-                "Specific improvement 2"
-            ],
-            "key_additions": [
-                "Important context or requirements added",
-                "Domain-specific best practices included"
-            ],
-            "structure_analysis": "Analysis of how the prompt was structured and improved",
-            "effectiveness_score": 0.98,
-            "reasoning": "Explanation of why these improvements will be effective"
-        }}
+**Phase 3 — EXECUTE:** Write the improved prompt incorporating ALL fixes.
+
+**Phase 4 — SELF-CRITIQUE:** Re-read your improved prompt and ask:
+  • "Could two different people interpret this differently?" If yes, fix it.
+  • "Is there anything I still need to assume?" If yes, make it explicit.
+  • "Would I be able to execute this immediately without questions?" If no, add detail.
+  • "Does this follow {domain} best practices?" If no, add them.
+
+━━━  PROMPT-ENGINEERING PRINCIPLES (apply ALL)  ━━━
+1. **Role Anchoring** – Open with a vivid, expert persona ("You are a principal
+   engineer at a FAANG company with 15+ years of experience in...").
+2. **Clarity & Precision** – Eliminate every ambiguity; prefer concrete metrics,
+   numbers, and named concepts over vague qualifiers like "good" or "some."
+3. **Structured Decomposition** – Use headings (##), numbered steps, bullet
+   lists, and clearly delimited sections. Group related requirements.
+4. **Completeness** – Include ALL context, constraints, personas, output format,
+   success criteria, and edge-case handling. The reader should NEVER guess.
+5. **Actionability** – Start with strong action verbs. Define measurable
+   acceptance criteria and deliverables.
+6. **Few-Shot Guidance** – When useful, embed a brief input/output example to
+   anchor the expected quality and format.
+7. **Negative Constraints** – Explicitly state what to AVOID (e.g., "Do NOT
+   include generic filler", "Do NOT assume X unless stated").
+8. **Output Format Specification** – Define the exact structure: headings,
+   code blocks, tables, JSON, Markdown — whatever fits the task.
+9. **Domain Best Practices** – Weave in conventions, standards, frameworks,
+   and professional terminology specific to **{domain}**.
+10. **Meta-Verification** – End with a brief self-check instruction: "Before
+    finalizing, verify your response meets all requirements above."
+
+━━━  ANTI-PATTERNS TO REMOVE  ━━━
+• Remove "please", "kindly", and other filler words that add no precision.
+• Remove open-ended phrases like "etc.", "and so on", "as needed."
+• Replace subjective qualifiers ("make it good") with measurable criteria.
+• Remove redundant or repeated instructions.
+
+━━━  YOUR TASK  ━━━
+Produce a **dramatically improved** version of the prompt above. You MUST:
+• Inject deep, domain-specific context and best practices.
+• Eliminate ALL ambiguity; add precise, actionable requirements.
+• Re-structure the prompt for maximum clarity and effectiveness.
+• Specify desired output format, tone, and persona.
+• Add examples, edge-case handling, and explicit constraints.
+• Include negative constraints (what NOT to do).
+• Add a self-verification step at the end of the prompt.
+
+{improvement_instructions}
+
+━━━  OUTPUT (strict JSON — no markdown fences)  ━━━
+{{
+    "improved_prompt": "<the fully rewritten prompt>",
+    "improvements_made": ["<specific change 1>", "..."],
+    "key_additions": ["<important context/requirement added>", "..."],
+    "structure_analysis": "<how the prompt structure was improved>",
+    "effectiveness_score": <float 0.0-1.0>,
+    "reasoning": "<why these changes make the prompt more effective>"
+}}
         """)
 
         self.improvement_chain = (
@@ -430,70 +465,79 @@ class BaseExpertAgent(ABC):
 
     def _setup_context_improvement_chain(self):
         """Set up the LangChain for context-enhanced prompt improvement."""
-        model_config = get_model_config()
-        context_model = ChatGoogleGenerativeAI(
-            model=model_config["model_name"],
-            google_api_key=model_config["api_key"],
-            temperature=0.2  # Lower temperature for context-aware improvements
-        )
+        context_model = get_llm(temperature=0.2)
 
         # Context-enhanced improvement prompt template
-        context_improvement_prompt = PromptTemplate.from_template("""
-        You are an expert prompt engineer specializing in {domain}.
+        context_improvement_prompt = PromptTemplate.from_template("""You are an **elite prompt engineer** — one of the world's foremost experts —
+specialising in **{domain}**.
 
-        DOMAIN EXPERTISE: {domain_description}
-        EXPERTISE AREAS: {expertise_areas}
+━━━  DOMAIN CONTEXT  ━━━
+Description : {domain_description}
+Expertise   : {expertise_areas}
 
-        ORIGINAL PROMPT:
-        {original_prompt}
+━━━  ORIGINAL PROMPT  ━━━
+{original_prompt}
 
-        PROMPT TYPE: {prompt_type}
-        KEY TOPICS: {key_topics}
+━━━  METADATA  ━━━
+Prompt type : {prompt_type}
+Key topics  : {key_topics}
 
-        ADDITIONAL CONTEXT:
-        You have access to relevant context from previous interactions and knowledge:
+━━━  RAG & CONVERSATION CONTEXT  ━━━
+{context_parts}
 
-        {context_parts}
+RAG stats: {memories_count} memories · {knowledge_count} knowledge entries ·
+           {total_context_length} chars · {conversation_turns} conversation turns
 
-        RAG METADATA:
-        - Memories retrieved: {memories_count}
-        - Knowledge entries: {knowledge_count}
-        - Context length: {total_context_length} characters
-        - Conversation turns: {conversation_turns}
+━━━  STEP-BY-STEP APPROACH (Chain-of-Thought)  ━━━
+Before writing the improved prompt, work through these phases **internally**:
 
-        TASK:
-        Improve this prompt using your domain expertise and the provided context. Focus on:
-        1. Adding missing context and specificity based on previous interactions
-        2. Removing ambiguity and unclear requirements
-        3. Structuring the prompt for better results using learned patterns
-        4. Adding relevant domain-specific best practices from knowledge base
-        5. Leveraging conversation history for continuity
-        6. Optimizing wording for clarity and effectiveness
+**Phase 1 — CONTEXT MINING:** Extract every useful signal from the RAG context:
+  • Which past interactions reveal the user's style, preferences, or pain points?
+  • Which knowledge entries contain domain conventions that should be embedded?
+  • What continuity should be maintained from recent conversation turns?
 
-        {improvement_instructions}
+**Phase 2 — DIAGNOSE:** Identify every flaw in the original prompt:
+  • Ambiguities, missing context, unclear constraints, absent output format.
+  • Gaps the RAG context can fill.
 
-        Respond in JSON format with the following structure:
-        {{
-            "improved_prompt": "The fully improved and optimized prompt with context",
-            "improvements_made": [
-                "Specific improvement 1",
-                "Specific improvement 2",
-                "Context-based improvement"
-            ],
-            "key_additions": [
-                "Important context or requirements added",
-                "Domain-specific best practices included",
-                "Conversation continuity maintained"
-            ],
-            "structure_analysis": "Analysis of how the prompt was structured and improved with context",
-            "effectiveness_score": 0.95,
-            "context_utilization": {{
-                "memories_used": {memories_count},
-                "knowledge_applied": {knowledge_count},
-                "conversation_continuity": "high|medium|low"
-            }},
-            "reasoning": "Explanation of why these improvements will be effective, including context benefits"
-        }}
+**Phase 3 — PLAN & EXECUTE:** Write the improved prompt:
+  • Inject retrieved knowledge directly into the prompt (don't just reference it).
+  • Apply all prompt-engineering principles below.
+  • Structure for maximum skim-ability and precision.
+
+**Phase 4 — SELF-CRITIQUE:** Re-read your output and verify:
+  • Every RAG insight that was relevant has been incorporated.
+  • The prompt is self-contained — no external context needed to execute.
+  • No ambiguity remains; two readers would interpret it identically.
+
+━━━  PROMPT-ENGINEERING PRINCIPLES (apply ALL)  ━━━
+1. **Role Anchoring** – Open with a vivid, expert persona.
+2. **Clarity & Precision** – Concrete metrics over vague qualifiers.
+3. **Structured Decomposition** – Headings, numbered steps, bullet lists.
+4. **Completeness** – All context, constraints, output format, success criteria.
+5. **Actionability** – Strong verbs, measurable deliverables.
+6. **Few-Shot Guidance** – Embed input/output examples when valuable.
+7. **Negative Constraints** – State what to AVOID explicitly.
+8. **Output Format Spec** – Define exact response structure.
+9. **Domain Best Practices** – Professional {domain} conventions.
+10. **Meta-Verification** – End prompt with a self-check instruction.
+
+{improvement_instructions}
+
+━━━  OUTPUT (strict JSON — no markdown fences)  ━━━
+{{
+    "improved_prompt": "<the fully rewritten prompt>",
+    "improvements_made": ["<specific change>", "..."],
+    "key_additions": ["<context-based addition>", "..."],
+    "structure_analysis": "<how structure was improved with context>",
+    "effectiveness_score": <float 0.0-1.0>,
+    "context_utilization": {{
+        "memories_used": {memories_count},
+        "knowledge_applied": {knowledge_count},
+        "conversation_continuity": "high|medium|low"
+    }},
+    "reasoning": "<why these changes help, including context benefits>"
+}}
         """)
 
         self.improvement_with_context_chain = (
@@ -560,28 +604,40 @@ class SoftwareEngineeringExpert(BaseExpertAgent):
     def _define_improvement_templates(self) -> Dict[str, str]:
         return {
             "default": """
-            For software engineering prompts, ensure the final prompt is production-ready. It must include:
-            - **Language and Framework:** Specify the exact programming language, version, and any required frameworks.
-            - **Input/Output:** Define the precise format for inputs and outputs, including data structures and examples.
-            - **Performance:** State clear performance constraints (e.g., time complexity, memory usage).
-            - **Error Handling:** Detail how errors and edge cases should be managed.
-            - **Code Style:** Enforce a specific code style (e.g., PEP 8, Google Style Guide) and documentation standard (e.g., JSDoc, Sphinx).
-            - **Testing:** Mandate the inclusion of unit tests, integration tests, and validation criteria.
-            - **Security:** Address potential security vulnerabilities and best practices.
+            For software engineering prompts, ensure the final prompt is production-ready and uses
+            state-of-the-art prompt engineering techniques:
+            - **Language and Framework:** Specify the exact programming language, version, and required frameworks.
+            - **Input/Output Contracts:** Define the precise format for inputs and outputs with typed examples.
+            - **Performance Requirements:** State clear performance constraints (time complexity, memory, latency).
+            - **Error Handling & Edge Cases:** Detail how errors, boundary conditions, and failures are managed.
+            - **Code Style & Standards:** Enforce a specific code style (PEP 8, Google Style Guide) and docs standard.
+            - **Testing Mandate:** Require unit tests, integration tests, test coverage targets, and test data.
+            - **Security Considerations:** Address OWASP Top 10 or relevant security patterns.
+            - **Few-Shot Example:** Include at least one concrete input → expected output example.
+            - **Negative Constraints:** Explicitly state anti-patterns and approaches to avoid.
+            - **Self-Verification Step:** End with "Before submitting, verify: [checklist]."
             """,
             "raw": """
-            This is a raw, unstructured prompt. Re-engineer it into a professional-grade prompt by:
-            - **Defining a Persona:** Start with "You are an expert [Language] developer..."
-            - **Structuring the Task:** Use clear headings like "## Task," "## Requirements," "## Constraints," and "## Output Format."
-            - **Adding Technical Depth:** Inject specific library/framework requirements, version numbers, and architectural patterns.
-            - **Providing Examples:** Include at least one clear example of input and expected output.
+            This is a raw, unstructured prompt. Apply full prompt engineering transformation:
+            - **Role Anchor:** Open with "You are a principal software engineer at a top tech company with 15+ years
+              of experience in [relevant tech stack]..."
+            - **Structured Layout:** Use clear headings: ## Context, ## Task, ## Requirements, ## Constraints,
+              ## Output Format, ## Examples, ## What NOT To Do, ## Verification Checklist.
+            - **Technical Depth:** Inject specific library/framework requirements, version numbers, architectural
+              patterns (e.g., "Use repository pattern with dependency injection").
+            - **Concrete Example:** Include a worked input/output example that demonstrates expected quality.
+            - **Chain-of-Thought Trigger:** Add "Think through your approach step-by-step before coding."
+            - **Negative Constraints:** Add "Do NOT: use deprecated APIs, skip error handling, hardcode values."
             """,
             "structured": """
-            This is a semi-structured prompt. Elevate it to an exceptional standard by:
-            - **Enhancing Specificity:** Replace vague terms with precise technical specifications.
-            - **Incorporating Best Practices:** Add requirements for logging, monitoring, and configuration management.
-            - **Considering Scalability:** Introduce considerations for how the solution will perform under load.
-            - **Mandating Documentation:** Require detailed inline comments and a README file.
+            This is a semi-structured prompt. Elevate it to an exceptional standard:
+            - **Enhance Specificity:** Replace vague terms with precise technical specifications and numeric targets.
+            - **Incorporate Production Practices:** Add requirements for logging, monitoring, config management,
+              graceful degradation, and observability.
+            - **Scalability Section:** Introduce considerations for load, concurrency, and horizontal scaling.
+            - **Documentation Mandate:** Require inline comments, docstrings, README, and architecture decision records.
+            - **Self-Review Gate:** End with "Before finalizing, confirm: all edge cases handled, tests pass,
+              no hardcoded secrets, code is idiomatic [language]."
             """
         }
 
@@ -630,10 +686,186 @@ class DataScienceExpert(BaseExpertAgent):
         }
 
 
+class ReportWritingExpert(BaseExpertAgent):
+    """Expert agent for report writing and documentation prompts."""
+
+    def _define_expertise_areas(self) -> List[str]:
+        return [
+            "Executive summary composition",
+            "Technical documentation authoring",
+            "Business report structuring",
+            "Findings and recommendations writing",
+            "Data-driven narrative construction",
+            "Stakeholder communication",
+            "Academic and research report formatting",
+            "Presentation deck scripting"
+        ]
+
+    def _define_improvement_templates(self) -> Dict[str, str]:
+        return {
+            "default": """
+            For report writing prompts, ensure the final prompt produces a publication-ready document. It must include:
+            - **Purpose and Audience:** Specify who will read the report and what decisions it should inform.
+            - **Structure:** Define the report sections (Executive Summary, Introduction, Methodology, Findings, Recommendations, Appendices).
+            - **Data Requirements:** List the data sources, metrics, and KPIs to reference.
+            - **Tone and Formality:** Specify the writing style (e.g., formal business, academic, journalistic).
+            - **Visuals:** Mandate inclusion of charts, tables, or infographics where appropriate.
+            - **Length and Format:** Set page limits, citation style, and formatting requirements.
+            """,
+            "raw": """
+            This is a raw report writing prompt. Transform it into a professional content brief by:
+            - **Defining a Persona:** Start with "You are a senior business analyst preparing a report for..."
+            - **Structuring Sections:** Use headings like "## Report Objective," "## Target Audience," "## Required Sections," "## Deliverable Format."
+            - **Adding Specificity:** Include exact metrics, timeframes, and comparison criteria.
+            - **Providing a Template:** Outline the expected table of contents.
+            """,
+            "structured": """
+            This is a semi-structured report prompt. Enhance it by:
+            - **Adding Stakeholder Context:** Clarify who the decision-makers are and what they need.
+            - **Mandating Evidence:** Require data citations and sourcing for every claim.
+            - **Including Actionable Recommendations:** Each finding should map to a specific recommendation.
+            - **Requiring an Executive Summary:** Mandate a standalone summary that captures all key points.
+            """
+        }
+
+
+class EducationExpert(BaseExpertAgent):
+    """Expert agent for educational content and teaching prompts."""
+
+    def _define_expertise_areas(self) -> List[str]:
+        return [
+            "Curriculum design and lesson planning",
+            "Learning objective formulation (Bloom's taxonomy)",
+            "Assessment and rubric creation",
+            "Differentiated instruction strategies",
+            "Interactive and engaging content design",
+            "Tutorial and explainer writing",
+            "Student engagement techniques",
+            "Educational technology integration"
+        ]
+
+    def _define_improvement_templates(self) -> Dict[str, str]:
+        return {
+            "default": """
+            For education prompts, ensure the final prompt produces pedagogically sound content. It must include:
+            - **Learning Objectives:** Use Bloom's Taxonomy verbs (Understand, Apply, Analyze, Evaluate, Create).
+            - **Target Audience:** Specify grade level, skill level, or learner profile.
+            - **Content Structure:** Organize into Introduction, Core Concepts, Examples, Practice Activities, Assessment.
+            - **Engagement:** Include interactive elements, analogies, real-world scenarios, or discussion questions.
+            - **Assessment:** Define how mastery will be measured (quiz, project, rubric criteria).
+            - **Accessibility:** Ensure content accommodates different learning styles (visual, auditory, kinesthetic).
+            """,
+            "raw": """
+            This is a raw educational prompt. Transform it into a structured lesson plan by:
+            - **Defining a Persona:** Start with "You are an experienced educator specializing in..."
+            - **Using Bloom's Taxonomy:** Frame objectives with specific cognitive levels.
+            - **Adding Scaffolding:** Break complex topics into progressive, manageable steps.
+            - **Including Examples:** Provide at least two worked examples for each concept.
+            """,
+            "structured": """
+            This is a semi-structured education prompt. Enhance it by:
+            - **Adding Differentiation:** Include tiered activities for beginner, intermediate, and advanced learners.
+            - **Incorporating Assessment:** Add formative checks and a summative assessment with rubric.
+            - **Mandating Engagement Hooks:** Require an opening hook, mid-lesson activity, and closing reflection.
+            - **Requiring Real-World Connections:** Link each concept to a practical, real-world application.
+            """
+        }
+
+
+class BusinessStrategyExpert(BaseExpertAgent):
+    """Expert agent for business strategy and management prompts."""
+
+    def _define_expertise_areas(self) -> List[str]:
+        return [
+            "Strategic planning and competitive analysis",
+            "Market research and positioning",
+            "Business model innovation",
+            "Financial analysis and forecasting",
+            "Go-to-market strategy development",
+            "Organizational design and change management",
+            "Risk assessment and mitigation",
+            "Growth strategy and scaling"
+        ]
+
+    def _define_improvement_templates(self) -> Dict[str, str]:
+        return {
+            "default": """
+            For business strategy prompts, ensure the final prompt produces actionable strategic insights. It must include:
+            - **Business Context:** Specify industry, company size, market position, and competitive landscape.
+            - **Strategic Objective:** Define the specific business goal (growth, efficiency, market entry, etc.).
+            - **Analytical Frameworks:** Mandate use of frameworks (SWOT, Porter's Five Forces, PESTEL, Value Chain).
+            - **Data Requirements:** Specify market data, financial metrics, and KPIs needed.
+            - **Deliverable Format:** Define the output (strategy document, presentation, one-pager, financial model).
+            - **Timeline and Constraints:** Set implementation timeline, budget constraints, and risk tolerance.
+            """,
+            "raw": """
+            This is a raw business strategy prompt. Transform it into a professional strategic brief by:
+            - **Defining a Persona:** Start with "You are a management consultant at a top-tier firm..."
+            - **Structuring the Analysis:** Use headings like "## Strategic Objective," "## Market Analysis," "## Options," "## Recommendation."
+            - **Adding Quantitative Rigor:** Include revenue targets, market size estimates, and ROI projections.
+            - **Mandating Frameworks:** Require at least two analytical frameworks in the analysis.
+            """,
+            "structured": """
+            This is a semi-structured business prompt. Enhance it by:
+            - **Adding Competitive Intelligence:** Require analysis of top 3-5 competitors.
+            - **Including Scenario Planning:** Mandate best-case, base-case, and worst-case scenarios.
+            - **Requiring Actionable Recommendations:** Each insight must map to a specific action item with owner and timeline.
+            - **Mandating Risk Assessment:** Include a risk matrix with mitigation strategies.
+            """
+        }
+
+
+class CreativeWritingExpert(BaseExpertAgent):
+    """Expert agent for creative writing and content creation prompts."""
+
+    def _define_expertise_areas(self) -> List[str]:
+        return [
+            "Narrative structure and storytelling",
+            "Character development and dialogue",
+            "Content marketing and copywriting",
+            "Creative ideation and brainstorming",
+            "Tone and voice calibration",
+            "Audience engagement techniques",
+            "SEO-optimized content creation",
+            "Multi-format content adaptation"
+        ]
+
+    def _define_improvement_templates(self) -> Dict[str, str]:
+        return {
+            "default": """
+            For creative writing prompts, ensure the final prompt inspires high-quality, engaging output. It must include:
+            - **Genre and Style:** Specify the genre, tone, and literary style (e.g., persuasive, narrative, poetic).
+            - **Audience:** Define the target reader persona and their expectations.
+            - **Structure:** Outline the desired structure (hook, body, conclusion) or narrative arc.
+            - **Voice and Tone:** Provide specific adjectives for the desired voice (e.g., witty, authoritative, empathetic).
+            - **Constraints:** Set word count, format, and any content restrictions.
+            - **Inspiration:** Provide reference examples or comparable works for style guidance.
+            """,
+            "raw": """
+            This is a raw creative prompt. Transform it into a detailed creative brief by:
+            - **Defining a Persona:** Start with "You are an award-winning writer specializing in..."
+            - **Setting the Scene:** Provide world-building details, character sketches, or brand context.
+            - **Adding Sensory Details:** Require vivid descriptions that appeal to multiple senses.
+            - **Including Examples:** Reference specific works or writers as style benchmarks.
+            """,
+            "structured": """
+            This is a semi-structured creative prompt. Enhance it by:
+            - **Deepening Character/Brand Voice:** Add detailed persona traits and communication preferences.
+            - **Adding Emotional Arc:** Specify the emotional journey the reader should experience.
+            - **Mandating a Hook:** Require an opening that immediately captures attention.
+            - **Requiring Revision Criteria:** Define what "excellent" looks like with specific quality markers.
+            """
+        }
+
+
 # Registry of available expert agents
 EXPERT_AGENT_REGISTRY = {
     "software_engineering": SoftwareEngineeringExpert,
     "data_science": DataScienceExpert,
+    "report_writing": ReportWritingExpert,
+    "education": EducationExpert,
+    "business_strategy": BusinessStrategyExpert,
+    "creative_writing": CreativeWritingExpert,
 }
 
 
@@ -665,32 +897,43 @@ class GenericExpertAgent(BaseExpertAgent):
             "Clarity and specificity improvement",
             "Structure and organization enhancement",
             "Context and detail addition",
-            "Best practices application"
+            "Best practices application",
+            "Chain-of-Thought reasoning",
+            "Meta-prompting techniques"
         ]
 
     def _define_improvement_templates(self) -> Dict[str, str]:
         return {
             "default": """
-            For general prompts, ensure the final prompt is comprehensive and unambiguous. It must include:
-            - **Objective:** A crystal-clear statement of the desired outcome.
-            - **Context:** All relevant background information required to complete the task.
-            - **Audience and Tone:** Specify the target audience and the desired tone of the response.
-            - **Constraints:** List any limitations, constraints, or negative requirements.
-            - **Output Format:** Define the exact structure and format of the expected output.
-            - **Success Criteria:** Provide clear, measurable criteria for what constitutes a successful response.
+            For general prompts, apply systematic prompt engineering to make the output
+            comprehensive, unambiguous, and immediately executable:
+            - **Objective:** A crystal-clear statement of the desired outcome with measurable success criteria.
+            - **Context:** All relevant background information — the reader should never need to ask for more.
+            - **Persona & Tone:** Define who the model should be and the exact voice/register to use.
+            - **Constraints:** List all limitations, negative requirements ("Do NOT..."), and scope boundaries.
+            - **Output Format:** Define the exact structure (headings, code blocks, tables, JSON, etc.).
+            - **Examples:** Provide at least one input → output example to anchor expected quality.
+            - **Edge Cases:** Explicitly address boundary conditions, ambiguous scenarios, and fallbacks.
+            - **Verification:** End with a self-check instruction: "Before finalizing, verify all requirements are met."
             """,
             "raw": """
-            This is a raw, unstructured prompt. Re-engineer it into a high-quality, structured prompt by:
-            - **Defining a Persona:** Start with "You are a helpful and knowledgeable assistant..."
-            - **Structuring the Request:** Use clear headings like "## Goal," "## Context," "## Requirements," and "## Deliverable."
-            - **Adding Specificity:** Replace generalities with specific details and examples.
-            - **Clarifying the 'Why':** Briefly explain the purpose behind the request to provide better context.
+            This is a raw, unstructured prompt. Apply a full prompt engineering transformation:
+            - **Role Anchor:** Start with a vivid persona: "You are a world-class expert in..."
+            - **Structured Layout:** Use clear headings: ## Goal, ## Context, ## Requirements,
+              ## Constraints, ## Output Format, ## Examples, ## What NOT To Do.
+            - **Specificity Injection:** Replace every vague phrase with a concrete, measurable detail.
+            - **Chain-of-Thought:** Add "Think step-by-step before producing your answer."
+            - **Negative Constraints:** Add "Do NOT: provide generic filler, make assumptions not stated,
+              skip edge cases, or produce incomplete output."
+            - **Self-Verification:** End with "Before submitting, verify: [specific checklist items]."
             """,
             "structured": """
-            This is a semi-structured prompt. Elevate it to an exceptional standard by:
-            - **Enhancing Clarity:** Rephrase any ambiguous sentences for maximum clarity.
-            - **Providing Examples:** Add a clear example of what is expected.
-            - **Adding Negative Constraints:** Specify what should *not* be included in the response.
-            - **Mandating a Review:** Ask the model to review its own response against the requirements before finalizing.
+            This is a semi-structured prompt. Elevate it to an exceptional standard:
+            - **Enhance Clarity:** Rephrase any ambiguous sentence so two readers would interpret identically.
+            - **Add Examples:** Include a concrete worked example of expected input and output.
+            - **Negative Constraints:** Specify what should *not* be included in the response.
+            - **Self-Review Gate:** Ask the model to review its response against all requirements before finalizing.
+            - **Meta-Verification:** Add "Before finalizing: Does this fully address the goal? Are all constraints
+              met? Would the requester need to ask any follow-up questions?"
             """
         }

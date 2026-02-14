@@ -1,18 +1,18 @@
-# Core Web Framework
+# ─── Core Web Framework ──────────────────────────────────────────
 fastapi>=0.116.1
 pydantic>=2.11.7
 pydantic-settings>=2.10.1
 python-dotenv>=1.1.1
 uvicorn>=0.35.0
 
-# LangChain Ecosystem
+# ─── LangChain Ecosystem ────────────────────────────────────────
 langchain>=0.3.27
 langchain-core>=0.3.75
 langchain-openai>=0.3.32
 langchain-google-genai>=2.1.10
 langchain-text-splitters>=0.3.9
 
-# LangGraph Ecosystem
+# ─── LangGraph Ecosystem ────────────────────────────────────────
 langgraph>=0.6.6
 langgraph-api>=0.4.1
 langgraph-checkpoint>=2.1.1
@@ -21,30 +21,37 @@ langgraph-prebuilt>=0.6.4
 langgraph-runtime-inmem>=0.9.0
 langgraph-sdk>=0.2.3
 
-# LLM Providers
+# ─── LLM Providers ──────────────────────────────────────────────
 langsmith>=0.4.20
 openai>=1.102.0
 google-ai-generativelanguage>=0.6.18
 google-api-core>=2.25.1
+langchain-anthropic>=0.3.12       # Anthropic Claude models
+langchain-groq>=0.3.2             # Groq (fast, free tier)
 
-# Data Processing & Serialization
+# ─── Data Processing & Serialization ────────────────────────────
 protobuf>=6.32.0
 orjson>=3.11.3
 sqlite-vec>=0.1.6
 
-# HTTP & Async
+# ─── HTTP & Async ───────────────────────────────────────────────
 httpx>=0.28.1
+sse-starlette>=2.0.0              # Server-Sent Events for streaming
 
-# Vector Database & Embeddings (optional)
+# ─── Caching (optional) ─────────────────────────────────────────
+# redis>=5.0.0                    # Uncomment for Redis cache backend
+
+# ─── Vector Database & Embeddings (optional) ────────────────────
 # chromadb>=0.4.22
 # sentence-transformers>=2.2.2
 
-# Development & Testing
+# ─── Development & Testing ──────────────────────────────────────
 pytest>=8.4.1
-# matplotlib>=3.10.5  # optional (used for plotting in tools)
-# seaborn>=0.13.2    # optional (used for plotting in tools)
+pytest-asyncio>=1.0.0
+pytest-cov>=6.0
+ruff>=0.11.0
 safety>=3.6.0
 
-# System Monitoring
+# ─── System Monitoring ──────────────────────────────────────────
 psutil>=7.0.0
 

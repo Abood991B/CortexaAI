@@ -1,4 +1,4 @@
-"""Main application entry point for Multi-Agent Prompt Engineering System."""
+"""Main application entry point for CortexaAI - Advanced Multi-Agent Prompt Engineering System."""
 
 import uuid
 import asyncio
@@ -11,19 +11,39 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Query
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.config import settings, setup_langsmith, metrics, get_logger
+from config.llm_providers import llm_provider, PROVIDER_CONFIGS
+from core.optimization import optimization_engine
 from agents.coordinator import WorkflowCoordinator
 from agents.classifier import DomainClassifier
 from agents.evaluator import PromptEvaluator
 from src.workflow import process_prompt_with_langgraph
 import psutil
 from inspect import iscoroutinefunction
+
+# ── New feature imports ──────────────────────────────────────────────────
+from core.database import db
+from core.templates import template_engine
+from core.error_recovery import error_analytics
+from core.language import language_processor
+from core.complexity import complexity_analyzer
+from core.auth import auth_manager
+from core.marketplace import marketplace
+from core.finetuning import finetuning_manager
+from core.prompt_builder import prompt_builder
+from core.plugins import plugin_manager
+from core.regression import regression_runner
+from core.similarity import similarity_engine
+from core.streaming import stream_workflow
+from core.batch import batch_processor
+from core.webhooks import webhook_manager
 
 # Set up structured logging
 logger = get_logger(__name__)
@@ -89,9 +109,11 @@ def clear_workflow_caches(prompt: str, prompt_type: str = None):
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Multi-Agent Prompt Engineering System",
-    description="A production-level system for improving and optimizing prompts using multiple AI agents",
-    version="1.0.0"
+    title="CortexaAI",
+    description="Advanced Multi-Agent Prompt Engineering System with optimization, A/B testing, streaming, batch processing, marketplace, and multi-LLM support",
+    version="3.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # Add CORS middleware
@@ -102,6 +124,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Startup: initialize database, seed templates, load plugins ───────────
+@app.on_event("startup")
+async def startup_event():
+    """Initialize persistent layers on server start."""
+    # Database is auto-initialized on import; ensure templates are seeded
+    template_engine._seed_defaults()
+    # Load plugins from plugins/ directory if it exists
+    plugins_dir = Path(__file__).parent.parent / "plugins"
+    if plugins_dir.exists():
+        plugin_manager.load_from_directory(str(plugins_dir))
 
 
 # Pydantic models for API
@@ -116,6 +150,9 @@ class PromptRequest(BaseModel):
     workflow_id: Optional[str] = None  # Add workflow_id for tracking
     advanced_mode: bool = False
     synchronous: bool = False  # If true, run inline and return final result
+    # New feature fields
+    callback_url: Optional[str] = None  # Webhook URL to POST result on completion
+    language: Optional[str] = None  # Force a language (auto-detected if omitted)
 
 
 class PromptResponse(BaseModel):
@@ -837,7 +874,7 @@ async def get_metrics():
     # Add system metrics
     lines.append("# HELP system_info System information")
     lines.append("# TYPE system_info gauge")
-    lines.append('system_info{version="1.0.0",langsmith_enabled="' + str(bool(settings.langsmith_api_key)).lower() + '"} 1')
+    lines.append('system_info{version="3.0.0",langsmith_enabled="' + str(bool(settings.langsmith_api_key)).lower() + '"} 1')
 
     # Add LLM call metrics
     lines.append("# HELP llm_calls_total Total number of LLM calls")
@@ -923,7 +960,7 @@ async def health_check():
     health_status = {
         "status": "healthy",
         "timestamp": time.time(),
-        "version": "1.0.0",
+        "version": "3.0.0",
         "uptime_seconds": time.time() - getattr(health_check, 'start_time', time.time()),
         "components": {},
         "metrics": {}
@@ -992,14 +1029,716 @@ async def health_check():
     return health_status
 
 
+# ---------------------------------------------------------------------------
+# LLM Provider Management Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/providers")
+async def get_providers():
+    """Get status of all configured LLM providers."""
+    return {
+        "providers": llm_provider.get_provider_status(),
+        "default_provider": settings.default_model_provider,
+        "default_model": settings.default_model_name,
+        "available": llm_provider.get_available_providers(),
+    }
+
+
+@app.post("/api/providers/{provider_name}/reset")
+async def reset_provider_health(provider_name: str):
+    """Reset health status for a provider (useful after fixing API keys)."""
+    if provider_name not in PROVIDER_CONFIGS:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_name}")
+    llm_provider.reset_health(provider_name)
+    return {"status": "ok", "message": f"Health reset for provider: {provider_name}"}
+
+
+# ---------------------------------------------------------------------------
+# Optimization Engine Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/optimization/dashboard")
+async def get_optimization_dashboard():
+    """Get optimization engine dashboard data (analytics, A/B tests, versions)."""
+    return optimization_engine.get_dashboard_data()
+
+
+@app.get("/api/optimization/analytics")
+async def get_optimization_analytics():
+    """Get detailed optimization analytics and performance metrics."""
+    return optimization_engine.analytics.get_summary()
+
+
+@app.get("/api/optimization/ab-tests")
+async def get_ab_tests():
+    """Get A/B test history and statistics."""
+    return {
+        "stats": optimization_engine.ab_testing.get_stats(),
+        "history": optimization_engine.ab_testing.get_test_history(),
+    }
+
+
+@app.get("/api/optimization/versions")
+async def get_prompt_versions():
+    """Get prompt version statistics."""
+    return optimization_engine.version_control.get_stats()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  NEW FEATURE ENDPOINTS (v3.0)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+# ---------------------------------------------------------------------------
+# Streaming (SSE)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/process-prompt/stream")
+async def process_prompt_stream(request: PromptRequest):
+    """Stream prompt processing progress via Server-Sent Events."""
+    return StreamingResponse(
+        stream_workflow(
+            prompt=request.prompt,
+            prompt_type=request.prompt_type,
+            use_langgraph=request.use_langgraph,
+            coordinator=coordinator,
+            langgraph_fn=process_prompt_with_langgraph if request.use_langgraph else None,
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Batch Processing
+# ---------------------------------------------------------------------------
+
+class BatchRequest(BaseModel):
+    prompts: List[Dict[str, Any]]
+    concurrency: int = Field(default=3, ge=1, le=10)
+
+
+@app.post("/api/batch")
+async def create_batch(req: BatchRequest, background_tasks: BackgroundTasks):
+    """Create and start a batch processing job."""
+    job = batch_processor.create_batch(req.prompts, req.concurrency)
+    batch_id = job["batch_id"]
+
+    async def _processor(prompt_text, prompt_type="auto"):
+        return await coordinator.process_prompt(prompt=prompt_text, prompt_type=prompt_type)
+
+    background_tasks.add_task(batch_processor.run_batch, batch_id, _processor)
+    return job
+
+
+@app.get("/api/batch/{batch_id}/status")
+async def get_batch_status(batch_id: str):
+    status = batch_processor.get_status(batch_id)
+    if not status:
+        raise HTTPException(404, "Batch not found")
+    return status
+
+
+@app.get("/api/batch/{batch_id}/results")
+async def get_batch_results(batch_id: str):
+    results = batch_processor.get_results(batch_id)
+    if not results:
+        raise HTTPException(404, "Batch not found")
+    return results
+
+
+@app.get("/api/batches")
+async def list_batches():
+    return batch_processor.list_batches()
+
+
+# ---------------------------------------------------------------------------
+# Prompt Templates
+# ---------------------------------------------------------------------------
+
+class TemplateCreateRequest(BaseModel):
+    name: str
+    domain: str
+    template_text: str
+    description: str = ""
+    variables: Optional[List[str]] = None
+
+
+class TemplateRenderRequest(BaseModel):
+    template_id: str
+    variables: Dict[str, str] = {}
+
+
+@app.get("/api/templates")
+async def list_templates(domain: Optional[str] = None, query: Optional[str] = None):
+    if query:
+        return template_engine.search(query)
+    return template_engine.list_all(domain)
+
+
+@app.post("/api/templates")
+async def create_template(req: TemplateCreateRequest):
+    return template_engine.create(
+        name=req.name, domain=req.domain,
+        template_text=req.template_text,
+        description=req.description,
+        variables=req.variables,
+    )
+
+
+@app.get("/api/templates/{template_id}")
+async def get_template(template_id: str):
+    t = template_engine.get(template_id)
+    if not t:
+        raise HTTPException(404, "Template not found")
+    return t
+
+
+@app.post("/api/templates/render")
+async def render_template(req: TemplateRenderRequest):
+    result = template_engine.render(req.template_id, req.variables)
+    if not result:
+        raise HTTPException(404, "Template not found")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Complexity Scoring
+# ---------------------------------------------------------------------------
+
+class ComplexityRequest(BaseModel):
+    text: str
+
+
+@app.post("/api/complexity")
+async def analyze_complexity(req: ComplexityRequest):
+    return complexity_analyzer.analyze(req.text)
+
+
+@app.post("/api/complexity/pipeline-config")
+async def get_pipeline_config(req: ComplexityRequest):
+    return complexity_analyzer.get_pipeline_config(req.text)
+
+
+# ---------------------------------------------------------------------------
+# Language Detection & Processing
+# ---------------------------------------------------------------------------
+
+class LanguageRequest(BaseModel):
+    text: str
+
+
+@app.post("/api/language/detect")
+async def detect_language(req: LanguageRequest):
+    return language_processor.analyze(req.text)
+
+
+@app.get("/api/language/supported")
+async def supported_languages():
+    return language_processor.get_supported_languages()
+
+
+# ---------------------------------------------------------------------------
+# API Key Auth Management
+# ---------------------------------------------------------------------------
+
+class APIKeyCreateRequest(BaseModel):
+    name: str
+    scopes: Optional[List[str]] = None
+    rate_limit_rpm: Optional[int] = None
+
+
+@app.post("/api/auth/keys")
+async def create_api_key(req: APIKeyCreateRequest):
+    return auth_manager.create_key(req.name, req.scopes, req.rate_limit_rpm)
+
+
+@app.get("/api/auth/keys")
+async def list_api_keys():
+    return auth_manager.list_keys()
+
+
+@app.delete("/api/auth/keys/{name}")
+async def revoke_api_key(name: str):
+    auth_manager.revoke_key(name)
+    return {"status": "revoked", "name": name}
+
+
+@app.post("/api/auth/verify")
+async def verify_api_key(request: Request):
+    key = request.headers.get("X-API-Key", "")
+    result = auth_manager.verify_key(key)
+    if not result:
+        raise HTTPException(401, "Invalid or inactive API key")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Marketplace
+# ---------------------------------------------------------------------------
+
+class MarketplacePublishRequest(BaseModel):
+    title: str
+    description: str
+    prompt_text: str
+    domain: str
+    author: str = "anonymous"
+    tags: Optional[List[str]] = None
+    price: float = 0.0
+
+
+class MarketplaceRateRequest(BaseModel):
+    stars: int = Field(ge=1, le=5)
+
+
+@app.get("/api/marketplace")
+async def marketplace_search(
+    query: Optional[str] = None,
+    domain: Optional[str] = None,
+    sort_by: str = "downloads",
+    limit: int = 20,
+    offset: int = 0,
+):
+    return marketplace.search(query, domain, sort_by, limit, offset)
+
+
+@app.post("/api/marketplace")
+async def marketplace_publish(req: MarketplacePublishRequest):
+    return marketplace.publish(
+        title=req.title, description=req.description,
+        prompt_text=req.prompt_text, domain=req.domain,
+        author=req.author, tags=req.tags, price=req.price,
+    )
+
+
+@app.get("/api/marketplace/{item_id}")
+async def marketplace_download(item_id: str):
+    item = marketplace.download(item_id)
+    if not item:
+        raise HTTPException(404, "Marketplace item not found")
+    return item
+
+
+@app.post("/api/marketplace/{item_id}/rate")
+async def marketplace_rate(item_id: str, req: MarketplaceRateRequest):
+    result = marketplace.rate(item_id, req.stars)
+    if not result:
+        raise HTTPException(404, "Marketplace item not found")
+    return result
+
+
+@app.get("/api/marketplace/stats/overview")
+async def marketplace_stats():
+    return marketplace.stats()
+
+
+@app.get("/api/marketplace/featured/list")
+async def marketplace_featured(limit: int = 10):
+    return marketplace.featured(limit)
+
+
+# ---------------------------------------------------------------------------
+# Fine-Tuning
+# ---------------------------------------------------------------------------
+
+class FineTuneJobRequest(BaseModel):
+    provider: str = "openai"
+    model: str = "gpt-4o-mini-2024-07-18"
+    hyperparameters: Optional[Dict[str, Any]] = None
+
+
+class TrainingDataRequest(BaseModel):
+    prompts: List[Dict[str, str]]
+    format_type: str = "openai"
+
+
+@app.post("/api/finetuning/prepare")
+async def prepare_training_data(req: TrainingDataRequest):
+    return finetuning_manager.prepare_training_data(req.prompts, req.format_type)
+
+
+@app.post("/api/finetuning/jobs")
+async def create_finetune_job(req: FineTuneJobRequest):
+    return finetuning_manager.create_job(req.provider, req.model, hyperparameters=req.hyperparameters)
+
+
+@app.get("/api/finetuning/jobs")
+async def list_finetune_jobs():
+    return finetuning_manager.list_jobs()
+
+
+@app.get("/api/finetuning/jobs/{job_id}")
+async def get_finetune_job(job_id: str):
+    job = finetuning_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Fine-tuning job not found")
+    return job
+
+
+@app.post("/api/finetuning/jobs/{job_id}/simulate")
+async def simulate_finetune(job_id: str):
+    result = finetuning_manager.simulate_run(job_id)
+    if not result:
+        raise HTTPException(404, "Fine-tuning job not found")
+    return result
+
+
+@app.get("/api/finetuning/models/{provider}")
+async def get_finetune_models(provider: str):
+    return finetuning_manager.get_supported_models(provider)
+
+
+@app.get("/api/finetuning/estimate")
+async def estimate_finetune_cost(provider: str = "openai", samples: int = 100, epochs: int = 3):
+    return finetuning_manager.estimate_cost(provider, samples, epochs)
+
+
+# ---------------------------------------------------------------------------
+# Visual Prompt Builder
+# ---------------------------------------------------------------------------
+
+class BuilderBlockRequest(BaseModel):
+    block_type: str
+    content: str
+    label: Optional[str] = None
+    order: Optional[int] = None
+
+
+class BuilderAssembleRequest(BaseModel):
+    variables: Optional[Dict[str, str]] = None
+
+
+class BuilderReorderRequest(BaseModel):
+    block_ids: List[str]
+
+
+@app.post("/api/builder/sessions")
+async def create_builder_session(domain: Optional[str] = None):
+    return prompt_builder.create_session(domain)
+
+
+@app.get("/api/builder/sessions/{session_id}")
+async def get_builder_session(session_id: str):
+    s = prompt_builder.get_session(session_id)
+    if not s:
+        raise HTTPException(404, "Builder session not found")
+    return s
+
+
+@app.post("/api/builder/sessions/{session_id}/blocks")
+async def add_builder_block(session_id: str, req: BuilderBlockRequest):
+    result = prompt_builder.add_block(session_id, req.block_type, req.content, req.label, req.order)
+    if not result:
+        raise HTTPException(404, "Session not found")
+    return result
+
+
+@app.put("/api/builder/sessions/{session_id}/blocks/{block_id}")
+async def update_builder_block(session_id: str, block_id: str, req: BuilderBlockRequest):
+    result = prompt_builder.update_block(session_id, block_id, req.content)
+    if not result:
+        raise HTTPException(404, "Block or session not found")
+    return result
+
+
+@app.delete("/api/builder/sessions/{session_id}/blocks/{block_id}")
+async def remove_builder_block(session_id: str, block_id: str):
+    if not prompt_builder.remove_block(session_id, block_id):
+        raise HTTPException(404, "Block or session not found")
+    return {"status": "removed"}
+
+
+@app.post("/api/builder/sessions/{session_id}/reorder")
+async def reorder_builder_blocks(session_id: str, req: BuilderReorderRequest):
+    result = prompt_builder.reorder_blocks(session_id, req.block_ids)
+    if not result:
+        raise HTTPException(404, "Session not found")
+    return result
+
+
+@app.post("/api/builder/sessions/{session_id}/assemble")
+async def assemble_prompt(session_id: str, req: BuilderAssembleRequest):
+    result = prompt_builder.assemble(session_id, req.variables)
+    if not result:
+        raise HTTPException(404, "Session not found")
+    return result
+
+
+@app.get("/api/builder/presets")
+async def list_builder_presets():
+    return prompt_builder.list_presets()
+
+
+@app.get("/api/builder/presets/{domain}")
+async def get_builder_preset(domain: str):
+    preset = prompt_builder.get_preset(domain)
+    if not preset:
+        raise HTTPException(404, "Preset not found")
+    return preset
+
+
+# ---------------------------------------------------------------------------
+# Plugin System
+# ---------------------------------------------------------------------------
+
+class PluginRegisterRequest(BaseModel):
+    name: str
+    version: str = "1.0.0"
+    plugin_type: str = "expert"
+    description: str = ""
+    author: str = ""
+    config: Optional[Dict[str, Any]] = None
+
+
+@app.get("/api/plugins")
+async def list_plugins():
+    return plugin_manager.list_plugins()
+
+
+@app.post("/api/plugins")
+async def register_plugin(req: PluginRegisterRequest):
+    return plugin_manager.register(
+        req.name, req.version, req.plugin_type, req.description, req.author, req.config,
+    )
+
+
+@app.get("/api/plugins/{name}")
+async def get_plugin(name: str):
+    p = plugin_manager.get_plugin(name)
+    if not p:
+        raise HTTPException(404, "Plugin not found")
+    return p
+
+
+@app.delete("/api/plugins/{name}")
+async def unregister_plugin(name: str):
+    if not plugin_manager.unregister(name):
+        raise HTTPException(404, "Plugin not found")
+    return {"status": "removed"}
+
+
+@app.post("/api/plugins/{name}/enable")
+async def enable_plugin(name: str):
+    if not plugin_manager.enable(name):
+        raise HTTPException(404, "Plugin not found")
+    return {"status": "enabled"}
+
+
+@app.post("/api/plugins/{name}/disable")
+async def disable_plugin(name: str):
+    if not plugin_manager.disable(name):
+        raise HTTPException(404, "Plugin not found")
+    return {"status": "disabled"}
+
+
+# ---------------------------------------------------------------------------
+# Regression Testing
+# ---------------------------------------------------------------------------
+
+class RegressionSuiteRequest(BaseModel):
+    name: str
+    domain: str
+    description: str = ""
+    test_cases: Optional[List[Dict[str, Any]]] = None
+
+
+class RegressionCaseRequest(BaseModel):
+    input_prompt: str
+    expected_keywords: Optional[List[str]] = None
+    min_score: float = 0.7
+
+
+@app.get("/api/regression/suites")
+async def list_regression_suites():
+    return regression_runner.list_suites()
+
+
+@app.post("/api/regression/suites")
+async def create_regression_suite(req: RegressionSuiteRequest):
+    return regression_runner.create_suite(req.name, req.domain, req.description, req.test_cases)
+
+
+@app.get("/api/regression/suites/{suite_id}")
+async def get_regression_suite(suite_id: str):
+    s = regression_runner.get_suite(suite_id)
+    if not s:
+        raise HTTPException(404, "Suite not found")
+    return s
+
+
+@app.delete("/api/regression/suites/{suite_id}")
+async def delete_regression_suite(suite_id: str):
+    regression_runner.delete_suite(suite_id)
+    return {"status": "deleted"}
+
+
+@app.post("/api/regression/suites/{suite_id}/cases")
+async def add_regression_case(suite_id: str, req: RegressionCaseRequest):
+    result = regression_runner.add_test_case(suite_id, req.input_prompt, req.expected_keywords, req.min_score)
+    if not result:
+        raise HTTPException(404, "Suite not found")
+    return result
+
+
+@app.post("/api/regression/suites/{suite_id}/run")
+async def run_regression_suite(suite_id: str):
+    async def _processor(prompt_text):
+        result = await coordinator.process_prompt(prompt=prompt_text, prompt_type="auto")
+        return {
+            "improved_prompt": result.get("output", {}).get("optimized_prompt", ""),
+            "evaluation_score": result.get("output", {}).get("quality_score", 0),
+        }
+    return await regression_runner.run_suite(suite_id, _processor)
+
+
+@app.post("/api/regression/suites/{suite_id}/baseline")
+async def save_regression_baseline(suite_id: str, run_results: Dict[str, Any]):
+    regression_runner.save_baseline(suite_id, run_results)
+    return {"status": "baseline_saved"}
+
+
+# ---------------------------------------------------------------------------
+# Similarity Search
+# ---------------------------------------------------------------------------
+
+class SimilaritySearchRequest(BaseModel):
+    query: str
+    top_k: int = Field(default=5, ge=1, le=50)
+    domain: Optional[str] = None
+    min_score: float = 0.0
+
+
+class SimilarityIndexRequest(BaseModel):
+    doc_id: str
+    text: str
+    domain: str = ""
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@app.post("/api/similarity/search")
+async def similarity_search(req: SimilaritySearchRequest):
+    return similarity_engine.search(req.query, req.top_k, req.domain, req.min_score)
+
+
+@app.post("/api/similarity/index")
+async def similarity_index(req: SimilarityIndexRequest):
+    return similarity_engine.add_document(req.doc_id, req.text, req.domain, req.metadata)
+
+
+@app.get("/api/similarity/duplicates")
+async def find_duplicates(threshold: float = 0.85):
+    return similarity_engine.find_duplicates(threshold)
+
+
+@app.post("/api/similarity/reindex")
+async def reindex_similarity(limit: int = 500):
+    count = similarity_engine.index_from_history(limit)
+    return {"indexed": count, "corpus_size": similarity_engine.stats()["corpus_size"]}
+
+
+@app.get("/api/similarity/stats")
+async def similarity_stats():
+    return similarity_engine.stats()
+
+
+# ---------------------------------------------------------------------------
+# Error Analytics
+# ---------------------------------------------------------------------------
+
+@app.get("/api/errors/analytics")
+async def get_error_analytics():
+    return error_analytics.get_summary()
+
+
+@app.get("/api/errors/recent")
+async def get_recent_errors(limit: int = 20):
+    return error_analytics.get_recent(limit)
+
+
+# ---------------------------------------------------------------------------
+# Webhook Management
+# ---------------------------------------------------------------------------
+
+class WebhookSubscribeRequest(BaseModel):
+    url: str
+    events: Optional[List[str]] = None
+    secret: Optional[str] = None
+    name: str = ""
+
+
+@app.post("/api/webhooks")
+async def subscribe_webhook(req: WebhookSubscribeRequest):
+    return webhook_manager.subscribe(req.url, req.events, req.secret, req.name)
+
+
+@app.get("/api/webhooks")
+async def list_webhooks():
+    return webhook_manager.list_subscriptions()
+
+
+@app.delete("/api/webhooks/{sub_id}")
+async def unsubscribe_webhook(sub_id: str):
+    if not webhook_manager.unsubscribe(sub_id):
+        raise HTTPException(404, "Subscription not found")
+    return {"status": "removed"}
+
+
+@app.get("/api/webhooks/log")
+async def webhook_delivery_log(limit: int = 50):
+    return webhook_manager.get_delivery_log(limit)
+
+
+# ---------------------------------------------------------------------------
+# Database Dashboard
+# ---------------------------------------------------------------------------
+
+@app.get("/api/dashboard")
+async def get_dashboard():
+    """Aggregated dashboard combining DB stats, cache stats, and optimisation."""
+    return {
+        "database": db.get_dashboard_stats(),
+        "cache": {
+            "stats": metrics.get_metrics(),
+        },
+        "optimization": optimization_engine.get_dashboard_data(),
+        "plugins": plugin_manager.list_plugins(),
+        "similarity": similarity_engine.stats(),
+        "marketplace": marketplace.stats(),
+        "version": "3.0.0",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Serve React Frontend (production build)
+# ---------------------------------------------------------------------------
+
+# Try to serve React build if it exists
+_frontend_build = Path(__file__).parent.parent / "frontend-react" / "dist"
+if _frontend_build.exists():
+    app.mount("/assets", StaticFiles(directory=str(_frontend_build / "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve the React SPA for any non-API route."""
+        # Don't intercept API routes
+        if full_path.startswith("api/") or full_path in ("docs", "redoc", "openapi.json", "health", "metrics"):
+            raise HTTPException(status_code=404)
+        index_file = _frontend_build / "index.html"
+        if index_file.exists():
+            return HTMLResponse(index_file.read_text(encoding="utf-8"))
+        raise HTTPException(status_code=404, detail="Frontend not built. Run: cd frontend-react && npm run build")
+
+
 def main():
     """Main entry point for running the application."""
     # Set up LangSmith if configured
     setup_langsmith()
 
     # Start the server
-    logger.info("Starting Multi-Agent Prompt Engineering System...")
-    logger.info(f"Server will run on {settings.host}:{settings.port}")
+    logger.info("Starting CortexaAI - Advanced Multi-Agent Prompt Engineering System")
+    logger.info(f"Server: http://{settings.host}:{settings.port}")
+    logger.info(f"API Docs: http://{settings.host}:{settings.port}/docs")
+    logger.info(f"Providers: {', '.join(llm_provider.get_available_providers()) or 'None (check .env)'}")
 
     uvicorn.run(
         "src.main:app",

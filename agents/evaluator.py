@@ -7,11 +7,11 @@ import json
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from langchain_google_genai import ChatGoogleGenerativeAI
+from config.llm_providers import get_llm
 from agents.exceptions import EvaluationError, ImprovementError
 from agents.utils import is_retryable_error, sanitize_json_response
 from config.config import (
-    settings, get_model_config, get_logger, metrics, log_performance,
+    settings, get_logger, metrics, log_performance,
     cache_manager, perf_config, generate_evaluation_cache_key, log_cache_performance,
     security_manager, security_config, log_security_event, prompt_generation_config
 )
@@ -31,70 +31,85 @@ class PromptEvaluator:
 
     def _setup_evaluation_chain(self):
         """Set up the LangChain for prompt evaluation."""
-        model_config = get_model_config(provider="google")
-        self.model = ChatGoogleGenerativeAI(
-            model=model_config["model_name"],
-            google_api_key=model_config["api_key"],
-            temperature=0.1  # Low temperature for consistent evaluation
-        )
+        self.model = get_llm(temperature=0.1)
 
-        evaluation_prompt = PromptTemplate.from_template("""
-        You are an expert prompt evaluator. Your task is to assess the quality of a prompt improvement.
+        evaluation_prompt = PromptTemplate.from_template("""You are a **principal prompt-quality evaluator** with deep expertise in
+structured assessment. Your task is to compare an improved prompt against
+its original and produce a rigorous, evidence-based evaluation.
 
-        DOMAIN: {domain}
-        ORIGINAL PROMPT:
-        {original_prompt}
+━━━  CONTEXT  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DOMAIN: {domain}
+PROMPT TYPE: {prompt_type}
+IMPROVEMENTS CLAIMED: {improvements_made}
 
-        IMPROVED PROMPT:
-        {improved_prompt}
+ORIGINAL PROMPT:
+{original_prompt}
 
-        PROMPT TYPE: {prompt_type}
-        IMPROVEMENTS CLAIMED: {improvements_made}
+IMPROVED PROMPT:
+{improved_prompt}
 
-        EVALUATION CRITERIA:
-        1. CLARITY: How clear and unambiguous is the prompt?
-        2. SPECIFICITY: How specific are the requirements and expectations?
-        3. STRUCTURE: How well is the prompt organized and structured?
-        4. COMPLETENESS: How complete are the instructions and context?
-        5. ACTIONABILITY: How actionable and implementable is the prompt?
-        6. DOMAIN ALIGNMENT: How well does it align with domain best practices?
+━━━  EVALUATION APPROACH (think step-by-step)  ━━━
+Before scoring, analyse the prompt through each lens below. For every
+criterion, cite specific evidence (quote or paraphrase) from the prompt
+that justifies your score. Do NOT assign scores without evidence.
 
-        TASK:
-        Evaluate the improved prompt against the original and provide detailed feedback.
-        Determine if the prompt meets quality standards or needs further improvement.
+━━━  EVALUATION RUBRIC (score each 0.0 – 1.0)  ━━━
+1. **CLARITY** – Is every sentence unambiguous? Could two readers interpret it
+   differently? Deduct for vague qualifiers ("good", "some", "etc."), passive
+   voice where active is clearer, and undefined acronyms or jargon.
+2. **SPECIFICITY** – Are inputs, outputs, constraints, edge-cases, formats,
+   and acceptance criteria explicitly stated? Score higher when concrete
+   numbers, named technologies, version numbers, or worked examples appear.
+3. **STRUCTURE** – Is the prompt logically organised with headings, numbered
+   lists, or clear sections? Deduct for wall-of-text, missing segmentation,
+   or illogical ordering of instructions.
+4. **COMPLETENESS** – Does it include all information needed to fulfil the task
+   without follow-up questions? Penalise missing context, undefined personas,
+   absent output format, or unstated assumptions.
+5. **ACTIONABILITY** – Can someone execute this prompt immediately? Look for
+   strong verbs, defined deliverables, measurable acceptance criteria, and
+   explicit next steps. Deduct for passive or vague asks.
+6. **DOMAIN ALIGNMENT** – Does it reflect best practices, terminology,
+   conventions, frameworks, and professional standards of **{domain}**?
 
-        Respond in JSON format with the following structure:
-        {{
-            "overall_score": 0.95,
-            "criteria_scores": {{
-                "clarity": 0.9,
-                "specificity": 0.9,
-                "structure": 0.9,
-                "completeness": 0.95,
-                "actionability": 0.95,
-                "domain_alignment": 0.96
-            }},
-            "passes_threshold": true,
-            "needs_improvement": false,
-            "strengths": [
-                "Strength 1",
-                "Strength 2"
-            ],
-            "weaknesses": [
-                "Weakness 1",
-                "Weakness 2"
-            ],
-            "specific_feedback": [
-                "Specific suggestion for improvement",
-                "Another targeted recommendation"
-            ],
-            "improvement_priority": "high|medium|low",
-            "reasoning": "Detailed explanation of evaluation and recommendations",
-            "comparison_analysis": "Analysis of improvements made vs. what was needed"
-        }}
+━━━  SCORING GUIDELINES  ━━━━━━━━━━━━━━━━━━━━━
+• 0.95-1.0  = Exceptional — production-ready, no changes needed
+• 0.85-0.94 = Strong — minor polish; maybe 1-2 small refinements
+• 0.70-0.84 = Acceptable — noticeable gaps worth addressing
+• 0.50-0.69 = Weak — significant rewrites needed in multiple areas
+• < 0.50    = Poor — fundamental issues; near-complete rewrite required
 
-        Set passes_threshold to true if overall_score >= {threshold}.
-        Set needs_improvement to true if there are significant weaknesses to address.
+━━━  ANTI-HALLUCINATION ANCHORS  ━━━
+• Base every score on evidence you can quote from the prompt text.
+• If a criterion is not applicable (e.g. domain_alignment for a generic task),
+  default to 0.75 and note it.
+• Do NOT inflate scores: a prompt that merely "sounds professional" but
+  lacks concrete detail should score ≤ 0.70 on specificity.
+• Compare against the ORIGINAL: credit genuine improvement, not just length.
+
+━━━  OUTPUT (strict JSON, no markdown fences)  ━━━
+{{
+    "overall_score": <float>,
+    "criteria_scores": {{
+        "clarity": <float>,
+        "specificity": <float>,
+        "structure": <float>,
+        "completeness": <float>,
+        "actionability": <float>,
+        "domain_alignment": <float>
+    }},
+    "passes_threshold": <bool — true if overall_score >= {threshold}>,
+    "needs_improvement": <bool — true if significant weaknesses remain>,
+    "strengths": ["<evidence-backed strength>", "..."],
+    "weaknesses": ["<evidence-backed weakness>", "..."],
+    "specific_feedback": [
+        "<targeted, actionable suggestion with example>",
+        "..."
+    ],
+    "improvement_priority": "high|medium|low",
+    "reasoning": "<2-4 sentence justification tying scores to rubric>",
+    "comparison_analysis": "<what changed vs. original and whether changes helped>"
+}}
         """)
 
         self.evaluation_chain = (
@@ -261,6 +276,8 @@ class PromptEvaluator:
                            prompt_type: str = "raw") -> Tuple[Dict[str, Any], int]:
         """
         Run an evaluation loop until the prompt reaches acceptable quality.
+        Uses **adaptive iteration**: stops early when quality plateaus
+        (improvement < 2 %) or the threshold is met.
 
         Args:
             original_prompt: The original prompt
@@ -274,6 +291,10 @@ class PromptEvaluator:
         """
         current_prompt = improved_prompt
         iteration = 0
+        previous_score: float = 0.0
+        plateau_count: int = 0
+        _PLATEAU_THRESHOLD = 0.02   # 2 % minimum improvement
+        _MAX_PLATEAUS = 1           # stop after 1 plateau
 
         while iteration < self.max_iterations:
             iteration += 1
@@ -287,6 +308,26 @@ class PromptEvaluator:
                 domain=domain,
                 prompt_type=prompt_type
             )
+
+            current_score = evaluation.get("overall_score", 0.0)
+
+            # ── Adaptive early-stop check ────────────────────────────────
+            if iteration > 1 and previous_score > 0:
+                improvement_pct = (current_score - previous_score) / max(previous_score, 0.01)
+                if improvement_pct < _PLATEAU_THRESHOLD:
+                    plateau_count += 1
+                    logger.info(
+                        f"Score improvement {improvement_pct:.2%} < {_PLATEAU_THRESHOLD:.0%} "
+                        f"(plateau {plateau_count}/{_MAX_PLATEAUS})"
+                    )
+                    if plateau_count >= _MAX_PLATEAUS:
+                        logger.info(f"Adaptive stop: score plateaued after {iteration} iterations")
+                        evaluation["adaptive_stopped"] = True
+                        return evaluation, iteration
+                else:
+                    plateau_count = 0  # reset on meaningful improvement
+
+            previous_score = current_score
 
             # Check if we meet the threshold
             if evaluation.get("passes_threshold", False):
@@ -924,6 +965,101 @@ class PromptEvaluator:
             return keyword in harmful_keywords and context.startswith('evaluation')
 
         return False  # Default to allowing events that passed SecurityManager filtering
+
+    # ------------------------------------------------------------------
+    # Enhanced: Weighted scoring with domain-specific criteria weights
+    # ------------------------------------------------------------------
+
+    # Domain-specific criteria weights (sum to 1.0 per domain)
+    DOMAIN_WEIGHTS: Dict[str, Dict[str, float]] = {
+        "software_engineering": {
+            "clarity": 0.15, "specificity": 0.20, "structure": 0.15,
+            "completeness": 0.20, "actionability": 0.20, "domain_alignment": 0.10,
+        },
+        "data_science": {
+            "clarity": 0.15, "specificity": 0.20, "structure": 0.10,
+            "completeness": 0.20, "actionability": 0.15, "domain_alignment": 0.20,
+        },
+        "report_writing": {
+            "clarity": 0.20, "specificity": 0.15, "structure": 0.25,
+            "completeness": 0.20, "actionability": 0.10, "domain_alignment": 0.10,
+        },
+        "education": {
+            "clarity": 0.25, "specificity": 0.15, "structure": 0.15,
+            "completeness": 0.15, "actionability": 0.15, "domain_alignment": 0.15,
+        },
+        "business_strategy": {
+            "clarity": 0.15, "specificity": 0.20, "structure": 0.15,
+            "completeness": 0.15, "actionability": 0.20, "domain_alignment": 0.15,
+        },
+        "creative_writing": {
+            "clarity": 0.20, "specificity": 0.10, "structure": 0.15,
+            "completeness": 0.15, "actionability": 0.15, "domain_alignment": 0.25,
+        },
+    }
+
+    def compute_weighted_score(
+        self, criteria_scores: Dict[str, float], domain: str = "general"
+    ) -> float:
+        """
+        Compute a weighted overall score using domain-specific criteria weights.
+
+        Falls back to equal weights for unknown domains.
+        """
+        weights = self.DOMAIN_WEIGHTS.get(domain, {})
+        if not weights:
+            n = len(criteria_scores) or 1
+            weights = {k: 1.0 / n for k in criteria_scores}
+
+        total = 0.0
+        weight_sum = 0.0
+        for criterion, score in criteria_scores.items():
+            w = weights.get(criterion, 1.0 / len(criteria_scores))
+            total += score * w
+            weight_sum += w
+
+        return round(total / weight_sum, 4) if weight_sum else 0.0
+
+    async def batch_evaluate(
+        self,
+        prompts: List[Dict[str, str]],
+        domain: str = "general",
+        prompt_type: str = "raw",
+    ) -> List[Dict[str, Any]]:
+        """
+        Evaluate a batch of original→improved prompt pairs concurrently.
+
+        Args:
+            prompts: List of dicts with keys 'original' and 'improved'.
+            domain: Domain for all prompts (or overridden per entry).
+            prompt_type: Prompt type for all entries.
+
+        Returns:
+            List of evaluation results in the same order.
+        """
+        tasks = [
+            self.evaluate_prompt(
+                original_prompt=p["original"],
+                improved_prompt=p["improved"],
+                domain=p.get("domain", domain),
+                prompt_type=p.get("prompt_type", prompt_type),
+            )
+            for p in prompts
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        evaluated = []
+        for idx, res in enumerate(results):
+            if isinstance(res, Exception):
+                logger.warning(f"Batch evaluation [{idx}] failed: {res}")
+                evaluated.append({
+                    "overall_score": 0.0,
+                    "error": str(res),
+                    "passes_threshold": False,
+                })
+            else:
+                evaluated.append(res)
+        return evaluated
 
 
 # Global evaluator instance

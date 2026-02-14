@@ -2,6 +2,18 @@
 
 This module defines a comprehensive exception hierarchy for the agentic system,
 providing detailed error information for better debugging and error handling.
+
+Hierarchy
+~~~~~~~~~
+AgenticSystemError (base)
+├── ClassificationError
+├── ImprovementError
+├── EvaluationError
+├── ConfigurationError
+├── LLMServiceError
+├── DomainError
+├── WorkflowError
+└── InputValidationError
 """
 
 from typing import Dict, Any, Optional, List
@@ -42,7 +54,7 @@ class AgenticSystemError(Exception):
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert exception to dictionary for logging/serialization."""
-        return {
+        result = {
             "error_type": self.__class__.__name__,
             "error_code": self.error_code,
             "message": self.message,
@@ -50,6 +62,12 @@ class AgenticSystemError(Exception):
             "details": self.details,
             "cause": str(self.cause) if self.cause else None
         }
+        if self.security_events:
+            result["security_events"] = self.security_events
+        return result
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(code={self.error_code!r}, message={self.message!r})"
 
 
 class ClassificationError(AgenticSystemError):
@@ -244,3 +262,22 @@ ERROR_CODES = {
     "UNKNOWN_ERROR": "An unexpected error occurred",
     "VALIDATION_ERROR": "Input validation failed"
 }
+
+
+class InputValidationError(AgenticSystemError):
+    """Raised when user-supplied input fails validation.
+
+    Common causes:
+    - Empty or whitespace-only prompt
+    - Prompt exceeding maximum allowed length
+    - Invalid parameter values (e.g. unsupported prompt_type)
+    """
+
+    def __init__(self, message: str, field: Optional[str] = None,
+                 value: Optional[Any] = None, cause: Optional[Exception] = None):
+        error_code = "VALIDATION_ERROR"
+        details = {
+            "field": field,
+            "value_preview": str(value)[:80] if value is not None else None,
+        }
+        super().__init__(message, error_code, details, cause)

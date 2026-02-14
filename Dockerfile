@@ -1,4 +1,4 @@
-# Multi-stage build for CortexaAI - Production Dockerfile for Koyeb
+# Multi-stage build for CortexaAI - Production Dockerfile
 
 # Stage 1: Build React Frontend
 FROM node:18-alpine AS frontend-builder
@@ -64,7 +64,7 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-# Expose port (default 8000, Koyeb will set PORT env var)
+# Expose port (default 8000, configurable via PORT env var)
 EXPOSE 8000
 
 # Start the application

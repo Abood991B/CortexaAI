@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { PromptProcessor } from '@/pages/PromptProcessor';
 import { SystemHealth } from '@/pages/SystemHealth';
+import { Dashboard } from '@/pages/Dashboard';
+import { Templates } from '@/pages/Templates';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -26,7 +28,9 @@ function App() {
         <div className="min-h-screen bg-background text-foreground">
           <Routes>
             <Route index element={<PromptProcessor />} />
-            <Route path="processor" element={<PromptProcessor />} />
+            <Route path="processor" element={<Navigate to="/" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="templates" element={<Templates />} />
             <Route path="system-health" element={<SystemHealth />} />
             {/* 404 Route */}
             <Route path="*" element={<Navigate to="/" replace />} />

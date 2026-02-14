@@ -269,7 +269,7 @@ def main():
     print("CORTEXA System")
     print("=" * 50)
 
-    # Determine project root (go up one level from tools directory)
+    # Determine project root (go up one level from scripts directory)
     script_path = Path(__file__).resolve()
     project_root = script_path.parent.parent
     

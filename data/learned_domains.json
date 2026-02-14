@@ -2,11 +2,6 @@
   "software_engineering": {
     "description": "Learned domain: software_engineering",
     "keywords": [
-      "financial news",
-      "pipeline",
-      "python",
-      "repo files",
-      "folders",
       "coding files",
       "workspace repo",
       "GitHub",
@@ -21,11 +16,15 @@
       "software architecture",
       "discrepancy analysis",
       "technical debt",
-      "software"
+      "software",
+      "workflow",
+      "system prompt",
+      "agents",
+      "prompt templates",
+      "evaluator"
     ],
-    "usage_count": 173,
+    "usage_count": 174,
     "quality_scores": [
-      0.95,
       0.93,
       0.95,
       0.93,
@@ -74,24 +73,25 @@
       0.95,
       0.96,
       0.95,
-      0.96
+      0.96,
+      0.92
     ],
-    "avg_quality_score": 0.9452000000000004,
-    "last_used": "2025-12-29T23:02:51.963595",
+    "avg_quality_score": 0.9446000000000003,
+    "last_used": "2026-02-14T06:00:04.223346",
     "created_from_workflow": "workflow_1756974410",
     "learning_metadata": {
       "first_seen": "2025-09-04T16:27:32.090612",
       "improvement_patterns": [
-        "Explicitly listed core pillars of inspiration from GTA 5 to guide the design.",
-        "Added a clear persona (expert Python developer/architect).",
-        "Structured the prompt into distinct sections (Task, Requirements, Constraints, Output Format).",
         "Specified the expected input types and formats (text file for report, Git repository link for code).",
         "Added persona and tone instructions for more consistent output.",
         "Expanded the analysis scope with more specific technical details and best practices.",
         "Clarified constraints and prioritization criteria.",
         "Defined a clear persona (Senior Software Architect) to guide the model's reasoning.",
         "Specified precise input formats (text file for report, zip file for repository).",
-        "Detailed specific analysis requirements covering architecture, APIs, database, implementation, configuration, and error handling."
+        "Detailed specific analysis requirements covering architecture, APIs, database, implementation, configuration, and error handling.",
+        "Added a clear persona (expert Python developer with LangChain specialization).",
+        "Structured the prompt into distinct sections (Task, Requirements, Constraints, Output Format).",
+        "Specified the technology stack and version numbers."
       ],
       "common_prompt_types": [
         "raw",
@@ -398,6 +398,80 @@
         "Added a clear goal and defined the investor profile (long-term, moderate risk).",
         "Provided specific financial metrics to analyze and benchmark values.",
         "Included qualitative considerations and risk assessment requirements."
+      ],
+      "common_prompt_types": [
+        "raw"
+      ]
+    }
+  },
+  "general": {
+    "description": "Learned domain: general",
+    "keywords": [],
+    "usage_count": 6,
+    "quality_scores": [
+      0.92,
+      0.92,
+      0.92,
+      0.92,
+      0.92,
+      0.92
+    ],
+    "avg_quality_score": 0.92,
+    "last_used": "2026-02-14T05:10:55.082791",
+    "created_from_workflow": "workflow_1771016665",
+    "learning_metadata": {
+      "first_seen": "2026-02-14T05:04:59.933544",
+      "improvement_patterns": [
+        "Provided detailed instructions for handling various input scenarios, including empty or ambiguous input.",
+        "Added a clear persona to establish the model's role.",
+        "Structured the prompt into distinct sections (Goal, Context, Requirements, Deliverable) for improved organization.",
+        "Provided detailed requirements for each section of the template.",
+        "Added a clear persona for the LLM.",
+        "Structured the prompt with distinct sections (Goal, Context, Requirements, Input, Instructions, Constraints, Output Format).",
+        "Provided detailed requirements for each section.",
+        "Added a clear persona and tone for the assistant.",
+        "Structured the prompt with distinct sections (Goal, Context, Requirements, Instructions, Constraints, Output Format, Example).",
+        "Provided specific instructions for the LLM, including category definitions and edge case handling."
+      ],
+      "common_prompt_types": [
+        "raw"
+      ]
+    }
+  },
+  "report_writing": {
+    "description": "Learned domain: report_writing",
+    "keywords": [
+      "report",
+      "analysis",
+      "findings",
+      "conclusion",
+      "summary"
+    ],
+    "usage_count": 6,
+    "quality_scores": [
+      0.92,
+      0.92,
+      0.92,
+      0.92,
+      0.92,
+      0.92
+    ],
+    "avg_quality_score": 0.92,
+    "last_used": "2026-02-14T05:18:42.992931",
+    "created_from_workflow": "workflow_1771017070",
+    "learning_metadata": {
+      "first_seen": "2026-02-14T05:11:59.785350",
+      "improvement_patterns": [
+        "Specified exact metrics to be included in the analysis.",
+        "Added a clear persona and defined the report's recipient and their priorities.",
+        "Structured the prompt into distinct sections with headings for improved readability.",
+        "Specified the exact metrics to be included in the analysis.",
+        "Added a clear persona and defined the report's recipient and their priorities.",
+        "Structured the prompt into distinct sections with headings for improved readability.",
+        "Specified the required sections of the report with detailed instructions for each.",
+        "Added a detailed persona and context (company, CMO, SaaS).",
+        "Structured the prompt into clear, logical sections with headings.",
+        "Specified data sources and required metrics for each channel."
       ],
       "common_prompt_types": [
         "raw"

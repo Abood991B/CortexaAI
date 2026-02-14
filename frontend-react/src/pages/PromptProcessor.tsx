@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
-import { Send, Copy, Download, Trash2, Edit, Sparkles, Bot, User, Plus, Menu, Activity, Bell, ChevronDown, Check, HelpCircle } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Send, Copy, Download, Trash2, Edit, Sparkles, Bot, User, Plus, Bell, ChevronDown, ChevronUp, Check, HelpCircle, Gauge, BarChart3, ArrowLeftRight, FileJson, FileText, ClipboardCopy, Keyboard } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer, Tooltip } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -21,14 +22,15 @@ import {
 import { 
   useProcessPromptWithMemory,
   useCancelWorkflow,
-  useWorkflowStatus
+  useWorkflowStatus,
+  useComplexity
 } from '@/hooks/useApi';
 import { formatDuration } from '@/utils';
 import { toast } from 'sonner';
 import { useNotifications } from '@/hooks/useNotifications';
 import { NotificationsDropdown } from '@/components/ui/notifications';
-import { NavLink } from 'react-router-dom';
-import type { PromptRequest, PromptResponse } from '@/types/api';
+import { Sidebar } from '@/components/layout';
+import type { PromptRequest, PromptResponse, ComplexityResult } from '@/types/api';
 
 // Define message types for chat interface
 interface ChatMessage {
@@ -50,8 +52,518 @@ interface ChatSession {
   model: 'standard' | 'langgraph';
 }
 
+/* ── Evaluation Criteria Breakdown ────────────────────────────── */
+const CRITERIA_LABELS: Record<string, string> = {
+  clarity: 'Clarity',
+  specificity: 'Specificity',
+  structure: 'Structure',
+  completeness: 'Completeness',
+  actionability: 'Actionability',
+  domain_alignment: 'Domain Fit',
+};
+
+const CRITERIA_DESCRIPTIONS: Record<string, string> = {
+  clarity: 'How unambiguous and easy to understand the prompt is',
+  specificity: 'How precisely inputs, outputs, and constraints are defined',
+  structure: 'How well-organized with headings, lists, and logical flow',
+  completeness: 'Whether all information needed to fulfill the task is present',
+  actionability: 'Whether someone can execute the prompt immediately',
+  domain_alignment: 'How well the prompt fits the detected domain',
+};
+
+function EvaluationBreakdown({ response }: { response: PromptResponse }) {
+  const [expanded, setExpanded] = useState(false);
+  const criteria = response.analysis?.evaluation?.criteria_scores;
+  const strengths = response.analysis?.evaluation?.strengths || [];
+  const weaknesses = response.analysis?.evaluation?.weaknesses || [];
+
+  if (!criteria || Object.keys(criteria).length === 0) return null;
+
+  const radarData = Object.entries(criteria).map(([key, value]) => ({
+    criterion: CRITERIA_LABELS[key] || key,
+    score: Math.round((value as number) * 100),
+    fullMark: 100,
+  }));
+
+  const getScoreColor = (score: number) => {
+    if (score >= 0.8) return 'text-green-600 dark:text-green-400';
+    if (score >= 0.6) return 'text-yellow-600 dark:text-yellow-400';
+    return 'text-red-600 dark:text-red-400';
+  };
+
+  const getBarWidth = (score: number) => `${Math.round(score * 100)}%`;
+  const getBarColor = (score: number) => {
+    if (score >= 0.8) return 'bg-green-500';
+    if (score >= 0.6) return 'bg-yellow-500';
+    return 'bg-red-500';
+  };
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+      >
+        <BarChart3 className="h-3.5 w-3.5" />
+        {expanded ? 'Hide' : 'Show'} Quality Breakdown
+        {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+
+      {expanded && (
+        <div className="mt-3 p-4 rounded-xl bg-muted/50 border border-border/40 space-y-4 animate-fade-in">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Radar Chart */}
+            <div className="flex items-center justify-center">
+              <ResponsiveContainer width="100%" height={220}>
+                <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
+                  <PolarGrid stroke="hsl(var(--border))" />
+                  <PolarAngleAxis dataKey="criterion" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} tickCount={5} />
+                  <Radar name="Score" dataKey="score" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.25} strokeWidth={2} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '0.5rem', fontSize: '0.75rem' }}
+                    formatter={(value: number) => [`${value}%`, 'Score']}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Score bars */}
+            <div className="space-y-2.5">
+              {Object.entries(criteria).map(([key, value]) => (
+                <div key={key} className="group" title={CRITERIA_DESCRIPTIONS[key]}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium">{CRITERIA_LABELS[key] || key}</span>
+                    <span className={`text-xs font-bold ${getScoreColor(value as number)}`}>{Math.round((value as number) * 100)}%</span>
+                  </div>
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${getBarColor(value as number)}`}
+                      style={{ width: getBarWidth(value as number) }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Strengths & Weaknesses */}
+          {(strengths.length > 0 || weaknesses.length > 0) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-border/30">
+              {strengths.length > 0 && (
+                <div>
+                  <h5 className="text-xs font-semibold text-green-600 dark:text-green-400 mb-1.5">Strengths</h5>
+                  <ul className="space-y-1">
+                    {strengths.slice(0, 3).map((s, i) => (
+                      <li key={i} className="text-xs text-muted-foreground flex gap-1.5">
+                        <span className="text-green-500 shrink-0">+</span> {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {weaknesses.length > 0 && (
+                <div>
+                  <h5 className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1.5">Areas to Improve</h5>
+                  <ul className="space-y-1">
+                    {weaknesses.slice(0, 3).map((w, i) => (
+                      <li key={i} className="text-xs text-muted-foreground flex gap-1.5">
+                        <span className="text-amber-500 shrink-0">-</span> {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Complexity Badge ─────────────────────────────────────────── */
+function ComplexityBadge({ complexity }: { complexity: ComplexityResult | null }) {
+  if (!complexity) return null;
+
+  const config = {
+    simple: { color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800', label: 'Simple' },
+    medium: { color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800', label: 'Medium' },
+    complex: { color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800', label: 'Complex' },
+  };
+
+  const c = config[complexity.level] || config.simple;
+
+  return (
+    <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border ${c.color} transition-all`} title={`Complexity: ${(complexity.score * 100).toFixed(0)}% · ~${complexity.token_count} tokens · ${complexity.recommended_iterations} iteration${complexity.recommended_iterations > 1 ? 's' : ''} recommended`}>
+      <Gauge className="h-3 w-3" />
+      {c.label}
+      <span className="opacity-70">·</span>
+      <span className="opacity-70">{complexity.token_count} tokens</span>
+    </div>
+  );
+}
+
+/* ── SSE Streaming Hook ───────────────────────────────────────── */
+
+/* ── Diff View ────────────────────────────────────────────────── */
+function DiffView({ comparison }: { comparison: PromptResponse['comparison'] }) {
+  const [showDiff, setShowDiff] = useState(false);
+
+  if (!comparison?.side_by_side) return null;
+
+  const { original, optimized } = comparison.side_by_side;
+  const improvement = comparison.improvement_ratio;
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setShowDiff(!showDiff)}
+        className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+      >
+        <ArrowLeftRight className="h-3.5 w-3.5" />
+        {showDiff ? 'Hide' : 'Show'} Before / After
+        {showDiff ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+
+      {showDiff && (
+        <div className="mt-3 rounded-xl bg-muted/50 border border-border/40 overflow-hidden animate-fade-in">
+          {improvement !== undefined && (
+            <div className="px-4 py-2 border-b border-border/40 bg-muted/30">
+              <span className="text-xs text-muted-foreground">
+                Improvement: <strong className="text-green-600 dark:text-green-400">+{Math.round(improvement * 100)}%</strong>
+              </span>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border/40">
+            <div className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase tracking-wide">Original</span>
+              </div>
+              <pre className="text-xs whitespace-pre-wrap text-muted-foreground leading-relaxed max-h-64 overflow-auto">{original}</pre>
+            </div>
+            <div className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide">Optimized</span>
+              </div>
+              <pre className="text-xs whitespace-pre-wrap text-foreground/90 leading-relaxed max-h-64 overflow-auto">{optimized}</pre>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Export Menu ───────────────────────────────────────────────── */
+function ExportMenu({ message }: { message: ChatMessage }) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    if (open) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const copyAsText = () => {
+    navigator.clipboard.writeText(message.content);
+    toast.success('Copied as plain text');
+    setOpen(false);
+  };
+
+  const copyAsMarkdown = () => {
+    const md = buildMarkdown(message);
+    navigator.clipboard.writeText(md);
+    toast.success('Copied as Markdown');
+    setOpen(false);
+  };
+
+  const downloadAsJson = () => {
+    const json = {
+      role: message.role,
+      content: message.content,
+      timestamp: message.timestamp,
+      model: message.model,
+      ...(message.response && {
+        quality_score: message.response.output?.quality_score,
+        domain: message.response.output?.domain,
+        iterations: message.response.output?.iterations_used,
+        analysis: message.response.analysis,
+        comparison: message.response.comparison,
+      }),
+    };
+    const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `prompt_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('Downloaded as JSON');
+    setOpen(false);
+  };
+
+  return (
+    <div ref={menuRef} className="relative inline-block">
+      <Button variant="ghost" size="sm" onClick={() => setOpen(!open)} className="h-5 w-5 p-0">
+        <Copy className="h-3 w-3" />
+      </Button>
+      {open && (
+        <div className="absolute bottom-full mb-1 right-0 w-44 bg-popover border rounded-xl shadow-lg z-20 overflow-hidden animate-fade-in">
+          <button onClick={copyAsText} className="flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-accent transition-colors text-left">
+            <ClipboardCopy className="h-3.5 w-3.5" /> Copy as Text
+          </button>
+          <button onClick={copyAsMarkdown} className="flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-accent transition-colors text-left">
+            <FileText className="h-3.5 w-3.5" /> Copy as Markdown
+          </button>
+          <button onClick={downloadAsJson} className="flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-accent transition-colors text-left border-t border-border/40">
+            <FileJson className="h-3.5 w-3.5" /> Download JSON
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function buildMarkdown(msg: ChatMessage): string {
+  const lines: string[] = [];
+  lines.push(`## Optimized Prompt\n`);
+  lines.push(msg.content);
+  if (msg.response?.output) {
+    const o = msg.response.output;
+    lines.push(`\n---\n`);
+    lines.push(`| Metric | Value |`);
+    lines.push(`|--------|-------|`);
+    lines.push(`| Quality | ${o.quality_score?.toFixed(2)} |`);
+    lines.push(`| Domain | ${o.domain} |`);
+    lines.push(`| Iterations | ${o.iterations_used} |`);
+  }
+  if (msg.response?.comparison?.side_by_side) {
+    const c = msg.response.comparison.side_by_side;
+    lines.push(`\n### Original\n`);
+    lines.push(c.original);
+    lines.push(`\n### Optimized\n`);
+    lines.push(c.optimized);
+  }
+  return lines.join('\n');
+}
+
+/* ── Keyboard Shortcuts Dialog ────────────────────────────────── */
+const SHORTCUTS = [
+  { keys: ['Enter'], description: 'Send message' },
+  { keys: ['Shift', 'Enter'], description: 'New line' },
+  { keys: ['Ctrl', 'N'], description: 'New chat' },
+  { keys: ['Ctrl', '/'], description: 'Toggle Advanced mode' },
+  { keys: ['Ctrl', 'Shift', 'E'], description: 'Download conversation' },
+  { keys: ['Alt', '1-4'], description: 'Navigate pages' },
+  { keys: ['?'], description: 'Show this dialog' },
+];
+
+function KeyboardShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Keyboard className="h-5 w-5 text-primary" />
+            Keyboard Shortcuts
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          {SHORTCUTS.map((s, i) => (
+            <div key={i} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-muted/50">
+              <span className="text-sm text-muted-foreground">{s.description}</span>
+              <div className="flex items-center gap-1">
+                {s.keys.map((k, j) => (
+                  <span key={j}>
+                    <kbd className="px-2 py-0.5 text-xs font-mono bg-muted border border-border/60 rounded-md shadow-sm">{k}</kbd>
+                    {j < s.keys.length - 1 && <span className="text-muted-foreground mx-0.5">+</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)} className="rounded-xl">Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface StreamingState {
+  stage: string;
+  message: string;
+  domain?: string;
+  preview?: string;
+  score?: number;
+  iterations?: number;
+  result?: PromptResponse;
+  error?: string;
+}
+
+function useSSEStream() {
+  const [streamState, setStreamState] = useState<StreamingState | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const startStream = async (request: PromptRequest): Promise<PromptResponse | null> => {
+    abortRef.current = new AbortController();
+    setIsStreaming(true);
+    setStreamState({ stage: 'started', message: 'Starting workflow...' });
+
+    return new Promise((resolve, reject) => {
+      const url = '/api/process-prompt/stream';
+      
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal: abortRef.current!.signal,
+      }).then(async (response) => {
+        if (!response.ok) {
+          const err = await response.text();
+          throw new Error(err || 'Stream request failed');
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('No response body');
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let finalResult: PromptResponse | null = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          let currentEvent = '';
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              currentEvent = line.slice(7).trim();
+            } else if (line.startsWith('data: ') && currentEvent) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                switch (currentEvent) {
+                  case 'started':
+                    setStreamState({ stage: 'started', message: 'Workflow started...', preview: data.prompt_preview });
+                    break;
+                  case 'classifying':
+                    setStreamState({ stage: 'classifying', message: 'Classifying domain...' });
+                    break;
+                  case 'classified':
+                    setStreamState({ stage: 'classified', message: `Domain: ${data.domain}`, domain: data.domain });
+                    break;
+                  case 'improving':
+                    setStreamState(prev => ({ ...prev!, stage: 'improving', message: data.message || 'Generating improvement...' }));
+                    break;
+                  case 'improved':
+                    setStreamState(prev => ({ ...prev!, stage: 'improved', message: 'Improvement ready', preview: data.preview }));
+                    break;
+                  case 'evaluating':
+                    setStreamState(prev => ({ ...prev!, stage: 'evaluating', message: 'Evaluating quality...' }));
+                    break;
+                  case 'evaluated':
+                    setStreamState(prev => ({ ...prev!, stage: 'evaluated', message: `Score: ${data.score?.toFixed(2)}`, score: data.score, iterations: data.iterations }));
+                    break;
+                  case 'iterating':
+                    setStreamState(prev => ({ ...prev!, stage: 'iterating', message: `Iteration ${data.iteration || ''}...` }));
+                    break;
+                  case 'completed':
+                    finalResult = data.result;
+                    setStreamState(prev => ({ ...prev!, stage: 'completed', message: 'Complete', result: data.result }));
+                    break;
+                  case 'error':
+                    setStreamState(prev => ({ ...prev!, stage: 'error', message: data.message, error: data.message }));
+                    break;
+                }
+              } catch { /* skip malformed json */ }
+              currentEvent = '';
+            }
+          }
+        }
+        setIsStreaming(false);
+        resolve(finalResult);
+      }).catch((err) => {
+        if (err.name === 'AbortError') {
+          setIsStreaming(false);
+          resolve(null);
+        } else {
+          setIsStreaming(false);
+          setStreamState({ stage: 'error', message: err.message, error: err.message });
+          reject(err);
+        }
+      });
+    });
+  };
+
+  const cancelStream = () => {
+    abortRef.current?.abort();
+    setIsStreaming(false);
+    setStreamState(null);
+  };
+
+  return { streamState, isStreaming, startStream, cancelStream };
+}
+
+/* ── Streaming Progress Indicator ─────────────────────────────── */
+const STAGE_ORDER = ['started', 'classifying', 'classified', 'improving', 'improved', 'evaluating', 'evaluated', 'completed'];
+const STAGE_LABELS: Record<string, string> = {
+  started: 'Starting',
+  classifying: 'Classifying',
+  classified: 'Classified',
+  improving: 'Improving',
+  improved: 'Improved',
+  evaluating: 'Evaluating',
+  evaluated: 'Evaluated',
+  iterating: 'Iterating',
+  completed: 'Complete',
+};
+
+function StreamingProgress({ state }: { state: StreamingState }) {
+  const currentIdx = STAGE_ORDER.indexOf(state.stage);
+  const progress = state.stage === 'completed' ? 100 : Math.max(5, ((currentIdx + 1) / STAGE_ORDER.length) * 100);
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center gap-2.5">
+        <LoadingSpinner size="sm" />
+        <div className="flex-1 space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">{STAGE_LABELS[state.stage] || state.stage}...</span>
+            {state.domain && <Badge variant="outline" className="text-[10px] h-4">{state.domain}</Badge>}
+          </div>
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-700 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      </div>
+      {state.preview && state.stage === 'improved' && (
+        <p className="text-xs text-muted-foreground italic pl-7 line-clamp-2">{state.preview}</p>
+      )}
+      {state.score !== undefined && state.stage === 'evaluated' && (
+        <p className="text-xs text-muted-foreground pl-7">Quality score: <strong>{state.score.toFixed(2)}</strong></p>
+      )}
+    </div>
+  );
+}
+
 export function PromptProcessor() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [selectedModel, setSelectedModel] = useState<'standard' | 'langgraph'>('standard');
   const [currentInput, setCurrentInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -69,11 +581,16 @@ export function PromptProcessor() {
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [complexity, setComplexity] = useState<ComplexityResult | null>(null);
+  const complexityTimerRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const processPromptWithMemoryMutation = useProcessPromptWithMemory();
   const cancelWorkflowMutation = useCancelWorkflow();
+  const complexityMutation = useComplexity();
+  const { streamState, isStreaming, startStream, cancelStream } = useSSEStream();
   const {
     notifications,
     unreadCount,
@@ -94,6 +611,61 @@ export function PromptProcessor() {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
+  // Debounced complexity analysis
+  useEffect(() => {
+    if (complexityTimerRef.current) clearTimeout(complexityTimerRef.current);
+    if (!currentInput.trim() || currentInput.trim().length < 15) {
+      setComplexity(null);
+      return;
+    }
+    complexityTimerRef.current = setTimeout(() => {
+      complexityMutation.mutate(currentInput.trim(), {
+        onSuccess: (data) => setComplexity(data),
+        onError: () => setComplexity(null),
+      });
+    }, 800);
+    return () => { if (complexityTimerRef.current) clearTimeout(complexityTimerRef.current); };
+  }, [currentInput]);
+
+  // Stable refs for keyboard shortcut callbacks
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const isAdvancedModeRef = useRef(isAdvancedMode);
+  isAdvancedModeRef.current = isAdvancedMode;
+
+  // Processor-specific keyboard shortcuts (navigation & ? handled globally in AppLayout)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ctrl+N / Cmd+N — new chat
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        createNewSession();
+        return;
+      }
+
+      // Ctrl+/ / Cmd+/ — toggle advanced mode
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        setIsAdvancedMode(prev => {
+          const next = !prev;
+          toast.info(next ? 'Advanced mode on' : 'Advanced mode off');
+          return next;
+        });
+        return;
+      }
+
+      // Ctrl+Shift+E / Cmd+Shift+E — download conversation
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        if (messagesRef.current.length > 0) handleDownloadConversation();
+        return;
+      }
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Workflow status polling
   const workflowStatusQuery = useWorkflowStatus(workflowId);
@@ -306,13 +878,42 @@ export function PromptProcessor() {
     const request: PromptRequest = {
       prompt: inputText,
       prompt_type: 'auto',
-      return_comparison: false,
+      return_comparison: true,
       use_langgraph: selectedModel === 'langgraph',
       chat_history: chatHistory,
       advanced_mode: isAdvancedMode
     };
 
     try {
+      // Try SSE streaming first for real-time progress, fall back to polling
+      try {
+        const streamResult = await startStream(request);
+        if (streamResult) {
+          // SSE streaming completed successfully
+          setMessages(prev => prev.map(msg => 
+            msg.id === loadingMessage.id 
+              ? {
+                  ...msg,
+                  id: `result_${Date.now()}`,
+                  isLoading: false,
+                  content: streamResult.output?.optimized_prompt || '',
+                  response: streamResult
+                }
+              : msg
+          ));
+          addNotification({
+            type: 'success',
+            title: `${selectedModel === 'langgraph' ? 'LangGraph' : 'Standard'} Model Complete`,
+            message: `Quality score: ${streamResult.output?.quality_score?.toFixed(2) || 'N/A'}`,
+            action: { label: 'View Results', onClick: () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }
+          });
+          return;
+        }
+      } catch {
+        // SSE failed — fall back to standard polling approach
+        console.log('SSE streaming unavailable, falling back to polling');
+      }
+
       let response: PromptResponse | undefined;
       
       // Always use memory-enhanced processing
@@ -350,6 +951,12 @@ export function PromptProcessor() {
 
   // Handle cancellation
   const handleCancel = () => {
+    if (isStreaming) {
+      cancelStream();
+      setMessages(prev => prev.filter(msg => !msg.isLoading));
+      toast.info('Processing cancelled.');
+      return;
+    }
     if (workflowId) {
       cancelWorkflowMutation.mutate(workflowId, {
         onSuccess: () => {
@@ -431,12 +1038,6 @@ export function PromptProcessor() {
     }
   }, [messages, currentSessionId, selectedModel]);
 
-  // Copy result to clipboard
-  const handleCopyMessage = (content: string) => {
-    navigator.clipboard.writeText(content);
-    toast.success('Copied to clipboard');
-  };
-
   // Download conversation
   const handleDownloadConversation = () => {
     const conversation = {
@@ -461,247 +1062,189 @@ export function PromptProcessor() {
     toast.success('Conversation downloaded');
   };
 
-  const isLoading = processPromptWithMemoryMutation.isPending || isPolling;
-  const canCancel = isPolling && workflowId && gracePeriodCountdown > 0;
+  const isLoading = processPromptWithMemoryMutation.isPending || isPolling || isStreaming;
+  const canCancel = isStreaming || (isPolling && workflowId && gracePeriodCountdown > 0);
 
   return (
-    <div className="flex h-screen bg-background">
-      {/* Professional Sidebar */}
-      <div className={`${showSidebar ? 'w-64' : 'w-20'} transition-all duration-300 border-r border-gray-200 bg-gray-50 flex flex-col items-center py-4`}>
-        <div className="flex items-center justify-center w-full px-4 py-2">
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* Sidebar with chat sessions */}
+      <Sidebar collapsed={!showSidebar} onToggle={() => setShowSidebar(!showSidebar)}>
+        {/* New chat button */}
+        <div className="px-3 pt-2 pb-1">
           <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowSidebar(!showSidebar)}
-            className="absolute top-4 left-4"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-          {showSidebar && (
-            <div className="flex items-center space-x-3">
-              <img src="/Cortexa Logo.png" alt="Cortexa Logo" className="w-8 h-8" />
-              <span className="text-lg font-semibold text-gray-900">Cortexa</span>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-6 w-full flex flex-col items-center space-y-4 px-3">
-          <Button 
             onClick={createNewSession}
-            className={`w-full ${showSidebar ? 'justify-start' : 'justify-center'} bg-white hover:bg-gray-100 text-gray-900 border border-gray-300 shadow-none`}
             variant="outline"
+            className="w-full justify-start gap-2 border-dashed"
           >
-            <Plus className={`${showSidebar ? 'mr-2' : ''} h-4 w-4`} />
+            <Plus className="h-4 w-4" />
             {showSidebar && 'New chat'}
           </Button>
         </div>
 
+        {/* Session list */}
         {showSidebar && (
-          <div className="flex-1 flex flex-col min-h-0 w-full mt-4">
-            <div className="flex-1 overflow-y-auto px-3 space-y-1">
-              {sessions.map(session => (
-                <div
-                  key={session.id}
-                  className={`group relative p-2 rounded-md cursor-pointer hover:bg-gray-200 transition-colors ${
-                    currentSessionId === session.id ? 'bg-gray-200' : ''
-                  }`}
-                  onClick={() => loadSession(session.id)}
-                >
-                  {editingSessionId === session.id ? (
-                    <input
-                      type="text"
-                      value={editingTitle}
-                      onChange={(e) => setEditingTitle(e.target.value)}
-                      onBlur={() => updateSessionTitle(session.id, editingTitle)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          updateSessionTitle(session.id, editingTitle);
-                        } else if (e.key === 'Escape') {
-                          setEditingSessionId(null);
-                          setEditingTitle('');
-                        }
-                      }}
-                      className="w-full px-2 py-1 text-sm bg-white border border-gray-300 rounded"
-                      autoFocus
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  ) : (
-                    <>
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-900 truncate">{session.title}</p>
-                          <p className="text-xs text-gray-500">
-                            {session.messages.length} messages
-                          </p>
-                        </div>
-                      </div>
-                      <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 hover:bg-gray-300"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingSessionId(session.id);
-                            setEditingTitle(session.title);
-                          }}
-                        >
-                          <Edit className="h-3 w-3 text-gray-600" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 hover:bg-gray-300"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSessionToDelete(session.id);
-                            setIsDeleteDialogOpen(true);
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3 text-gray-600" />
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
+          <div className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
+            {sessions.map(session => (
+              <div
+                key={session.id}
+                className={`group relative px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
+                  currentSessionId === session.id
+                    ? 'bg-primary/10 text-foreground'
+                    : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                }`}
+                onClick={() => loadSession(session.id)}
+              >
+                {editingSessionId === session.id ? (
+                  <input
+                    type="text"
+                    value={editingTitle}
+                    onChange={(e) => setEditingTitle(e.target.value)}
+                    onBlur={() => updateSessionTitle(session.id, editingTitle)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') updateSessionTitle(session.id, editingTitle);
+                      else if (e.key === 'Escape') { setEditingSessionId(null); setEditingTitle(''); }
+                    }}
+                    className="w-full px-2 py-1 text-sm bg-background border rounded-md"
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <>
+                    <p className="text-sm truncate pr-12">{session.title}</p>
+                    <p className="text-xs opacity-60 mt-0.5">{session.messages.length} messages</p>
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-6 w-6"
+                        onClick={(e) => { e.stopPropagation(); setEditingSessionId(session.id); setEditingTitle(session.title); }}
+                      ><Edit className="h-3 w-3" /></Button>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-6 w-6 hover:text-destructive"
+                        onClick={(e) => { e.stopPropagation(); setSessionToDelete(session.id); setIsDeleteDialogOpen(true); }}
+                      ><Trash2 className="h-3 w-3" /></Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
         )}
-
-        <div className={`w-full px-3 py-4 ${showSidebar ? 'border-t border-gray-200' : ''}`}>
-          <NavLink
-            to="/system-health"
-            className={`flex items-center space-x-2 text-sm text-gray-600 hover:text-gray-900 transition-colors ${showSidebar ? '' : 'justify-center'}`}
-          >
-            <Activity className="h-4 w-4" />
-            {showSidebar && <span>System Health</span>}
-          </NavLink>
-        </div>
-      </div>
+      </Sidebar>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="border-b px-6 py-4 flex items-center justify-end bg-background">
-          <div className="flex items-center space-x-2">
-            <div className="flex items-center space-x-2">
-              {/* Notification Icon */}
-              <div className="relative">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={toggleDropdown}
-                  className="relative"
-                >
-                  <Bell className="h-4 w-4" />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full"></span>
-                  )}
-                </Button>
-                <NotificationsDropdown
-                  notifications={notifications}
-                  isOpen={isDropdownOpen}
-                  unreadCount={unreadCount}
-                  onClose={toggleDropdown}
-                  onMarkAsRead={markAsRead}
-                  onMarkAllAsRead={markAllAsRead}
-                  onRemove={removeNotification}
-                  onClearAll={clearAll}
-                />
-              </div>
-              
-              {messages.length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleDownloadConversation}
-                >
-                  <Download className="h-4 w-4" />
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsUserGuideOpen(true)}
-              >
-                <HelpCircle className="h-4 w-4" />
+        <header className="sticky top-0 z-30 flex items-center justify-end h-14 px-6 border-b border-border/60 bg-background/80 backdrop-blur-md">
+          <div className="flex items-center gap-1.5">
+            <div className="relative">
+              <Button variant="ghost" size="icon" onClick={toggleDropdown} className="relative h-9 w-9">
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-destructive rounded-full ring-2 ring-background" />
+                )}
               </Button>
+              <NotificationsDropdown
+                notifications={notifications}
+                isOpen={isDropdownOpen}
+                unreadCount={unreadCount}
+                onClose={toggleDropdown}
+                onMarkAsRead={markAsRead}
+                onMarkAllAsRead={markAllAsRead}
+                onRemove={removeNotification}
+                onClearAll={clearAll}
+              />
             </div>
+            {messages.length > 0 && (
+              <Button variant="ghost" size="icon" onClick={handleDownloadConversation} className="h-9 w-9">
+                <Download className="h-4 w-4" />
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={() => setIsUserGuideOpen(true)} className="h-9 w-9">
+              <HelpCircle className="h-4 w-4" />
+            </Button>
           </div>
-        </div>
+        </header>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-6 py-6">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-4xl mx-auto p-8 rounded-lg bg-gradient-to-br from-background to-muted/20">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center max-w-4xl mx-auto p-8 rounded-2xl">
                 <div className="flex justify-center">
-                  <img src="/Cortexa Logo.png" alt="Cortexa Logo" className="w-48 h-48" />
+                  <img src="/Cortexa Logo.png" alt="Cortexa Logo" className="w-40 h-40 drop-shadow-lg" />
                 </div>
-                <div className="text-center md:text-left">
-                  <h2 className="text-4xl font-bold mb-4 text-primary">Welcome to Cortexa</h2>
-                  <p className="text-lg text-muted-foreground mb-6">
+                <div className="text-center md:text-left space-y-4">
+                  <h2 className="text-3xl font-bold tracking-tight text-foreground">Welcome to Cortexa</h2>
+                  <p className="text-muted-foreground leading-relaxed">
                     Unlock the power of AI with our advanced multi-agent system. Craft, refine, and optimize your prompts for exceptional results.
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div 
-                      className="p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer bg-background"
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    <button
+                      className={`p-4 border rounded-xl text-left transition-all hover:shadow-md ${
+                        selectedModel === 'standard' ? 'border-primary/50 bg-primary/5 shadow-sm' : 'hover:border-border/80'
+                      }`}
                       onClick={() => setSelectedModel('standard')}
                     >
-                      <div className="flex items-center mb-2">
-                        <Sparkles className="h-6 w-6 mr-3 text-primary" />
-                        <h3 className="text-lg font-semibold">Standard Model</h3>
+                      <div className="flex items-center gap-2.5 mb-1.5">
+                        <Sparkles className="h-5 w-5 text-primary shrink-0" />
+                        <h3 className="font-semibold text-sm">Standard Model</h3>
                       </div>
-                      <p className="text-sm text-muted-foreground">Memory-enhanced optimization for quick, reliable results.</p>
-                    </div>
-                    <div 
-                      className="p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer bg-background"
+                      <p className="text-xs text-muted-foreground leading-relaxed">Memory-enhanced optimization for quick, reliable results.</p>
+                    </button>
+                    <button
+                      className={`p-4 border rounded-xl text-left transition-all hover:shadow-md ${
+                        selectedModel === 'langgraph' ? 'border-primary/50 bg-primary/5 shadow-sm' : 'hover:border-border/80'
+                      }`}
                       onClick={() => setSelectedModel('langgraph')}
                     >
-                      <div className="flex items-center mb-2">
-                        <Bot className="h-6 w-6 mr-3 text-primary" />
-                        <h3 className="text-lg font-semibold">LangGraph Model</h3>
+                      <div className="flex items-center gap-2.5 mb-1.5">
+                        <Bot className="h-5 w-5 text-primary shrink-0" />
+                        <h3 className="font-semibold text-sm">LangGraph Model</h3>
                       </div>
-                      <p className="text-sm text-muted-foreground">Complex multi-agent workflow for in-depth analysis.</p>
-                    </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">Complex multi-agent workflow for in-depth analysis.</p>
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="space-y-6 max-w-4xl mx-auto">
+            <div className="space-y-5 max-w-4xl mx-auto">
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
                 >
-                  <div className={`flex space-x-3 ${message.role === 'user' ? 'max-w-[80%] flex-row-reverse space-x-reverse' : 'max-w-[95%]'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                  <div className={`flex gap-3 ${message.role === 'user' ? 'max-w-[80%] flex-row-reverse' : 'max-w-[90%]'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                       message.role === 'user' ? 'bg-primary' : 'bg-muted'
                     }`}>
                       {message.role === 'user' ? (
                         <User className="h-4 w-4 text-primary-foreground" />
                       ) : (
-                        <Bot className="h-4 w-4" />
+                        <Bot className="h-4 w-4 text-foreground" />
                       )}
                     </div>
                     
-                    <div className="flex-1 space-y-2 max-w-full">
-                      <div className={`rounded-lg px-4 py-3 break-words overflow-hidden ${
+                    <div className="flex-1 space-y-1.5 min-w-0">
+                      <div className={`rounded-2xl px-4 py-3 overflow-hidden ${
                         message.role === 'user' 
-                          ? 'bg-primary text-primary-foreground' 
+                          ? 'bg-primary text-primary-foreground rounded-tr-md' 
                           : message.error 
-                            ? 'bg-destructive/10 border border-destructive/20'
-                            : 'bg-assistant-message'
+                            ? 'bg-destructive/10 border border-destructive/20 rounded-tl-md'
+                            : 'bg-card border border-border/60 shadow-sm rounded-tl-md'
                       }`}>
                         {message.isLoading ? (
-                          <div className="flex items-center space-x-2">
-                            <LoadingSpinner size="sm" />
-                            <span className="text-sm">
-                              Processing with {selectedModel === 'langgraph' ? 'LangGraph' : 'Standard'} model...
-                            </span>
-                          </div>
+                          streamState && isStreaming ? (
+                            <StreamingProgress state={streamState} />
+                          ) : (
+                            <div className="flex items-center space-x-2">
+                              <LoadingSpinner size="sm" />
+                              <span className="text-sm">
+                                Processing with {selectedModel === 'langgraph' ? 'LangGraph' : 'Standard'} model...
+                              </span>
+                            </div>
+                          )
                         ) : message.error ? (
                           <div className="text-sm text-destructive">{message.content}</div>
                         ) : message.role === 'assistant' && message.response ? (
@@ -724,13 +1267,17 @@ export function PromptProcessor() {
                             </SyntaxHighlighter>
                             
                             {message.response.output && (
-                              <div className="flex items-center space-x-4 pt-2 border-t text-xs text-muted-foreground">
-                                <span>Quality: {message.response.output.quality_score?.toFixed(2)}</span>
-                                <span>Domain: {message.response.output.domain}</span>
-                                <span>Iterations: {message.response.output.iterations_used}</span>
-                                {message.response.processing_time_seconds && (
-                                  <span>Time: {formatDuration(message.response.processing_time_seconds)}</span>
-                                )}
+                              <div className="pt-3 mt-3 border-t border-border/40 space-y-2">
+                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                  <span className="flex items-center gap-1">Quality: <strong>{message.response.output.quality_score?.toFixed(2)}</strong></span>
+                                  <span className="flex items-center gap-1">Domain: <strong>{message.response.output.domain}</strong></span>
+                                  <span className="flex items-center gap-1">Iterations: <strong>{message.response.output.iterations_used}</strong></span>
+                                  {message.response.processing_time_seconds && (
+                                    <span>Time: {formatDuration(message.response.processing_time_seconds)}</span>
+                                  )}
+                                </div>
+                                <EvaluationBreakdown response={message.response} />
+                                <DiffView comparison={message.response.comparison} />
                               </div>
                             )}
                           </div>
@@ -740,22 +1287,15 @@ export function PromptProcessor() {
                       </div>
                       
                       {!message.isLoading && !message.error && (
-                        <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground/70 px-1 pt-0.5">
                           <span>{message.timestamp.toLocaleTimeString()}</span>
                           {message.model && (
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="text-[10px] h-4 px-1.5">
                               {message.model === 'langgraph' ? 'LangGraph' : 'Standard'}
                             </Badge>
                           )}
                           {message.role === 'assistant' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleCopyMessage(message.content)}
-                              className="h-6 px-2"
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
+                            <ExportMenu message={message} />
                           )}
                         </div>
                       )}
@@ -769,15 +1309,15 @@ export function PromptProcessor() {
         </div>
 
         {/* Input Area */}
-        <div className="border-t px-6 py-4 bg-background">
+        <div className="border-t border-border/60 px-6 py-4 bg-background/80 backdrop-blur-md">
           <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
-            <div className="relative rounded-lg border bg-background focus-within:ring-2 focus-within:ring-ring">
+            <div className="relative rounded-2xl border border-border/80 bg-card shadow-sm focus-within:ring-2 focus-within:ring-ring/40 focus-within:border-primary/40 transition-all">
               <Textarea
                 ref={inputRef}
                 value={currentInput}
                 onChange={(e) => setCurrentInput(e.target.value)}
                 placeholder="Message Cortexa..."
-                className="resize-none w-full border-0 bg-transparent pt-3 pb-12 pl-3 pr-12 min-h-[60px] max-h-[400px] focus-visible:ring-0 overflow-y-auto"
+                className="resize-none w-full border-0 bg-transparent pt-3 pb-14 pl-4 pr-14 min-h-[56px] max-h-[300px] focus-visible:ring-0 overflow-y-auto rounded-2xl"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -787,56 +1327,50 @@ export function PromptProcessor() {
                 disabled={isLoading}
                 rows={1}
               />
-              <div className="absolute bottom-3 left-3 flex items-center space-x-4">
+              <div className="absolute bottom-3 left-4 flex items-center gap-3">
                 <div className="relative">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                    className="flex items-center space-x-1 text-sm font-semibold"
+                    className="flex items-center gap-1 text-xs font-medium h-7 px-2.5 rounded-lg"
                   >
                     <span>{selectedModel === 'standard' ? 'Standard' : 'LangGraph'}</span>
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="h-3.5 w-3.5" />
                   </Button>
                   {isModelDropdownOpen && (
-                    <div className="absolute bottom-full mb-2 w-72 bg-background border rounded-lg shadow-lg z-10">
+                    <div className="absolute bottom-full mb-2 w-64 bg-popover border rounded-xl shadow-lg z-10 overflow-hidden">
                       <div
-                        className="flex items-center justify-between p-3 hover:bg-muted cursor-pointer"
-                        onClick={() => {
-                          setSelectedModel('standard');
-                          setIsModelDropdownOpen(false);
-                        }}
+                        className="flex items-center justify-between p-3 hover:bg-accent cursor-pointer transition-colors"
+                        onClick={() => { setSelectedModel('standard'); setIsModelDropdownOpen(false); }}
                       >
                         <div>
-                          <h4 className="font-semibold">Standard</h4>
-                          <p className="text-xs text-muted-foreground">Memory-enhanced optimization for quick results.</p>
+                          <h4 className="text-sm font-semibold">Standard</h4>
+                          <p className="text-xs text-muted-foreground">Memory-enhanced optimization.</p>
                         </div>
-                        {selectedModel === 'standard' && <Check className="h-4 w-4 text-primary" />}
+                        {selectedModel === 'standard' && <Check className="h-4 w-4 text-primary shrink-0" />}
                       </div>
                       <div
-                        className="flex items-center justify-between p-3 hover:bg-muted cursor-pointer"
-                        onClick={() => {
-                          setSelectedModel('langgraph');
-                          setIsModelDropdownOpen(false);
-                        }}
+                        className="flex items-center justify-between p-3 hover:bg-accent cursor-pointer transition-colors border-t border-border/40"
+                        onClick={() => { setSelectedModel('langgraph'); setIsModelDropdownOpen(false); }}
                       >
                         <div>
-                          <h4 className="font-semibold">LangGraph</h4>
-                          <p className="text-xs text-muted-foreground">Complex multi-agent workflow for in-depth analysis.</p>
+                          <h4 className="text-sm font-semibold">LangGraph</h4>
+                          <p className="text-xs text-muted-foreground">Multi-agent workflow.</p>
                         </div>
-                        {selectedModel === 'langgraph' && <Check className="h-4 w-4 text-primary" />}
+                        {selectedModel === 'langgraph' && <Check className="h-4 w-4 text-primary shrink-0" />}
                       </div>
                     </div>
                   )}
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-1.5">
                   <Switch
                     id="advanced-mode"
                     checked={isAdvancedMode}
                     onCheckedChange={setIsAdvancedMode}
                   />
-                  <Label htmlFor="advanced-mode" className="text-sm">Advanced</Label>
+                  <Label htmlFor="advanced-mode" className="text-xs">Advanced</Label>
                 </div>
               </div>
               <div className="absolute bottom-3 right-3">
@@ -846,27 +1380,28 @@ export function PromptProcessor() {
                     size="sm"
                     variant="destructive"
                     onClick={handleCancel}
+                    className="rounded-xl h-8"
                   >
-                    Cancel ({gracePeriodCountdown}s)
+                    {isStreaming ? 'Cancel' : `Cancel (${gracePeriodCountdown}s)`}
                   </Button>
                 ) : (
                   <Button
                     type="submit"
-                    size="sm"
+                    size="icon"
                     disabled={isLoading || !currentInput.trim()}
+                    className="rounded-xl h-8 w-8"
                   >
-                    {isLoading ? (
-                      <LoadingSpinner size="sm" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
+                    {isLoading ? <LoadingSpinner size="sm" /> : <Send className="h-4 w-4" />}
                   </Button>
                 )}
               </div>
             </div>
-            <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-              <span>Press Enter to send, Shift+Enter for new line</span>
-              <span>{currentInput.length} characters</span>
+            <div className="flex items-center justify-between mt-1.5 px-1 text-[11px] text-muted-foreground/70">
+              <div className="flex items-center gap-2">
+                <span>Enter to send &middot; Shift+Enter for new line</span>
+                <ComplexityBadge complexity={complexity} />
+              </div>
+              <span>{currentInput.length} chars</span>
             </div>
           </form>
         </div>
@@ -888,39 +1423,45 @@ export function PromptProcessor() {
 
       {/* User Guide Dialog */}
       <Dialog open={isUserGuideOpen} onOpenChange={setIsUserGuideOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[560px] rounded-2xl">
           <DialogHeader>
-            <DialogTitle>User Guide</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <HelpCircle className="h-5 w-5 text-primary" />
+              User Guide
+            </DialogTitle>
             <DialogDescription>
               Welcome to Cortexa! Here's a quick guide to get you started.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4 text-sm">
-            <div className="grid grid-cols-1 gap-2">
-              <h4 className="font-semibold">What is Cortexa?</h4>
-              <p>
+          <div className="grid gap-5 py-4 text-sm">
+            <div className="space-y-1.5">
+              <h4 className="font-semibold text-foreground">What is Cortexa?</h4>
+              <p className="text-muted-foreground leading-relaxed">
                 Cortexa is an advanced multi-agent system designed to help you craft, refine, and optimize your prompts for exceptional results from AI models.
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-2">
-              <h4 className="font-semibold">Choosing a Model</h4>
-              <ul className="list-disc list-inside space-y-1">
-                <li><b>Standard Model:</b> Use this for quick and reliable prompt optimization. It's enhanced with memory to understand the context of your conversation.</li>
-                <li><b>LangGraph Model:</b> This model uses a more complex multi-agent workflow for in-depth analysis and prompt improvement.</li>
+            <div className="space-y-2">
+              <h4 className="font-semibold text-foreground">Choosing a Model</h4>
+              <ul className="space-y-1.5 text-muted-foreground">
+                <li className="flex gap-2"><span className="text-primary font-bold">&bull;</span><span><b className="text-foreground">Standard</b> &mdash; Quick, reliable prompt optimization enhanced with memory.</span></li>
+                <li className="flex gap-2"><span className="text-primary font-bold">&bull;</span><span><b className="text-foreground">LangGraph</b> &mdash; Multi-agent workflow for in-depth analysis.</span></li>
               </ul>
             </div>
-            <div className="grid grid-cols-1 gap-2">
-              <h4 className="font-semibold">Advanced Mode</h4>
-              <p>
-                The "Advanced" mode enables a conversational prompt engineering session. When you enable this mode, the AI agent will ask you a series of clarifying questions to better understand your needs before generating an improved prompt. This is useful when your initial idea is broad or you're not sure how to best phrase your prompt.
+            <div className="space-y-1.5">
+              <h4 className="font-semibold text-foreground">Advanced Mode</h4>
+              <p className="text-muted-foreground leading-relaxed">
+                Enable Advanced mode for a conversational prompt-engineering session. The AI will ask clarifying questions to deeply understand your needs before generating an improved prompt.
               </p>
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => setIsUserGuideOpen(false)}>Close</Button>
+            <Button onClick={() => setIsUserGuideOpen(false)} className="rounded-xl">Got it</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Keyboard Shortcuts Dialog */}
+      <KeyboardShortcutsDialog open={isShortcutsOpen} onOpenChange={setIsShortcutsOpen} />
     </div>
   );
 }

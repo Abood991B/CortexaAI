@@ -5,6 +5,7 @@ import apiClient from '@/api/client';
 import type {
   PromptRequest,
   PromptResponse,
+  ComplexityResult,
 } from '@/types/api';
 
 // Helper to format API errors for display
@@ -12,12 +13,14 @@ const getApiErrorMessage = (error: any): string => {
   if (axios.isAxiosError(error) && error.response?.data?.detail) {
     const detail = error.response.data.detail;
     if (Array.isArray(detail)) {
-      // Handle Pydantic validation errors
       return detail.map(err => `Error in '${err.loc.join('.')}': ${err.msg}`).join('\n');
     }
     if (typeof detail === 'string') {
       return detail;
     }
+  }
+  if (axios.isAxiosError(error) && error.code === 'ERR_NETWORK') {
+    return 'Cannot connect to backend. Is the server running?';
   }
   return error.message || 'An unexpected error occurred.';
 };
@@ -27,6 +30,7 @@ export const queryKeys = {
   stats: ['stats'] as const,
   history: (limit?: number) => ['history', limit] as const,
   health: ['health'] as const,
+  templates: (domain?: string, query?: string) => ['templates', domain, query] as const,
 };
 
 // Caching layer for prompt processing
@@ -136,8 +140,10 @@ export const useStats = () => {
   return useQuery({
     queryKey: queryKeys.stats,
     queryFn: () => apiClient.getStats(),
-    staleTime: 30 * 1000, // 30 seconds for real-time updates
-    refetchInterval: 30 * 1000, // Auto-refresh every 30 seconds
+    staleTime: 60 * 1000,
+    refetchInterval: 60 * 1000,
+    retry: 1,
+    retryDelay: 5000,
   });
 };
 
@@ -145,8 +151,9 @@ export const useHistory = (limit?: number) => {
   return useQuery({
     queryKey: queryKeys.history(limit),
     queryFn: () => apiClient.getHistory(limit),
-    staleTime: 15 * 1000, // 15 seconds for real-time updates
-    refetchInterval: 15 * 1000, // Auto-refresh every 15 seconds
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+    retry: 1,
   });
 };
 
@@ -154,12 +161,12 @@ export const useHealth = () => {
   return useQuery({
     queryKey: queryKeys.health,
     queryFn: () => apiClient.getHealth(),
-    refetchInterval: 15 * 1000, // 15 seconds for more real-time updates
-    staleTime: 10 * 1000, // 10 seconds
+    refetchInterval: 30 * 1000,
+    staleTime: 20 * 1000,
     refetchOnWindowFocus: true,
     refetchOnMount: true,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    retry: 1,
+    retryDelay: 5000,
   });
 };
 
@@ -178,7 +185,6 @@ export const useCancelWorkflow = () => {
     mutationFn: (workflowId: string) => apiClient.cancelWorkflow(workflowId),
     onSuccess: (_, workflowId) => {
       toast.success('Workflow cancellation requested.');
-      // Optionally, you can invalidate queries related to this workflow
       queryClient.invalidateQueries({ queryKey: ['workflows', workflowId] });
     },
     onError: (error: any) => {
@@ -198,3 +204,49 @@ export const useWorkflowStatus = (workflowId: string | null) => {
     },
   });
 };
+
+// ─── Template & Render Hooks ──────────────────────────────────
+
+export const useTemplates = (domain?: string, query?: string) => {
+  return useQuery({
+    queryKey: queryKeys.templates(domain, query),
+    queryFn: () => apiClient.getTemplates(domain, query),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+};
+
+export const useRenderTemplate = () => {
+  return useMutation({
+    mutationFn: ({ template_id, variables }: { template_id: string; variables?: Record<string, string> }) =>
+      apiClient.renderTemplate(template_id, variables),
+    onError: (error: any) => toast.error(getApiErrorMessage(error)),
+  });
+};
+
+export const useCreateTemplate = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; domain: string; template_text: string; description?: string; variables?: string[] }) =>
+      apiClient.createTemplate(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates() });
+      toast.success('Template created!');
+    },
+    onError: (error: any) => toast.error(getApiErrorMessage(error)),
+  });
+};
+
+export const useComplexity = () => {
+  return useMutation<ComplexityResult, Error, string>({
+    mutationFn: (text: string) => apiClient.analyzeComplexity(text),
+  });
+};
+
+export const useDetectLanguage = () => {
+  return useMutation<any, Error, string>({
+    mutationFn: (text: string) => apiClient.detectLanguage(text),
+  });
+};
+
+
