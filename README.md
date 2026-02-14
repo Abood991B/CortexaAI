@@ -403,18 +403,17 @@ CortexaAI deploys easily to Railway with Docker support.
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template/cortexaai)
 
-**Why Railway?**
-- $5/month credit (enough for small projects)
-- 512MB RAM, 1GB disk free forever
-- Auto-deploy from GitHub
-- PostgreSQL database included
-- Custom domains with SSL
-
 **Quick Deploy:**
-1. Click the button above
-2. Connect your GitHub repo
-3. Set `GOOGLE_API_KEY` in dashboard
-4. Deploy!
+1. Go to [railway.app](https://railway.app) and create an account
+2. **Create a workspace** (required before deploying)
+3. Click the button above or manually connect your GitHub repo
+4. Set `GOOGLE_API_KEY` in Railway dashboard
+5. Deploy!
+
+**Troubleshooting:**
+- If you see `You must specify a workspaceId to create a project`, create a workspace first in Railway before deploying your project.
+- Make sure your environment variables are set in the Railway dashboard.
+- Railway will use `Dockerfile.railway` automatically for the build.
 
 ### Docker (Local Development)
 
@@ -426,8 +425,6 @@ docker compose up --build
 docker build -f Dockerfile.railway -t cortexaai .
 docker run -p 8000:8000 -e GOOGLE_API_KEY=your_key cortexaai
 ```
-
-> See [RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md) for complete Railway deployment guide.
 
 ---
 
