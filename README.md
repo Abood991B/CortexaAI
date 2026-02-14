@@ -12,7 +12,7 @@
   <a href="https://reactjs.org/"><img src="https://img.shields.io/badge/React-18.2+-61DAFB.svg?logo=react&logoColor=white" alt="React 18+"/></a>
   <a href="https://langchain-ai.github.io/langgraph/"><img src="https://img.shields.io/badge/LangGraph-0.6+-purple.svg" alt="LangGraph"/></a>
   <img src="https://img.shields.io/badge/LLM_Providers-6+-orange.svg" alt="6+ LLM Providers"/>
-  <img src="https://img.shields.io/badge/API_Routes-87-brightgreen.svg" alt="87 API Routes"/>
+  <img src="https://img.shields.io/badge/API_Routes-83-brightgreen.svg" alt="83 API Routes"/>
   <a href="#docker-deployment"><img src="https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white" alt="Docker Ready"/></a>
 </p>
 
@@ -24,7 +24,7 @@
 
 ## What is CortexaAI?
 
-CortexaAI is a **production-ready, multi-agent prompt optimization platform** that takes any prompt and automatically transforms it into a highly effective, domain-specific prompt through a pipeline of specialized AI agents.
+CortexaAI is a **production-ready, enterprise-grade multi-agent prompt optimization platform** built with LangGraph orchestration. It automatically transforms any raw prompt into a highly effective, domain-specific prompt through a pipeline of specialized AI agents, with built-in A/B testing, version control, batch processing, and 17 production feature modules.
 
 **The Problem:** Writing effective prompts for LLMs is time-consuming, inconsistent, and requires expertise. A poorly written prompt can lead to vague, incorrect, or unhelpful AI responses.
 
@@ -61,7 +61,7 @@ CortexaAI is a **production-ready, multi-agent prompt optimization platform** th
 | 🧬 **Prompt Templates** | Template marketplace with sharing and versioning |
 | 🗄️ **SQLite Database** | Persistent storage for templates, API keys, and analytics |
 | 🐳 **Docker Ready** | One-command deployment with Docker Compose |
-| 📖 **87 API Routes** | Comprehensive REST API with interactive Swagger docs at `/docs` |
+| 📖 **83 API Routes** | Comprehensive REST API with interactive Swagger docs at `/docs` |
 
 ---
 
@@ -197,12 +197,70 @@ CortexaAI supports **6 providers** out of the box, with a modular system for add
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/batch/submit` | Submit batch prompt processing jobs |
-| `GET` | `/api/templates` | Browse prompt template marketplace |
+| `POST` | `/api/batch` | Submit batch prompt processing jobs |
+| `GET` | `/api/batch/{batch_id}/status` | Get batch job status |
+| `GET` | `/api/batch/{batch_id}/results` | Get batch job results |
+| `GET` | `/api/batches` | List all batch jobs |
+| `GET` | `/api/templates` | Browse prompt template library |
+| `POST` | `/api/templates` | Create new prompt template |
+| `GET` | `/api/templates/{template_id}` | Get specific template |
+| `POST` | `/api/templates/render` | Render template with variables |
 | `POST` | `/api/webhooks` | Register webhook callbacks |
+| `GET` | `/api/webhooks` | List webhook subscriptions |
+| `DELETE` | `/api/webhooks/{sub_id}` | Delete webhook subscription |
+| `GET` | `/api/webhooks/log` | View webhook delivery log |
 | `GET` | `/api/plugins` | List installed plugins |
-| `POST` | `/api/auth/keys` | Manage API key authentication |
-| `GET` | `/api/streaming/{id}` | Stream workflow progress via SSE |
+| `POST` | `/api/plugins` | Install a new plugin |
+| `GET` | `/api/plugins/{name}` | Get plugin details |
+| `DELETE` | `/api/plugins/{name}` | Uninstall plugin |
+| `POST` | `/api/plugins/{name}/enable` | Enable plugin |
+| `POST` | `/api/plugins/{name}/disable` | Disable plugin |
+| `POST` | `/api/auth/keys` | Create API key |
+| `GET` | `/api/auth/keys` | List API keys |
+| `DELETE` | `/api/auth/keys/{name}` | Delete API key |
+| `POST` | `/api/auth/verify` | Verify API key |
+| `POST` | `/api/process-prompt/stream` | Stream workflow progress via SSE |
+| `POST` | `/api/complexity` | Analyze prompt complexity |
+| `POST` | `/api/complexity/pipeline-config` | Get pipeline config based on complexity |
+| `POST` | `/api/language/detect` | Detect prompt language |
+| `GET` | `/api/language/supported` | List supported languages |
+| `GET` | `/api/marketplace` | Browse marketplace items |
+| `POST` | `/api/marketplace` | Publish to marketplace |
+| `GET` | `/api/marketplace/{item_id}` | Get marketplace item |
+| `POST` | `/api/marketplace/{item_id}/rate` | Rate marketplace item |
+| `GET` | `/api/marketplace/stats/overview` | Marketplace statistics |
+| `GET` | `/api/marketplace/featured/list` | Featured marketplace items |
+| `POST` | `/api/finetuning/prepare` | Prepare fine-tuning dataset |
+| `POST` | `/api/finetuning/jobs` | Create fine-tuning job |
+| `GET` | `/api/finetuning/jobs` | List fine-tuning jobs |
+| `GET` | `/api/finetuning/jobs/{job_id}` | Get job details |
+| `POST` | `/api/finetuning/jobs/{job_id}/simulate` | Simulate fine-tuned model |
+| `GET` | `/api/finetuning/models/{provider}` | List available models for provider |
+| `GET` | `/api/finetuning/estimate` | Estimate fine-tuning cost |
+| `POST` | `/api/builder/sessions` | Create prompt builder session |
+| `GET` | `/api/builder/sessions/{session_id}` | Get builder session |
+| `POST` | `/api/builder/sessions/{session_id}/blocks` | Add block to prompt |
+| `PUT` | `/api/builder/sessions/{session_id}/blocks/{block_id}` | Update block |
+| `DELETE` | `/api/builder/sessions/{session_id}/blocks/{block_id}` | Delete block |
+| `POST` | `/api/builder/sessions/{session_id}/reorder` | Reorder blocks |
+| `POST` | `/api/builder/sessions/{session_id}/assemble` | Assemble final prompt |
+| `GET` | `/api/builder/presets` | List builder presets |
+| `GET` | `/api/builder/presets/{domain}` | Get domain-specific presets |
+| `GET` | `/api/regression/suites` | List regression test suites |
+| `POST` | `/api/regression/suites` | Create test suite |
+| `GET` | `/api/regression/suites/{suite_id}` | Get suite details |
+| `DELETE` | `/api/regression/suites/{suite_id}` | Delete test suite |
+| `POST` | `/api/regression/suites/{suite_id}/cases` | Add test case |
+| `POST` | `/api/regression/suites/{suite_id}/run` | Run regression tests |
+| `POST` | `/api/regression/suites/{suite_id}/baseline` | Set baseline |
+| `POST` | `/api/similarity/search` | Search similar prompts |
+| `POST` | `/api/similarity/index` | Index prompt for similarity |
+| `GET` | `/api/similarity/duplicates` | Find duplicate prompts |
+| `POST` | `/api/similarity/reindex` | Rebuild similarity index |
+| `GET` | `/api/similarity/stats` | Similarity index statistics |
+| `GET` | `/api/errors/analytics` | Error analytics dashboard |
+| `GET` | `/api/errors/recent` | Recent errors log |
+| `GET` | `/api/dashboard` | Complete system dashboard |
 
 ### System
 
