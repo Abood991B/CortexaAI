@@ -19,6 +19,10 @@
 
 CortexaAI is an advanced multi-agent system that automatically classifies, optimizes, and evaluates prompts using domain-specific expert agents powered by LangChain and LangGraph. It supports **6 LLM providers**, **real-time SSE streaming**, **batch processing**, a **prompt marketplace**, and exposes **79 REST API endpoints** — all orchestrated through a 7-node LangGraph workflow with cancellation support, per-node timing, and adaptive iteration.
 
+<img width="1920" height="869" alt="Main CortexaAI" src="https://github.com/user-attachments/assets/1c26c541-d392-4e0f-98ca-bed74db56d31" />
+<img width="1920" height="1260" alt="Dasboard" src="https://github.com/user-attachments/assets/7b553656-5e7b-4701-815c-5d99bf570c91" />
+<img width="1920" height="1632" alt="Templates" src="https://github.com/user-attachments/assets/405b4e96-69df-4b18-975f-f559a310e56c" />
+
 ## ✨ Key Features
 
 ### Multi-Agent Architecture
