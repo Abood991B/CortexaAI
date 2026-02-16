@@ -26,7 +26,10 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from config.config import settings, setup_langsmith, get_logger
+from config.config import settings, setup_langsmith, get_logger, setup_structured_logging
+
+# Setup structured logging as early as possible
+setup_structured_logging()
 
 # Import shared state so backward-compat re-exports work for tests
 from src.deps import (
@@ -163,14 +166,29 @@ def main():
     # Determine if running in development mode
     is_development = os.getenv("CORTEXAAI_ENV", "development").lower() == "development"
     
-    uvicorn.run(
-        "src.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=is_development,
-        log_level=settings.log_level.lower(),
-        access_log=not settings.production_mode,  # Disable access logs in production
-    )
+    # Additional logging configuration for production
+    if settings.production_mode:
+        # Suppress uvicorn's default logging configuration
+        uvicorn_config = {
+            "app": "src.main:app",
+            "host": settings.host,
+            "port": settings.port,
+            "reload": is_development,
+            "log_level": "warning",  # Suppress uvicorn logs in production
+            "access_log": False,  # Disable access logs completely
+            "use_colors": False,  # Disable colors for clean output
+        }
+    else:
+        uvicorn_config = {
+            "app": "src.main:app",
+            "host": settings.host,
+            "port": settings.port,
+            "reload": is_development,
+            "log_level": settings.log_level.lower(),
+            "access_log": True,
+        }
+    
+    uvicorn.run(**uvicorn_config)
 
 
 if __name__ == "__main__":

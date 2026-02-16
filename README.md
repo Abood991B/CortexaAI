@@ -3,7 +3,7 @@
 </p>
   <h1 align="center">CortexaAI</h1>
   <p align="center">
-    <strong>Production-Ready Multi-Agent Prompt Engineering Platform</strong>
+    <strong>Multi-Agent Prompt Engineering Platform</strong>
   </p>
   <p align="center">
     <a href="https://github.com/Abood991B/CortexaAI/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>

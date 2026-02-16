@@ -263,7 +263,14 @@ def setup_structured_logging():
         
         for logger_name in noisy_loggers:
             logger = logging.getLogger(logger_name)
-            logger.setLevel(logging.WARNING)
+            logger.setLevel(logging.ERROR)  # Set to ERROR instead of WARNING
+            logger.propagate = False  # Prevent propagation to parent loggers
+            
+        # Special handling for watchfiles - completely disable it
+        watchfiles_logger = logging.getLogger('watchfiles')
+        watchfiles_logger.disabled = True
+        watchfiles_main_logger = logging.getLogger('watchfiles.main')
+        watchfiles_main_logger.disabled = True
             
         # Set INFO level for core uvicorn logger (keep startup/shutdown messages)
         logging.getLogger('uvicorn').setLevel(logging.INFO)
