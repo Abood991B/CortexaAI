@@ -358,7 +358,7 @@ const SHORTCUTS = [
   { keys: ['Enter'], description: 'Send message' },
   { keys: ['Shift', 'Enter'], description: 'New line' },
   { keys: ['Ctrl', 'N'], description: 'New chat' },
-  { keys: ['Ctrl', '/'], description: 'Toggle Advanced mode' },
+  { keys: ['Ctrl', '/'], description: 'Toggle Single-shot/Conversation' },
   { keys: ['Ctrl', 'Shift', 'E'], description: 'Download conversation' },
   { keys: ['Alt', '1-4'], description: 'Navigate pages' },
   { keys: ['?'], description: 'Show this dialog' },
@@ -737,7 +737,7 @@ export function PromptProcessor() {
         e.preventDefault();
         setIsAdvancedMode(prev => {
           const next = !prev;
-          toast.info(next ? 'Advanced mode on' : 'Advanced mode off');
+          toast.info(next ? 'Single-shot mode (no memory)' : 'Conversation mode (with memory)');
           return next;
         });
         return;
@@ -1005,10 +1005,19 @@ export function PromptProcessor() {
 
       let response: PromptResponse | undefined;
       
-      // Always use memory-enhanced processing
-      response = await processPromptWithMemoryMutation.mutateAsync({
-        request: { ...request, user_id: userId },
-      });
+      // Use memory-enhanced processing for conversation mode (advanced OFF)
+      // Use standard processing for single-shot optimization (advanced ON)
+      if (isAdvancedMode) {
+        // Advanced mode: single-shot optimization without memory
+        response = await processPromptWithMemoryMutation.mutateAsync({
+          request: request, // No user_id, uses standard endpoint
+        });
+      } else {
+        // Standard mode: conversation with memory
+        response = await processPromptWithMemoryMutation.mutateAsync({
+          request: { ...request, user_id: userId },
+        });
+      }
       
       if (response) {
         // Update loading message ID to match workflow
@@ -1640,8 +1649,11 @@ export function PromptProcessor() {
                     id="advanced-mode"
                     checked={isAdvancedMode}
                     onCheckedChange={setIsAdvancedMode}
+                    title={isAdvancedMode ? "Single-shot optimization mode (no conversation memory)" : "Conversation mode (with memory)"}
                   />
-                  <Label htmlFor="advanced-mode" className="text-xs">Advanced</Label>
+                  <Label htmlFor="advanced-mode" className="text-xs cursor-pointer" title={isAdvancedMode ? "Single-shot optimization mode (no conversation memory)" : "Conversation mode (with memory)"}>
+                    {isAdvancedMode ? "Single-shot" : "Conversation"}
+                  </Label>
                 </div>
               </div>
               <div className="absolute bottom-3 right-3">
