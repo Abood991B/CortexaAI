@@ -149,17 +149,7 @@ def main():
     print(f"  List: OK - count={len(batches)}")
     print()
 
-    # 11. Fine-tuning
-    print("11. FINE-TUNING MODULE")
-    from core.finetuning import finetuning_manager
-    models = finetuning_manager.get_supported_models("openai")
-    print(f"  Models: OK - count={len(models)}")
-    estimate = finetuning_manager.estimate_cost("openai", 100)
-    est_cost = estimate["estimated_cost_usd"]
-    print(f"  Estimate: OK - cost={est_cost}")
-    print()
-
-    # 12. Error Recovery
+    # 11. Error Recovery
     print("12. ERROR RECOVERY MODULE")
     from core.error_recovery import classify_error, ErrorAnalytics
     err = classify_error(Exception("rate limit exceeded"))

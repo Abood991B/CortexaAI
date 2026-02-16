@@ -1,5 +1,5 @@
 """Feature endpoints: templates, batch, marketplace, builder, plugins, regression,
-similarity, complexity, language, auth, finetuning, webhooks."""
+similarity, complexity, language, auth, webhooks."""
 
 from typing import Dict, List, Optional, Any
 
@@ -19,7 +19,6 @@ from src.deps import (
     complexity_analyzer,
     language_processor,
     auth_manager,
-    finetuning_manager,
     webhook_manager,
 )
 from core.auth import require_api_key
@@ -308,62 +307,6 @@ async def marketplace_stats():
 @router.get("/api/marketplace/featured/list")
 async def marketplace_featured(limit: int = 10):
     return marketplace.featured(limit)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  Fine-Tuning
-# ═══════════════════════════════════════════════════════════════════════════
-
-class FineTuneJobRequest(BaseModel):
-    provider: str = "openai"
-    model: str = "gpt-4o-mini-2024-07-18"
-    hyperparameters: Optional[Dict[str, Any]] = None
-
-
-class TrainingDataRequest(BaseModel):
-    prompts: List[Dict[str, str]]
-    format_type: str = "openai"
-
-
-@router.post("/api/finetuning/prepare")
-async def prepare_training_data(req: TrainingDataRequest):
-    return finetuning_manager.prepare_training_data(req.prompts, req.format_type)
-
-
-@router.post("/api/finetuning/jobs")
-async def create_finetune_job(req: FineTuneJobRequest):
-    return finetuning_manager.create_job(req.provider, req.model, hyperparameters=req.hyperparameters)
-
-
-@router.get("/api/finetuning/jobs")
-async def list_finetune_jobs():
-    return finetuning_manager.list_jobs()
-
-
-@router.get("/api/finetuning/jobs/{job_id}")
-async def get_finetune_job(job_id: str):
-    job = finetuning_manager.get_job(job_id)
-    if not job:
-        raise HTTPException(404, "Fine-tuning job not found")
-    return job
-
-
-@router.post("/api/finetuning/jobs/{job_id}/simulate")
-async def simulate_finetune(job_id: str):
-    result = finetuning_manager.simulate_run(job_id)
-    if not result:
-        raise HTTPException(404, "Fine-tuning job not found")
-    return result
-
-
-@router.get("/api/finetuning/models/{provider}")
-async def get_finetune_models(provider: str):
-    return finetuning_manager.get_supported_models(provider)
-
-
-@router.get("/api/finetuning/estimate")
-async def estimate_finetune_cost(provider: str = "openai", samples: int = 100, epochs: int = 3):
-    return finetuning_manager.estimate_cost(provider, samples, epochs)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

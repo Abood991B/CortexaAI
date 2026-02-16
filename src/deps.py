@@ -34,7 +34,6 @@ from core.language import language_processor
 from core.complexity import complexity_analyzer
 from core.auth import auth_manager
 from core.marketplace import marketplace
-from core.finetuning import finetuning_manager
 from core.prompt_builder import prompt_builder
 from core.plugins import plugin_manager
 from core.regression import regression_runner
