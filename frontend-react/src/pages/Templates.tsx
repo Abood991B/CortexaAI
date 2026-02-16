@@ -4,7 +4,7 @@ import {
   Layers, RefreshCw, Search, Code, Eye, Sparkles, Plus, Star,
   Filter, Copy, Check, Tag, Grid3X3, List, ChevronDown, X, BookOpen,
   Zap, Briefcase, GraduationCap, Palette, Database, Shield, Globe,
-  FileText, ArrowUpDown,
+  FileText, ArrowUpDown, Pencil, Trash2,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { LoadingSpinner } from '@/components/ui/loading';
 import {
   Dialog,
@@ -21,11 +22,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   useTemplates,
   useRenderTemplate,
   useCreateTemplate,
+  useUpdateTemplate,
+  useDeleteTemplate,
 } from '@/hooks/useApi';
 import { AppLayout, PageHeader } from '@/components/layout';
 
@@ -39,7 +42,34 @@ const domainIcons: Record<string, React.ReactNode> = {
   marketing: <Globe className="h-4 w-4" />,
   education: <GraduationCap className="h-4 w-4" />,
   report_writing: <FileText className="h-4 w-4" />,
+  coding: <Code className="h-4 w-4" />,
+  productivity: <Briefcase className="h-4 w-4" />,
+  writing: <Palette className="h-4 w-4" />,
+  research: <BookOpen className="h-4 w-4" />,
 };
+
+// Available domains for the create/edit dropdown
+const DOMAIN_OPTIONS = [
+  { value: 'coding', label: 'Coding' },
+  { value: 'software_engineering', label: 'Software Engineering' },
+  { value: 'data_science', label: 'Data Science' },
+  { value: 'creative_writing', label: 'Creative Writing' },
+  { value: 'writing', label: 'Writing' },
+  { value: 'business_strategy', label: 'Business Strategy' },
+  { value: 'marketing', label: 'Marketing' },
+  { value: 'education', label: 'Education' },
+  { value: 'productivity', label: 'Productivity' },
+  { value: 'research', label: 'Research' },
+  { value: 'report_writing', label: 'Report Writing' },
+  { value: 'general', label: 'General' },
+];
+
+/** Extract {{variable}} names from template text */
+function extractVariables(text: string): string[] {
+  const matches = text.match(/\{\{(\w+)\}\}/g);
+  if (!matches) return [];
+  return [...new Set(matches.map(m => m.replace(/\{\{|\}\}/g, '')))];
+}
 
 // ─── Source Detection ─────────────────────────────────────────
 type TemplateSource = 'claude-library' | 'custom';
@@ -78,16 +108,18 @@ export function Templates() {
     return (localStorage.getItem('cortexa_tpl_view') as 'grid' | 'list') || 'grid';
   });
   const [sortBy, setSortBy] = useState<SortOption>('favorites');
-  const [renderInput, setRenderInput] = useState<{ name: string; vars: Record<string, string> } | null>(null);
+  const [renderInput, setRenderInput] = useState<{ id: string; name: string; vars: Record<string, string> } | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [copiedTemplate, setCopiedTemplate] = useState<string | null>(null);
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
-  const [newTemplate, setNewTemplate] = useState({ name: '', domain: '', template_text: '', description: '', variableInput: '' });
+  const [newTemplate, setNewTemplate] = useState({ name: '', domain: '', template_text: '', description: '', variableInput: '', is_public: true });
+  const [editTemplate, setEditTemplate] = useState<{ id: string; name: string; domain: string; template_text: string; description: string; variableInput: string; is_public: boolean } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem('cortexa_favorite_templates');
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch { return new Set(); }
+      return stored ? new Set<string>(JSON.parse(stored)) : new Set<string>();
+    } catch { return new Set<string>(); }
   });
 
   // Persist preferences
@@ -111,20 +143,28 @@ export function Templates() {
   const { data: templates, isLoading: tplLoading, refetch: refetchTemplates } = useTemplates();
   const renderMut = useRenderTemplate();
   const createMut = useCreateTemplate();
+  const updateMut = useUpdateTemplate();
+  const deleteMut = useDeleteTemplate();
 
   const allTemplates: any[] = Array.isArray(templates) ? templates : templates?.templates ?? [];
+
+  // Prune orphaned favorites when templates load
+  useEffect(() => {
+    if (!templates) return;
+    const tplArr: any[] = Array.isArray(templates) ? templates : (templates as any)?.templates ?? [];
+    const names = new Set(tplArr.map((t: any) => t.name));
+    setFavorites(prev => {
+      const pruned = new Set<string>([...prev].filter(n => names.has(n)));
+      if (pruned.size !== prev.size) return pruned;
+      return prev; // no change — skip re-render
+    });
+  }, [templates]);
 
   // Extract metadata
   const categories = useMemo(() =>
     Array.from(new Set(allTemplates.map((t: any) => t.domain || t.category || 'General').filter(Boolean))).sort(),
     [allTemplates]
   );
-
-  const allTags = useMemo(() => {
-    const tagSet = new Set<string>();
-    allTemplates.forEach((t: any) => (t.tags || []).forEach((tag: string) => tagSet.add(tag)));
-    return Array.from(tagSet).sort();
-  }, [allTemplates]);
 
   // Source counts
   const sourceCounts = useMemo(() => {
@@ -239,10 +279,19 @@ export function Templates() {
               <div className="p-2 rounded-lg bg-yellow-500/10">
                 <Star className="h-5 w-5 text-yellow-500" />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-2xl font-bold">{favorites.size}</p>
                 <p className="text-xs text-muted-foreground">Favorites</p>
               </div>
+              {favorites.size > 0 && (
+                <button
+                  onClick={() => setFavorites(new Set<string>())}
+                  className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+                  title="Clear all favorites"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </CardContent>
           </Card>
           <Card className="border-border/40">
@@ -305,7 +354,7 @@ export function Templates() {
               >
                 <option value="">All Domains</option>
                 {categories.map((cat) => (
-                  <option key={cat} value={cat}>{cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
+                  <option key={cat} value={cat}>{cat.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}</option>
                 ))}
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
@@ -438,7 +487,7 @@ export function Templates() {
                         className="shrink-0 p-1 rounded-md hover:bg-accent/60 transition-colors"
                         title={favorites.has(tpl.name) ? 'Remove from favorites' : 'Add to favorites'}
                       >
-                        <Star className={`h-4 w-4 transition-colors ${favorites.has(tpl.name) ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/30 group-hover:text-muted-foreground/60'}`} />
+                        <Star className={`h-4 w-4 transition-colors ${favorites.has(tpl.name) ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/70 hover:text-yellow-400'}`} />
                       </button>
                     </div>
 
@@ -491,7 +540,7 @@ export function Templates() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => setRenderInput({ name: tpl.name, vars: {} })}
+                        onClick={() => setRenderInput({ id: tpl.id, name: tpl.name, vars: {} })}
                         className="gap-1 text-xs h-8 px-2.5"
                       >
                         <Eye className="h-3 w-3" /> Preview
@@ -508,6 +557,36 @@ export function Templates() {
                           <><Copy className="h-3 w-3" /> Copy</>
                         )}
                       </Button>
+                      {source === 'custom' && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditTemplate({
+                              id: tpl.id,
+                              name: tpl.name,
+                              domain: tpl.domain || '',
+                              template_text: tpl.template || '',
+                              description: tpl.description || '',
+                              variableInput: (tpl.variables || []).join(', '),
+                              is_public: tpl.is_public !== false,
+                            })}
+                            className="gap-1 text-xs h-8 px-2"
+                            title="Edit template"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDeleteTarget({ id: tpl.id, name: tpl.name })}
+                            className="gap-1 text-xs h-8 px-2 text-destructive hover:text-destructive"
+                            title="Delete template"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </>
+                      )}
                       <Button
                         size="sm"
                         variant="default"
@@ -546,7 +625,7 @@ export function Templates() {
                         onClick={(e) => { e.stopPropagation(); toggleFavorite(tpl.name); }}
                         className="shrink-0 p-0.5 mt-0.5"
                       >
-                        <Star className={`h-4 w-4 transition-colors ${favorites.has(tpl.name) ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/30 hover:text-yellow-400'}`} />
+                        <Star className={`h-4 w-4 transition-colors ${favorites.has(tpl.name) ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/70 hover:text-yellow-400'}`} />
                       </button>
 
                       {/* Main content */}
@@ -615,7 +694,7 @@ export function Templates() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => setRenderInput({ name: tpl.name, vars: {} })}
+                          onClick={() => setRenderInput({ id: tpl.id, name: tpl.name, vars: {} })}
                           className="h-8 px-2"
                         >
                           <Eye className="h-3.5 w-3.5" />
@@ -628,6 +707,36 @@ export function Templates() {
                         >
                           {copiedTemplate === tpl.name ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
                         </Button>
+                        {source === 'custom' && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditTemplate({
+                                id: tpl.id,
+                                name: tpl.name,
+                                domain: tpl.domain || '',
+                                template_text: tpl.template || '',
+                                description: tpl.description || '',
+                                variableInput: (tpl.variables || []).join(', '),
+                                is_public: tpl.is_public !== false,
+                              })}
+                              className="h-8 px-2"
+                              title="Edit"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setDeleteTarget({ id: tpl.id, name: tpl.name })}
+                              className="h-8 px-2 text-destructive hover:text-destructive"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
                         <Button
                           size="sm"
                           variant="default"
@@ -700,7 +809,7 @@ export function Templates() {
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={() => { setRenderInput(null); renderMut.reset(); }}>Close</Button>
               <Button
-                onClick={() => renderInput && renderMut.mutate({ template_id: renderInput.name, variables: renderInput.vars })}
+                onClick={() => renderInput && renderMut.mutate({ template_id: renderInput.id, variables: renderInput.vars })}
                 disabled={renderMut.isPending}
                 className="gap-1.5"
               >
@@ -711,7 +820,7 @@ export function Templates() {
         </Dialog>
 
         {/* ─── Create Template Dialog ─────────────────────── */}
-        <Dialog open={isCreateOpen} onOpenChange={(open) => { if (!open) { setIsCreateOpen(false); setNewTemplate({ name: '', domain: '', template_text: '', description: '', variableInput: '' }); createMut.reset(); } }}>
+        <Dialog open={isCreateOpen} onOpenChange={(open) => { if (!open) { setIsCreateOpen(false); setNewTemplate({ name: '', domain: '', template_text: '', description: '', variableInput: '', is_public: true }); createMut.reset(); } }}>
           <DialogContent className="sm:max-w-lg rounded-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -725,10 +834,26 @@ export function Templates() {
                 <div className="space-y-1.5">
                   <Label htmlFor="tpl-name">Name *</Label>
                   <Input id="tpl-name" placeholder="e.g. Code Review" value={newTemplate.name} onChange={e => setNewTemplate(p => ({ ...p, name: e.target.value }))} />
+                  {newTemplate.name.length > 0 && newTemplate.name.trim().length < 3 && (
+                    <p className="text-xs text-destructive">Name must be at least 3 characters</p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="tpl-domain">Domain *</Label>
-                  <Input id="tpl-domain" placeholder="e.g. software_engineering" value={newTemplate.domain} onChange={e => setNewTemplate(p => ({ ...p, domain: e.target.value }))} />
+                  <select
+                    id="tpl-domain"
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={newTemplate.domain}
+                    onChange={e => setNewTemplate(p => ({ ...p, domain: e.target.value }))}
+                  >
+                    <option value="">Select domain...</option>
+                    {DOMAIN_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  {!newTemplate.domain && newTemplate.name.trim() && (
+                    <p className="text-xs text-destructive">Please select a domain</p>
+                  )}
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -738,11 +863,39 @@ export function Templates() {
               <div className="space-y-1.5">
                 <Label htmlFor="tpl-text">Template Text *</Label>
                 <Textarea id="tpl-text" rows={6} placeholder={"Review this {{language}} code for best practices:\n\n{{code}}"} value={newTemplate.template_text} onChange={e => setNewTemplate(p => ({ ...p, template_text: e.target.value }))} className="font-mono text-sm" />
+                {newTemplate.template_text.length > 0 && newTemplate.template_text.trim().length < 10 && (
+                  <p className="text-xs text-destructive">Template must be at least 10 characters</p>
+                )}
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="tpl-vars">Variables <span className="text-muted-foreground font-normal">(comma-separated)</span></Label>
-                <Input id="tpl-vars" placeholder="language, code" value={newTemplate.variableInput} onChange={e => setNewTemplate(p => ({ ...p, variableInput: e.target.value }))} />
+
+              {/* Auto-detected variables */}
+              {(() => {
+                const detected = extractVariables(newTemplate.template_text);
+                return detected.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Detected Variables</Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {detected.map(v => (
+                        <span key={v} className="text-xs font-mono px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/20">
+                          {`{{${v}}}`}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : newTemplate.template_text.trim() ? (
+                  <p className="text-xs text-muted-foreground">Tip: Use {'{{variable_name}}'} to add dynamic variables</p>
+                ) : null;
+              })()}
+
+              {/* Public toggle */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm">Public Template</Label>
+                  <p className="text-xs text-muted-foreground">Visible to all users</p>
+                </div>
+                <Switch checked={newTemplate.is_public} onCheckedChange={(checked) => setNewTemplate(p => ({ ...p, is_public: checked }))} />
               </div>
+
               {newTemplate.template_text && (
                 <div className="p-3 bg-muted/50 rounded-lg border border-border/40">
                   <p className="text-xs font-medium text-muted-foreground mb-1.5">Preview</p>
@@ -754,25 +907,159 @@ export function Templates() {
               <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
               <Button
                 onClick={() => {
-                  if (!newTemplate.name.trim() || !newTemplate.domain.trim() || !newTemplate.template_text.trim()) return;
-                  const variables = newTemplate.variableInput.split(',').map(v => v.trim()).filter(Boolean);
+                  if (!newTemplate.name.trim() || newTemplate.name.trim().length < 3 || !newTemplate.domain || !newTemplate.template_text.trim() || newTemplate.template_text.trim().length < 10) return;
+                  const variables = extractVariables(newTemplate.template_text);
                   createMut.mutate({
                     name: newTemplate.name.trim(),
-                    domain: newTemplate.domain.trim(),
+                    domain: newTemplate.domain,
                     template_text: newTemplate.template_text.trim(),
                     description: newTemplate.description.trim() || undefined,
                     variables: variables.length > 0 ? variables : undefined,
+                    is_public: newTemplate.is_public,
                   }, {
                     onSuccess: () => {
                       setIsCreateOpen(false);
-                      setNewTemplate({ name: '', domain: '', template_text: '', description: '', variableInput: '' });
+                      setNewTemplate({ name: '', domain: '', template_text: '', description: '', variableInput: '', is_public: true });
                     }
                   });
                 }}
-                disabled={createMut.isPending || !newTemplate.name.trim() || !newTemplate.domain.trim() || !newTemplate.template_text.trim()}
+                disabled={createMut.isPending || !newTemplate.name.trim() || newTemplate.name.trim().length < 3 || !newTemplate.domain || !newTemplate.template_text.trim() || newTemplate.template_text.trim().length < 10}
                 className="gap-1.5"
               >
                 {createMut.isPending ? <LoadingSpinner size="sm" /> : <><Plus className="h-3.5 w-3.5" /> Create Template</>}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ─── Edit Template Dialog ───────────────────────── */}
+        <Dialog open={!!editTemplate} onOpenChange={(open) => { if (!open) { setEditTemplate(null); updateMut.reset(); } }}>
+          <DialogContent className="sm:max-w-lg rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="h-4 w-4 text-primary" />
+                Edit Template
+              </DialogTitle>
+              <DialogDescription>Update your custom template. Use {'{{variable}}'} syntax for dynamic parts.</DialogDescription>
+            </DialogHeader>
+            {editTemplate && (
+              <div className="space-y-4 py-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Name *</Label>
+                    <Input value={editTemplate.name} onChange={e => setEditTemplate(p => p ? { ...p, name: e.target.value } : p)} />
+                    {editTemplate.name.length > 0 && editTemplate.name.trim().length < 3 && (
+                      <p className="text-xs text-destructive">Name must be at least 3 characters</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Domain *</Label>
+                    <select
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      value={editTemplate.domain}
+                      onChange={e => setEditTemplate(p => p ? { ...p, domain: e.target.value } : p)}
+                    >
+                      <option value="">Select domain...</option>
+                      {DOMAIN_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Description</Label>
+                  <Input value={editTemplate.description} onChange={e => setEditTemplate(p => p ? { ...p, description: e.target.value } : p)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Template Text *</Label>
+                  <Textarea rows={6} value={editTemplate.template_text} onChange={e => setEditTemplate(p => p ? { ...p, template_text: e.target.value } : p)} className="font-mono text-sm" />
+                  {editTemplate.template_text.length > 0 && editTemplate.template_text.trim().length < 10 && (
+                    <p className="text-xs text-destructive">Template must be at least 10 characters</p>
+                  )}
+                </div>
+
+                {/* Auto-detected variables */}
+                {(() => {
+                  const detected = extractVariables(editTemplate.template_text);
+                  return detected.length > 0 ? (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Detected Variables</Label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {detected.map(v => (
+                          <span key={v} className="text-xs font-mono px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/20">
+                            {`{{${v}}}`}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
+                {/* Public toggle */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm">Public Template</Label>
+                    <p className="text-xs text-muted-foreground">Visible to all users</p>
+                  </div>
+                  <Switch checked={editTemplate.is_public} onCheckedChange={(checked) => setEditTemplate(p => p ? { ...p, is_public: checked } : p)} />
+                </div>
+              </div>
+            )}
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setEditTemplate(null)}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  if (!editTemplate || !editTemplate.name.trim() || editTemplate.name.trim().length < 3 || !editTemplate.domain || !editTemplate.template_text.trim() || editTemplate.template_text.trim().length < 10) return;
+                  const variables = extractVariables(editTemplate.template_text);
+                  updateMut.mutate({
+                    templateId: editTemplate.id,
+                    data: {
+                      name: editTemplate.name.trim(),
+                      domain: editTemplate.domain,
+                      template_text: editTemplate.template_text.trim(),
+                      description: editTemplate.description.trim() || undefined,
+                      variables: variables.length > 0 ? variables : undefined,
+                      is_public: editTemplate.is_public,
+                    },
+                  }, {
+                    onSuccess: () => setEditTemplate(null),
+                  });
+                }}
+                disabled={updateMut.isPending || !editTemplate?.name.trim() || (editTemplate?.name.trim().length ?? 0) < 3 || !editTemplate?.domain || !editTemplate?.template_text.trim() || (editTemplate?.template_text.trim().length ?? 0) < 10}
+                className="gap-1.5"
+              >
+                {updateMut.isPending ? <LoadingSpinner size="sm" /> : <><Check className="h-3.5 w-3.5" /> Save Changes</>}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ─── Delete Confirmation Dialog ─────────────────── */}
+        <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+          <DialogContent className="sm:max-w-md rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <Trash2 className="h-4 w-4" />
+                Delete Template
+              </DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete <strong>"{deleteTarget?.name}"</strong>? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (!deleteTarget) return;
+                  deleteMut.mutate(deleteTarget.id, {
+                    onSuccess: () => setDeleteTarget(null),
+                  });
+                }}
+                disabled={deleteMut.isPending}
+                className="gap-1.5"
+              >
+                {deleteMut.isPending ? <LoadingSpinner size="sm" /> : <><Trash2 className="h-3.5 w-3.5" /> Delete</>}
               </Button>
             </DialogFooter>
           </DialogContent>

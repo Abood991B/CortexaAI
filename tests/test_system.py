@@ -14,11 +14,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
 import pytest
 
-from agents.classifier import classifier
+from agents.classifier import DomainClassifier
 from agents.base_expert import create_expert_agent, SoftwareEngineeringExpert, GenericExpertAgent
 from agents.evaluator import evaluator
 from agents.coordinator import coordinator
 from config.config import settings
+
+# Create local classifier instance (global singleton was removed from classifier module)
+classifier = DomainClassifier()
 
 
 def test_system_initialization():

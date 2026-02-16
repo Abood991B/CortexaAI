@@ -4,11 +4,14 @@ import pytest
 from unittest.mock import Mock, patch
 import json
 
-from agents.classifier import classifier, DomainClassifier
+from agents.classifier import DomainClassifier
 from agents.base_expert import create_expert_agent, SoftwareEngineeringExpert, GenericExpertAgent
 from agents.evaluator import evaluator, PromptEvaluator
 from agents.coordinator import coordinator, WorkflowCoordinator
 from config.config import settings
+
+# Create test classifier instance (global singleton was removed from classifier module)
+classifier = DomainClassifier()
 
 
 class TestDomainClassifier:
@@ -21,27 +24,15 @@ class TestDomainClassifier:
         assert "data_science" in classifier.known_domains
 
     def test_classify_prompt_mock(self):
-        """Test prompt classification with mocked LLM."""
+        """Test prompt classification via keyword-only path."""
         import asyncio
-        from unittest.mock import patch, AsyncMock
 
-        # Mock the classifier chain with an async mock
-        mock_chain = AsyncMock(return_value={
-            "domain": "software_engineering",
-            "confidence": 0.95,
-            "is_new_domain": False,
-            "key_topics": ["code", "algorithm"],
-            "reasoning": "This is a coding task"
-        })
+        # Keyword classifier should classify coding prompts as software_engineering
+        result = asyncio.run(classifier.classify_prompt("Write a function to sort a list"))
 
-        with patch.object(classifier, 'classifier_chain', mock_chain):
-            # Run the async function synchronously
-            result = asyncio.run(classifier.classify_prompt("Write a function to sort a list"))
-
-            assert result["domain"] == "software_engineering"
-            # The actual confidence may vary, just check it's a reasonable value
-            assert 0.9 <= result["confidence"] <= 1.0
-            assert "code" in result["key_topics"]
+        assert result["domain"] == "software_engineering"
+        # The actual confidence may vary, just check it's a reasonable value
+        assert 0.5 <= result["confidence"] <= 1.0
 
     def test_get_available_domains(self):
         """Test getting available domains."""

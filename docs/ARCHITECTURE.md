@@ -14,7 +14,7 @@
 │  │  └──────────────┘  └──────────────────┘  └────────────────┘   │    │
 │  └─────────────────────────────┬───────────────────────────────────┘    │
 │                                │                                         │
-│                     REST API (87 routes)                                 │
+│                     REST API (86 routes)                                 │
 │                         + SSE Streaming                                  │
 └────────────────────────────────┼─────────────────────────────────────────┘
                                  │
@@ -23,7 +23,7 @@
 │                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │                    FastAPI Application                          │    │
-│  │                    (src/main.py — 87 routes)                    │    │
+│  │                    (src/main.py — 86 routes)                    │    │
 │  │                                                                 │    │
 │  │  Middleware: CORS │ Rate Limiting │ PII Detection │ Auth        │    │
 │  └─────────────────────────────┬───────────────────────────────────┘    │
@@ -131,7 +131,7 @@
 | Component | File(s) | Purpose |
 |-----------|---------|---------|
 | **Chat UI** | `frontend-react/src/pages/PromptProcessor.tsx` | Main prompt input/output interface with real-time streaming |
-| **Analytics Panel** | `frontend-react/src/pages/SystemHealth.tsx` | System metrics, domain distribution, optimization trends |
+| **Analytics Panel** | `frontend-react/src/pages/Dashboard.tsx` | System metrics, domain distribution, optimization trends |
 | **Provider Management** | `frontend-react/src/components/` | Configure and monitor LLM provider status |
 | **API Client** | `frontend-react/src/api/client.ts` | TypeScript HTTP client with type-safe requests |
 | **React Hooks** | `frontend-react/src/hooks/` | `useApi` (data fetching), `useNotifications` (alerts) |
@@ -140,7 +140,7 @@
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| **FastAPI App** | `src/main.py` | 87 REST endpoints, CORS middleware, static file serving |
+| **FastAPI App** | `src/main.py` | 86 REST endpoints, CORS middleware, static file serving |
 | **Rate Limiting** | `config/config.py` | Token-bucket rate limiter per client IP |
 | **Authentication** | `core/auth.py` | API key validation via `X-API-Key` header |
 | **PII Detection** | `config/config.py` | Scans prompts for personal identifiable information |
@@ -301,6 +301,4 @@ Request → Primary Provider (Google Gemini)
 | **Database** | SQLite (WAL mode) | Built-in |
 | **Frontend** | React 18 + TypeScript + Vite | 18.2+ |
 | **Styling** | Tailwind CSS + Radix UI | 3.4+ |
-| **Containerization** | Docker (multi-stage) | 24+ |
 | **CI/CD** | GitHub Actions | v4 |
-| **Deployment** | Render.com | — |

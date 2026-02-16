@@ -18,7 +18,17 @@ AgenticSystemError (base)
 
 from typing import Dict, Any, Optional, List
 from datetime import datetime
-from agents.utils import is_retryable_error
+
+
+def _lazy_is_retryable(error: Optional[Exception]) -> bool:
+    """Lazy wrapper to avoid importing agents.utils at module scope."""
+    if error is None:
+        return False
+    try:
+        from agents.utils import is_retryable_error
+        return is_retryable_error(error)
+    except ImportError:
+        return False
 
 class AgenticSystemError(Exception):
     """Base exception for all agentic system errors.
@@ -182,7 +192,7 @@ class LLMServiceError(AgenticSystemError):
             "provider": provider,
             "model": model,
             "request_type": request_type,
-            "is_retryable": is_retryable_error(cause)
+            "is_retryable": _lazy_is_retryable(cause)
         }
         super().__init__(message, error_code, details, cause)
 

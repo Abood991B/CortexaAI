@@ -22,8 +22,15 @@ class APIScope(str, Enum):
     ADMIN = "admin"
 
 
+# Fixed application-wide salt – prevents rainbow-table attacks.
+# For a per-key salt, the salt would need to be stored alongside the hash,
+# but a fixed salt already eliminates pre-computed tables.
+_KEY_SALT = "cortexaai_v1_key_salt"
+
+
 def _hash_key(key: str) -> str:
-    return hashlib.sha256(key.encode()).hexdigest()
+    """Hash an API key with a salt using SHA-256."""
+    return hashlib.sha256(f"{_KEY_SALT}:{key}".encode()).hexdigest()
 
 
 def _generate_key(prefix: str = "cxa") -> str:
@@ -166,8 +173,10 @@ auth_manager = AuthManager()
 # Dependency for FastAPI
 async def require_api_key(request) -> Optional[Dict[str, Any]]:
     """FastAPI dependency to verify API key from X-API-Key header.
-    Returns key info or None if auth is disabled / no key provided.
+    Returns key info dict on success, None if auth is disabled.
+    Raises HTTPException(401) when auth is enabled but key is missing/invalid.
     """
+    from fastapi import HTTPException
     from config.config import settings
 
     # If auth is not enforced, return None (allow)
@@ -176,14 +185,14 @@ async def require_api_key(request) -> Optional[Dict[str, Any]]:
 
     api_key = request.headers.get("X-API-Key", "")
     if not api_key:
-        return None  # Will be caught by the endpoint
+        raise HTTPException(status_code=401, detail="API key required. Provide X-API-Key header.")
 
     key_info = auth_manager.verify_key(api_key)
     if not key_info:
-        return None
+        raise HTTPException(status_code=401, detail="Invalid or inactive API key.")
 
     # Rate limit check
     if not auth_manager.check_rate_limit(key_info["key_hash"], key_info["rate_limit_rpm"]):
-        return {"error": "rate_limited", "retry_after_seconds": 60}
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     return key_info

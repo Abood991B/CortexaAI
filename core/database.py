@@ -10,6 +10,7 @@ import sqlite3
 import json
 import uuid
 import time
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -24,30 +25,37 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 class Database:
-    """SQLite-backed persistence layer with auto-migration."""
+    """SQLite-backed persistence layer with per-thread connection pooling."""
 
     def __init__(self, db_path: str = "data/cortexaai.db"):
         self.db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        self._local = threading.local()  # per-thread connection storage
         self._init_tables()
         logger.info(f"Database initialised at {db_path}")
 
     # -- connection helper --------------------------------------------------
 
+    def _get_connection(self) -> sqlite3.Connection:
+        """Return a per-thread reusable connection, creating one if needed."""
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(self.db_path, timeout=10)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            self._local.conn = conn
+        return conn
+
     @contextmanager
     def connection(self):
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
+        conn = self._get_connection()
         try:
             yield conn
             conn.commit()
         except Exception:
             conn.rollback()
             raise
-        finally:
-            conn.close()
 
     # -- schema -------------------------------------------------------------
 
@@ -443,6 +451,39 @@ class Database:
     def increment_template_usage(self, template_id: str):
         with self.connection() as conn:
             conn.execute("UPDATE templates SET usage_count = usage_count + 1 WHERE id=?", (template_id,))
+
+    def update_template(self, template_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update an existing template's fields. Returns the updated template or None."""
+        now = datetime.now().isoformat()
+        with self.connection() as conn:
+            existing = conn.execute("SELECT * FROM templates WHERE id=?", (template_id,)).fetchone()
+            if not existing:
+                return None
+
+            conn.execute(
+                """UPDATE templates
+                   SET name=?, domain=?, description=?, template_text=?,
+                       variables_json=?, tags_json=?, is_public=?, updated_at=?
+                   WHERE id=?""",
+                (
+                    data.get("name", existing["name"]),
+                    data.get("domain", existing["domain"]),
+                    data.get("description", existing["description"]),
+                    data.get("template", data.get("template_text", existing["template_text"])),
+                    json.dumps(data.get("variables", json.loads(existing["variables_json"] or "[]"))),
+                    json.dumps(data.get("tags", json.loads(existing["tags_json"] or "[]"))),
+                    1 if data.get("is_public", bool(existing["is_public"])) else 0,
+                    now,
+                    template_id,
+                ),
+            )
+        return self.get_template(template_id)
+
+    def delete_template(self, template_id: str) -> bool:
+        """Delete a template by ID. Returns True if a row was deleted."""
+        with self.connection() as conn:
+            cursor = conn.execute("DELETE FROM templates WHERE id=?", (template_id,))
+            return cursor.rowcount > 0
 
     # ======================================================================
     # API Keys

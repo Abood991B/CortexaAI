@@ -82,7 +82,10 @@ data/cache/
 data/logs/
 data/memories/
 data/vectors/
+data/keys.enc
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 *.sqlite-journal
@@ -138,8 +141,15 @@ temp/
 *.bak
 *.orig
 
-# ─── Docker ─────────────────────────────────────────────────
-docker-data/
+# ─── Deployment (removed from repo) ─────────────────────────
+Dockerfile
+Dockerfile.*
+docker-compose*.yml
+.dockerignore
+railway.json
+render.yaml
+*.koyeb.yaml
+Procfile
 
 # ─── LangGraph / LangSmith ─────────────────────────────────
 .langgraph/

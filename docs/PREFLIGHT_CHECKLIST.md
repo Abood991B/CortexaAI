@@ -5,7 +5,6 @@ Complete this checklist before deploying to production.
 ## Documentation
 
 - [x] README.md has clear project description, quick start, and usage examples
-- [x] DEPLOYMENT.md has step-by-step Render.com deployment guide
 - [x] ARCHITECTURE.md has system diagrams and component descriptions
 - [x] CHANGELOG.md documents all versions through v3.0.0
 - [x] CONTRIBUTING.md has contribution guidelines
@@ -28,15 +27,6 @@ Complete this checklist before deploying to production.
 - [x] No unused or experimental dependencies in production
 - [x] Python version requirement documented (3.10+)
 - [x] Node.js version requirement documented (18+)
-
-## Deployment
-
-- [x] `render.yaml` deployment blueprint present and correct
-- [x] `Dockerfile` multi-stage build verified
-- [x] `docker-compose.yml` configured for local deployment
-- [x] Health check endpoint (`/health`) implemented
-- [x] Port configuration via environment variable (`PORT`)
-- [x] Non-root user in Docker container
 
 ## Configuration
 
@@ -70,7 +60,6 @@ Complete this checklist before deploying to production.
 ## Infrastructure
 
 - [x] GitHub Actions CI/CD pipeline (lint, test, build)
-- [x] Docker multi-stage build (frontend + backend)
 - [x] Health check with component status reporting
 - [x] Graceful error handling (no hard crashes)
 - [x] Circuit breakers for LLM provider failures

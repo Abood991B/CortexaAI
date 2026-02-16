@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import asyncio
 import json
+import re
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.runnables import RunnablePassthrough
@@ -27,7 +28,15 @@ class PromptEvaluator:
         """Initialize the evaluator agent."""
         self.evaluation_threshold = settings.evaluation_threshold
         self.max_iterations = settings.max_evaluation_iterations
-        self._setup_evaluation_chain()
+        # Defer LLM / chain setup until first use so that importing this module
+        # does not require a configured API key (important for tests).
+        self._chain_ready = False
+
+    def _ensure_chain(self):
+        """Lazily initialise the evaluation chain on first use."""
+        if not self._chain_ready:
+            self._setup_evaluation_chain()
+            self._chain_ready = True
 
     def _setup_evaluation_chain(self):
         """Set up the LangChain for prompt evaluation."""
@@ -50,8 +59,11 @@ IMPROVED PROMPT:
 
 ━━━  EVALUATION APPROACH (think step-by-step)  ━━━
 Before scoring, analyse the prompt through each lens below. For every
-criterion, cite specific evidence (quote or paraphrase) from the prompt
+criterion, **cite specific evidence** (quote exact phrases) from the prompt
 that justifies your score. Do NOT assign scores without evidence.
+
+Compare the improved prompt against the original to credit genuine improvement.
+Adding length without adding precision does NOT count as improvement.
 
 ━━━  EVALUATION RUBRIC (score each 0.0 – 1.0)  ━━━
 1. **CLARITY** – Is every sentence unambiguous? Could two readers interpret it
@@ -72,20 +84,52 @@ that justifies your score. Do NOT assign scores without evidence.
 6. **DOMAIN ALIGNMENT** – Does it reflect best practices, terminology,
    conventions, frameworks, and professional standards of **{domain}**?
 
-━━━  SCORING GUIDELINES  ━━━━━━━━━━━━━━━━━━━━━
-• 0.95-1.0  = Exceptional — production-ready, no changes needed
-• 0.85-0.94 = Strong — minor polish; maybe 1-2 small refinements
-• 0.70-0.84 = Acceptable — noticeable gaps worth addressing
-• 0.50-0.69 = Weak — significant rewrites needed in multiple areas
-• < 0.50    = Poor — fundamental issues; near-complete rewrite required
+━━━  CALIBRATION ANCHORS (use these to calibrate your scores)  ━━━
+Score ≈ 0.95+: The prompt has a clear role anchor, structured sections with
+  headings, concrete examples, explicit constraints, negative constraints
+  (what NOT to do), output format specification, and a self-verification
+  checklist. EVERY element of the task is explicitly addressed.
+  Quote: "This prompt is immediately executable with zero follow-up questions."
 
-━━━  ANTI-HALLUCINATION ANCHORS  ━━━
-• Base every score on evidence you can quote from the prompt text.
-• If a criterion is not applicable (e.g. domain_alignment for a generic task),
-  default to 0.75 and note it.
-• Do NOT inflate scores: a prompt that merely "sounds professional" but
-  lacks concrete detail should score ≤ 0.70 on specificity.
-• Compare against the ORIGINAL: credit genuine improvement, not just length.
+Score ≈ 0.85: The prompt is well-structured with clear sections, mentions
+  constraints and output format, but may lack concrete examples, negative
+  constraints, or a self-verification step. Minor ambiguities exist.
+  Quote: "I could execute this, but I'd want to clarify 1-2 small things."
+
+Score ≈ 0.70: The prompt has some structure but significant gaps: missing
+  examples, undefined output format, vague constraints, 3+ ambiguous phrases.
+  Quote: "I understand the general direction but would need to ask several questions."
+
+Score ≈ 0.50: Minimal structure, multiple vague directives, no examples, no
+  constraints, no output format. Just a rough statement of intent.
+  Quote: "I'd need to guess at half the requirements."
+
+Score < 0.40: Essentially a one-liner or so vague as to be unusable.
+  Quote: "I have no idea what the desired output should look like."
+
+━━━  ANTI-INFLATION RULES (MANDATORY)  ━━━
+• A prompt that merely "sounds professional" but lacks concrete detail
+  MUST score ≤ 0.70 on specificity.
+• A prompt without ANY concrete example scores ≤ 0.85 on completeness.
+• A prompt without explicit negative constraints scores ≤ 0.85 on specificity.
+• A prompt that is just a single paragraph (no structural separation
+  of concerns) scores ≤ 0.65 on structure.
+• If the improved prompt is essentially the original with cosmetic rewording
+  and no substantive new content, score improvement_priority as "high"
+  and overall_score ≤ 0.60.
+• Scores above 0.90 require EXCEPTIONAL quality — reserve them for prompts
+  that are genuinely production-ready with zero ambiguity.
+• All 6 criteria scores must be internally consistent: a prompt with
+  specificity 0.5 cannot have completeness 0.9.
+
+━━━  FEEDBACK QUALITY REQUIREMENTS  ━━━
+• Each item in `specific_feedback` MUST be actionable and include a
+  concrete example of HOW to fix it.
+  BAD: "Add more detail" → GOOD: "Add specific column names and data types
+  expected in the output table, e.g., 'Column: revenue (float, 2 decimals)'"
+• Each item in `weaknesses` MUST quote or paraphrase the specific part
+  of the prompt that is weak.
+• `strengths` should cite specific techniques the prompt uses well.
 
 ━━━  OUTPUT (strict JSON, no markdown fences)  ━━━
 {{
@@ -103,7 +147,7 @@ that justifies your score. Do NOT assign scores without evidence.
     "strengths": ["<evidence-backed strength>", "..."],
     "weaknesses": ["<evidence-backed weakness>", "..."],
     "specific_feedback": [
-        "<targeted, actionable suggestion with example>",
+        "<targeted, actionable suggestion with concrete example of the fix>",
         "..."
     ],
     "improvement_priority": "high|medium|low",
@@ -203,19 +247,49 @@ that justifies your score. Do NOT assign scores without evidence.
                     "improvements_made": improvements_made or []
                 }
 
+                self._ensure_chain()
                 result = await self.evaluation_chain.ainvoke(evaluation_data)
 
-                # Ensure boolean values are properly set
-                result["passes_threshold"] = result.get("passes_threshold", False)
-                result["needs_improvement"] = result.get("needs_improvement", True)
+                # ── Recompute overall_score from criteria_scores ──────────
+                # Never trust the LLM's self-reported overall_score — derive
+                # it from the per-criterion scores so the metric is dynamic.
+                criteria = result.get("criteria_scores", {})
+                _CRITERIA_WEIGHTS = {
+                    "clarity": 0.18,
+                    "specificity": 0.20,
+                    "structure": 0.15,
+                    "completeness": 0.18,
+                    "actionability": 0.17,
+                    "domain_alignment": 0.12,
+                }
+                if criteria and isinstance(criteria, dict):
+                    weighted_sum = 0.0
+                    total_weight = 0.0
+                    for crit, weight in _CRITERIA_WEIGHTS.items():
+                        raw = criteria.get(crit)
+                        if raw is not None:
+                            # Clamp individual scores to [0, 1]
+                            score_val = max(0.0, min(1.0, float(raw)))
+                            criteria[crit] = round(score_val, 3)
+                            weighted_sum += score_val * weight
+                            total_weight += weight
+                    if total_weight > 0:
+                        computed_score = round(weighted_sum / total_weight, 3)
+                        result["overall_score"] = computed_score
+                        result["criteria_scores"] = criteria
+
+                score = result.get("overall_score", 0.0)
+
+                # Derive boolean flags from the computed score
+                result["passes_threshold"] = score >= self.evaluation_threshold
+                result["needs_improvement"] = score < self.evaluation_threshold
 
                 # Cache the result if caching is enabled (only for high-confidence results)
                 if perf_config.enable_caching:
-                    score = result.get("overall_score", 0)
-                    if score >= 0.7:  # Only cache reasonably good evaluations
+                    if score >= 0.5:  # Cache most evaluations for speed
                         cache_manager.set(cache_key, result, perf_config.cache_ttl)
 
-                logger.info(f"Evaluation completed. Score: {result.get('overall_score', 0)}")
+                logger.info(f"Evaluation completed. Computed score: {score:.3f} (criteria: {criteria})")
                 log_cache_performance(logger, "prompt_evaluation", False, domain=domain, score=score)
                 return result
 
@@ -271,107 +345,171 @@ that justifies your score. Do NOT assign scores without evidence.
     def _is_retryable_error(self, error: Exception) -> bool:
         return is_retryable_error(error)
 
+    # ------------------------------------------------------------------
+    # Fast heuristic quality scorer (no LLM call)
+    # ------------------------------------------------------------------
+    _HEADING_RE = re.compile(r'^#{1,4}\s', re.MULTILINE)
+    _NUMBERED_RE = re.compile(r'^\s*\d+[\.\)]\s', re.MULTILINE)
+    _BULLET_RE = re.compile(r'^\s*[-*•]\s', re.MULTILINE)
+    _EXAMPLE_RE = re.compile(r'example|e\.g\.|for instance|sample|demo', re.IGNORECASE)
+    _NEGATIVE_RE = re.compile(r'do not|don\'t|avoid|never|must not|should not|prohibited', re.IGNORECASE)
+    _FORMAT_RE = re.compile(r'output format|format:|response format|return format|json|markdown|csv|table', re.IGNORECASE)
+    _PERSONA_RE = re.compile(r'you are|act as|role:|persona:|as a |expert in', re.IGNORECASE)
+    _VERIFY_RE = re.compile(r'verif|checklist|before finaliz|confirm|validate|acceptance criteria|quality gate', re.IGNORECASE)
+    _VAGUE_RE = re.compile(r'\b(good|nice|great|some|things|stuff|etc\.?|and so on|as needed|please|kindly)\b', re.IGNORECASE)
+    _METRIC_RE = re.compile(r'\b\d+[%xX×]|\b\d+\s*(seconds?|minutes?|hours?|days?|bytes?|KB|MB|GB|rows?|columns?|items?|steps?|iterations?)\b', re.IGNORECASE)
+    _CODE_BLOCK_RE = re.compile(r'```')
+
+    def heuristic_evaluate(self, original_prompt: str, improved_prompt: str,
+                           domain: str = "general") -> Dict[str, Any]:
+        """Score an improved prompt using structural heuristics — **zero LLM calls**.
+
+        Returns a dict identical in shape to ``evaluate_prompt`` so callers
+        can use it as a drop-in replacement.
+        """
+        txt = improved_prompt
+        length = len(txt)
+        words = txt.split()
+        word_count = len(words)
+
+        # ── Clarity ──────────────────────────────────────────────────
+        vague_hits = len(self._VAGUE_RE.findall(txt))
+        vague_ratio = vague_hits / max(word_count, 1)
+        clarity = max(0.45, min(1.0, 0.92 - vague_ratio * 3.0))
+
+        # ── Specificity ─────────────────────────────────────────────
+        has_example = bool(self._EXAMPLE_RE.search(txt))
+        has_negative = bool(self._NEGATIVE_RE.search(txt))
+        has_metric = bool(self._METRIC_RE.search(txt))
+        has_code = bool(self._CODE_BLOCK_RE.search(txt))
+        spec_score = 0.50
+        if has_example:  spec_score += 0.12
+        if has_negative: spec_score += 0.10
+        if has_metric:   spec_score += 0.10
+        if has_code:     spec_score += 0.06
+        if word_count > 120: spec_score += 0.05
+        if word_count > 250: spec_score += 0.05
+        specificity = min(1.0, spec_score)
+
+        # ── Structure ────────────────────────────────────────────────
+        headings = len(self._HEADING_RE.findall(txt))
+        numbered = len(self._NUMBERED_RE.findall(txt))
+        bullets = len(self._BULLET_RE.findall(txt))
+        struct_score = 0.40
+        struct_score += min(headings * 0.08, 0.24)
+        struct_score += min(numbered * 0.04, 0.16)
+        struct_score += min(bullets * 0.03, 0.12)
+        structure = min(1.0, struct_score)
+
+        # ── Completeness ────────────────────────────────────────────
+        has_persona = bool(self._PERSONA_RE.search(txt))
+        has_format = bool(self._FORMAT_RE.search(txt))
+        has_verify = bool(self._VERIFY_RE.search(txt))
+        comp_score = 0.45
+        if has_persona:  comp_score += 0.12
+        if has_format:   comp_score += 0.10
+        if has_negative: comp_score += 0.08
+        if has_example:  comp_score += 0.08
+        if has_verify:   comp_score += 0.08
+        if word_count > 80: comp_score += 0.05
+        completeness = min(1.0, comp_score)
+
+        # ── Actionability ───────────────────────────────────────────
+        action_verbs = len(re.findall(
+            r'\b(implement|create|design|build|write|develop|analyze|configure|deploy|test|ensure|define|specify|list|generate|produce|return|calculate|extract|validate)\b',
+            txt, re.IGNORECASE))
+        act_score = 0.50
+        act_score += min(action_verbs * 0.05, 0.25)
+        if has_metric:  act_score += 0.08
+        if has_verify:  act_score += 0.08
+        actionability = min(1.0, act_score)
+
+        # ── Domain Alignment ────────────────────────────────────────
+        # Give a reasonable default; real domain alignment is hard to
+        # check without a keyword dictionary per domain.
+        expansion_ratio = length / max(len(original_prompt), 1)
+        domain_score = 0.60
+        if expansion_ratio > 2.0: domain_score += 0.10
+        if expansion_ratio > 4.0: domain_score += 0.08
+        if has_persona: domain_score += 0.05
+        if headings >= 2: domain_score += 0.05
+        domain_alignment = min(1.0, domain_score)
+
+        # ── Overall (weighted average matching LLM evaluator weights) ─
+        _W = {
+            "clarity": 0.18, "specificity": 0.20, "structure": 0.15,
+            "completeness": 0.18, "actionability": 0.17, "domain_alignment": 0.12,
+        }
+        criteria = {
+            "clarity": round(clarity, 3), "specificity": round(specificity, 3),
+            "structure": round(structure, 3), "completeness": round(completeness, 3),
+            "actionability": round(actionability, 3), "domain_alignment": round(domain_alignment, 3),
+        }
+        weighted = sum(criteria[k] * _W[k] for k in _W)
+        total_w = sum(_W.values())
+        overall = round(weighted / total_w, 3)
+
+        passes = overall >= self.evaluation_threshold
+
+        # Build strengths / weaknesses from what we detected
+        strengths, weaknesses = [], []
+        if has_persona:  strengths.append("Includes a clear role/persona anchor")
+        if headings >= 2: strengths.append("Well-structured with headings")
+        if has_example:  strengths.append("Contains concrete examples")
+        if has_negative: strengths.append("Includes negative constraints")
+        if has_format:   strengths.append("Specifies output format")
+        if has_verify:   strengths.append("Has verification / acceptance criteria")
+
+        if not has_persona:  weaknesses.append("Missing role/persona anchor — add 'You are …' framing")
+        if headings < 2:     weaknesses.append("Needs more structural headings (## sections)")
+        if not has_example:  weaknesses.append("Add at least one concrete input→output example")
+        if not has_negative: weaknesses.append("Add explicit negative constraints (what NOT to do)")
+        if not has_format:   weaknesses.append("Specify the desired output format")
+        if not has_verify:   weaknesses.append("Add a self-verification checklist")
+        if vague_hits > 2:   weaknesses.append(f"Contains {vague_hits} vague words — replace with concrete metrics")
+
+        return {
+            "overall_score": overall,
+            "criteria_scores": criteria,
+            "passes_threshold": passes,
+            "needs_improvement": not passes,
+            "strengths": strengths,
+            "weaknesses": weaknesses,
+            "specific_feedback": weaknesses[:3],
+            "improvement_priority": "low" if passes else ("medium" if overall > 0.7 else "high"),
+            "reasoning": f"Heuristic evaluation: {overall:.2f} (threshold {self.evaluation_threshold}). {len(strengths)} strengths, {len(weaknesses)} areas to improve.",
+            "comparison_analysis": f"Improved prompt is {expansion_ratio:.1f}× longer with {headings} headings, {numbered} numbered items, {bullets} bullets.",
+        }
+
     async def run_evaluation_loop(self, original_prompt: str, improved_prompt: str,
                            domain: str, expert_agent: Any,
                            prompt_type: str = "raw") -> Tuple[Dict[str, Any], int]:
-        """
-        Run an evaluation loop until the prompt reaches acceptable quality.
-        Uses **adaptive iteration**: stops early when quality plateaus
-        (improvement < 2 %) or the threshold is met.
+        """Return a quality evaluation and iteration count.
+
+        Uses fast **heuristic scoring** (no LLM call) so the user gets
+        instant feedback.  The heuristic analyses structural indicators
+        (headings, examples, constraints, persona, etc.) and produces a
+        score compatible with the full LLM evaluator output schema.
 
         Args:
             original_prompt: The original prompt
             improved_prompt: Initial improved prompt
             domain: The domain of the prompt
-            expert_agent: The expert agent that can improve prompts
-            prompt_type: Type of prompt ("raw" or "structured")
+            expert_agent: The expert agent (unused in heuristic mode)
+            prompt_type: Type of prompt
 
         Returns:
-            Tuple of (final_evaluation_result, iterations_used)
+            Tuple of (evaluation_result, 1)
         """
-        current_prompt = improved_prompt
-        iteration = 0
-        previous_score: float = 0.0
-        plateau_count: int = 0
-        _PLATEAU_THRESHOLD = 0.02   # 2 % minimum improvement
-        _MAX_PLATEAUS = 1           # stop after 1 plateau
+        logger.info("Running heuristic evaluation (zero LLM calls)")
 
-        while iteration < self.max_iterations:
-            iteration += 1
+        evaluation = self.heuristic_evaluate(
+            original_prompt=original_prompt,
+            improved_prompt=improved_prompt,
+            domain=domain,
+        )
 
-            logger.info(f"Evaluation iteration {iteration}/{self.max_iterations}")
-
-            # Evaluate current prompt
-            evaluation = await self.evaluate_prompt(
-                original_prompt=original_prompt,
-                improved_prompt=current_prompt,
-                domain=domain,
-                prompt_type=prompt_type
-            )
-
-            current_score = evaluation.get("overall_score", 0.0)
-
-            # ── Adaptive early-stop check ────────────────────────────────
-            if iteration > 1 and previous_score > 0:
-                improvement_pct = (current_score - previous_score) / max(previous_score, 0.01)
-                if improvement_pct < _PLATEAU_THRESHOLD:
-                    plateau_count += 1
-                    logger.info(
-                        f"Score improvement {improvement_pct:.2%} < {_PLATEAU_THRESHOLD:.0%} "
-                        f"(plateau {plateau_count}/{_MAX_PLATEAUS})"
-                    )
-                    if plateau_count >= _MAX_PLATEAUS:
-                        logger.info(f"Adaptive stop: score plateaued after {iteration} iterations")
-                        evaluation["adaptive_stopped"] = True
-                        return evaluation, iteration
-                else:
-                    plateau_count = 0  # reset on meaningful improvement
-
-            previous_score = current_score
-
-            # Check if we meet the threshold
-            if evaluation.get("passes_threshold", False):
-                logger.info(f"Prompt passed evaluation threshold after {iteration} iterations")
-                return evaluation, iteration
-
-            # Check if we need improvement
-            if not evaluation.get("needs_improvement", True):
-                logger.info(f"Prompt deemed acceptable after {iteration} iterations")
-                return evaluation, iteration
-
-            # Get feedback for improvement
-            feedback = evaluation.get("specific_feedback", [])
-            if not feedback:
-                logger.warning("No specific feedback provided, ending evaluation loop")
-                return evaluation, iteration
-
-            # Use expert agent to improve based on feedback
-            try:
-                improvement_result = await expert_agent.improve_prompt(
-                    original_prompt=current_prompt,
-                    prompt_type="structured",  # Treat as structured for re-improvement
-                    key_topics=[domain]  # Pass domain as key topic
-                )
-
-                current_prompt = improvement_result.get("improved_prompt", current_prompt)
-
-                logger.info(f"Completed iteration {iteration}, continuing evaluation loop")
-
-            except ImprovementError as ie:
-                logger.error(f"Improvement error in evaluation loop iteration {iteration}: {ie}")
-                # Return current evaluation with error context
-                evaluation["weaknesses"].append(f"Improvement failed: {str(ie)}")
-                evaluation["specific_feedback"].append(f"Unable to improve further due to: {ie.error_code}")
-                return evaluation, iteration
-
-            except Exception as e:
-                logger.error(f"Unexpected error in evaluation loop iteration {iteration}: {e}")
-                # Continue with current prompt if improvement fails
-                logger.warning(f"Continuing with current prompt due to error: {str(e)}")
-                continue
-
-        logger.warning(f"Maximum iterations ({self.max_iterations}) reached without meeting threshold")
-        return evaluation, iteration
+        return evaluation, 1
 
     def get_evaluation_summary(self, evaluations: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -1062,5 +1200,15 @@ that justifies your score. Do NOT assign scores without evidence.
         return evaluated
 
 
-# Global evaluator instance
-evaluator = PromptEvaluator()
+# Lazy evaluator instance — compiled on first access to avoid calling get_llm()
+# at import time, which fails when no API key is configured (e.g. in tests).
+_evaluator = None
+
+
+def __getattr__(name):
+    global _evaluator
+    if name == "evaluator":
+        if _evaluator is None:
+            _evaluator = PromptEvaluator()
+        return _evaluator
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

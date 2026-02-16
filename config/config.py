@@ -7,7 +7,7 @@ import time
 import asyncio
 from typing import Optional, Dict, Any, List, Tuple
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, model_validator
 from dotenv import load_dotenv
 import json
 
@@ -16,7 +16,12 @@ load_dotenv()
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+    """Application settings loaded from environment variables.
+    
+    API keys are resolved in priority order:
+      1. Encrypted key store (data/keys.enc)
+      2. Environment variables / .env file
+    """
 
     # API Keys - Multiple LLM Providers
     openai_api_key: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
@@ -31,6 +36,33 @@ class Settings(BaseSettings):
     langsmith_project: str = Field(default="cortexaai", env="LANGSMITH_PROJECT")
     langsmith_endpoint: str = Field(default="https://api.smith.langchain.com", env="LANGSMITH_ENDPOINT")
 
+    @model_validator(mode="after")
+    def _overlay_encrypted_keys(self) -> "Settings":
+        """Layer encrypted key store values over env-based values.
+        
+        For each API key field, if the encrypted store has a value,
+        use it — even if the env var was empty or missing.
+        """
+        try:
+            from config.key_store import key_store
+        except Exception:
+            return self  # cryptography not installed or import error — skip
+
+        _field_to_env = {
+            "openai_api_key": "OPENAI_API_KEY",
+            "anthropic_api_key": "ANTHROPIC_API_KEY",
+            "google_api_key": "GOOGLE_API_KEY",
+            "groq_api_key": "GROQ_API_KEY",
+            "deepseek_api_key": "DEEPSEEK_API_KEY",
+            "openrouter_api_key": "OPENROUTER_API_KEY",
+            "langsmith_api_key": "LANGSMITH_API_KEY",
+        }
+        for field_name, env_name in _field_to_env.items():
+            stored = key_store.get_key(env_name)
+            if stored:
+                object.__setattr__(self, field_name, stored)
+        return self
+
     # Model Configuration
     default_model_provider: str = Field(default="google", env="DEFAULT_MODEL_PROVIDER")
     default_model_name: str = Field(default="gemma-3-27b-it", env="DEFAULT_MODEL_NAME")
@@ -42,17 +74,23 @@ class Settings(BaseSettings):
 
     # System Configuration
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
-    max_evaluation_iterations: int = Field(default=3, env="MAX_EVALUATION_ITERATIONS")
-    evaluation_threshold: float = Field(default=0.8, env="EVALUATION_THRESHOLD")
+    max_evaluation_iterations: int = Field(default=1, env="MAX_EVALUATION_ITERATIONS")
+    evaluation_threshold: float = Field(default=0.82, env="EVALUATION_THRESHOLD")
     
     # LLM Configuration
-    max_llm_retries: int = Field(default=3, env="MAX_LLM_RETRIES")
-    llm_retry_delay: float = Field(default=1.0, env="LLM_RETRY_DELAY")
-    llm_timeout_seconds: int = Field(default=60, env="LLM_TIMEOUT_SECONDS")
+    max_llm_retries: int = Field(default=1, env="MAX_LLM_RETRIES")
+    llm_retry_delay: float = Field(default=0.5, env="LLM_RETRY_DELAY")
+    llm_timeout_seconds: int = Field(default=45, env="LLM_TIMEOUT_SECONDS")
 
     # Server Configuration
     host: str = Field(default="0.0.0.0", env="HOST")
     port: int = Field(default=8000, env="PORT")
+
+    # CORS Configuration (comma-separated origins, or "*" for open)
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173",
+        env="CORS_ORIGINS",
+    )
 
     class Config:
         """Pydantic configuration."""
@@ -160,13 +198,13 @@ class MetricsCollector:
     def start_timer(self, name: str) -> str:
         """Start a timer and return a timer ID."""
         timer_id = f"{name}_{len(self._timers)}"
-        self._timers[timer_id] = os.times()[4] if hasattr(os, 'times') else 0
+        self._timers[timer_id] = time.perf_counter()
         return timer_id
 
     def stop_timer(self, timer_id: str, labels: Optional[Dict[str, str]] = None):
         """Stop a timer and record the duration."""
         if timer_id in self._timers:
-            duration = (os.times()[4] if hasattr(os, 'times') else 0) - self._timers[timer_id]
+            duration = time.perf_counter() - self._timers[timer_id]
             self.observe("timer_duration", duration, labels)
             del self._timers[timer_id]
 
@@ -730,31 +768,27 @@ class DeadLetterQueue:
                 logger.info(f"Cleaned up {original_size - len(self._queue)} expired items from DLQ")
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get DLQ statistics."""
-        async def get_stats_async():
-            async with self._lock:
-                current_time = time.time()
-                pending_count = sum(1 for item in self._queue if current_time >= item["next_retry"])
-                oldest_item = min(self._queue, key=lambda x: x["timestamp"]) if self._queue else None
-                newest_item = max(self._queue, key=lambda x: x["timestamp"]) if self._queue else None
+        """Get DLQ statistics.
 
-                return {
-                    "total_items": len(self._queue),
-                    "pending_items": pending_count,
-                    "oldest_item_age": current_time - oldest_item["timestamp"] if oldest_item else 0,
-                    "newest_item_age": current_time - newest_item["timestamp"] if newest_item else 0,
-                    "max_size": self.max_size,
-                    "retention_seconds": self.retention_seconds
-                }
+        This is a read-only snapshot that does not need the async lock.
+        Acquiring the lock from a sync context when an event loop is already
+        running would cause a deadlock, so we read the list directly.  The
+        worst case is a slightly stale count — acceptable for monitoring.
+        """
+        current_time = time.time()
+        queue_snapshot = list(self._queue)  # shallow copy for safe iteration
+        pending_count = sum(1 for item in queue_snapshot if current_time >= item["next_retry"])
+        oldest_item = min(queue_snapshot, key=lambda x: x["timestamp"]) if queue_snapshot else None
+        newest_item = max(queue_snapshot, key=lambda x: x["timestamp"]) if queue_snapshot else None
 
-        # Return synchronously for metrics endpoints
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                return loop.run_in_executor(executor, lambda: asyncio.run(get_stats_async()))
-        else:
-            return asyncio.run(get_stats_async())
+        return {
+            "total_items": len(queue_snapshot),
+            "pending_items": pending_count,
+            "oldest_item_age": current_time - oldest_item["timestamp"] if oldest_item else 0,
+            "newest_item_age": current_time - newest_item["timestamp"] if newest_item else 0,
+            "max_size": self.max_size,
+            "retention_seconds": self.retention_seconds
+        }
 
     async def clear(self):
         """Clear all items from DLQ."""

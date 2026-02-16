@@ -356,83 +356,58 @@ class BaseExpertAgent(ABC):
         """Set up the LangChain for prompt improvement."""
         self.model = get_llm(temperature=0.4)
 
-        # General improvement prompt template
-        improvement_prompt = PromptTemplate.from_template("""You are an **elite prompt engineer** — one of the world's foremost experts —
-specialising in **{domain}**.
+        # General improvement prompt template — compact yet comprehensive
+        improvement_prompt = PromptTemplate.from_template("""You are an **elite prompt engineer** specialising in **{domain}**.
 
-━━━  DOMAIN CONTEXT  ━━━
-Description : {domain_description}
-Expertise   : {expertise_areas}
+DOMAIN: {domain_description}
+EXPERTISE: {expertise_areas}
 
-━━━  ORIGINAL PROMPT  ━━━
+ORIGINAL PROMPT:
 {original_prompt}
 
-━━━  METADATA  ━━━
-Prompt type : {prompt_type}
-Key topics  : {key_topics}
+METADATA: type={prompt_type} | topics={key_topics}
 
-━━━  STEP-BY-STEP APPROACH (Chain-of-Thought)  ━━━
-Before writing the improved prompt, work through these phases **internally**:
+━━━ CHAIN-OF-THOUGHT METHODOLOGY ━━━
 
-**Phase 1 — DIAGNOSE:** Identify every flaw in the original prompt.
-  • What is ambiguous, vague, or missing context?
-  • Which constraints, edge-cases, or output formats are absent?
-  • Does it lack a persona, tone, or audience definition?
+**Phase 1 — DIAGNOSE** (internal reasoning):
+• What is ambiguous, vague, or missing? (constraints, edge-cases, output format, persona, success criteria)
+• Executor view: What questions would I ask before starting?
+• Critic view: Where could the output go wrong or be misinterpreted?
+• Expert view: What {domain} standards/frameworks are missing?
 
-**Phase 2 — PLAN:** Decide exactly what to add, remove, or restructure.
-  • Map each weakness to a specific fix.
-  • Decide the optimal prompt structure: sections, order, hierarchy.
-  • Choose a persona and voice anchor.
+**Phase 2 — PLAN**: Map each weakness to a specific fix. Decide structure, persona, and examples.
 
-**Phase 3 — EXECUTE:** Write the improved prompt incorporating ALL fixes.
+**Phase 3 — EXECUTE**: Write the improved prompt using Chain-of-Density (broad → progressively add constraints and specifics).
 
-**Phase 4 — SELF-CRITIQUE:** Re-read your improved prompt and ask:
-  • "Could two different people interpret this differently?" If yes, fix it.
-  • "Is there anything I still need to assume?" If yes, make it explicit.
-  • "Would I be able to execute this immediately without questions?" If no, add detail.
-  • "Does this follow {domain} best practices?" If no, add them.
+**Phase 4 — SELF-CRITIQUE**: Re-read and verify:
+• Could two people interpret this differently? → Fix it.
+• Anything assumed? → Make explicit.
+• Could I execute immediately without questions? → Add detail.
+• Score ≥ 0.90 on clarity, specificity, structure, completeness, actionability, domain alignment? → If not, iterate.
 
-━━━  PROMPT-ENGINEERING PRINCIPLES (apply ALL)  ━━━
-1. **Role Anchoring** – Open with a vivid, expert persona ("You are a principal
-   engineer at a FAANG company with 15+ years of experience in...").
-2. **Clarity & Precision** – Eliminate every ambiguity; prefer concrete metrics,
-   numbers, and named concepts over vague qualifiers like "good" or "some."
-3. **Structured Decomposition** – Use headings (##), numbered steps, bullet
-   lists, and clearly delimited sections. Group related requirements.
-4. **Completeness** – Include ALL context, constraints, personas, output format,
-   success criteria, and edge-case handling. The reader should NEVER guess.
-5. **Actionability** – Start with strong action verbs. Define measurable
-   acceptance criteria and deliverables.
-6. **Few-Shot Guidance** – When useful, embed a brief input/output example to
-   anchor the expected quality and format.
-7. **Negative Constraints** – Explicitly state what to AVOID (e.g., "Do NOT
-   include generic filler", "Do NOT assume X unless stated").
-8. **Output Format Specification** – Define the exact structure: headings,
-   code blocks, tables, JSON, Markdown — whatever fits the task.
-9. **Domain Best Practices** – Weave in conventions, standards, frameworks,
-   and professional terminology specific to **{domain}**.
-10. **Meta-Verification** – End with a brief self-check instruction: "Before
-    finalizing, verify your response meets all requirements above."
+━━━ PROMPT-ENGINEERING PRINCIPLES (apply ALL) ━━━
+1. **Role Anchoring** — Open with vivid expert persona
+2. **Clarity** — Concrete metrics/numbers, no vague qualifiers ("good", "some", "etc.")
+3. **Structure** — ## headings, numbered steps, bullet lists, grouped sections
+4. **Completeness** — All context, constraints, output format, success criteria, edge-cases
+5. **Actionability** — Strong verbs, measurable deliverables
+6. **Few-Shot** — ≥1 concrete input→output example (MANDATORY for complex tasks)
+7. **Negative Constraints** — Explicitly state what to AVOID
+8. **Output Format** — Define exact response structure
+9. **Domain Practices** — {domain} conventions, terminology, standards
+10. **Meta-Verification** — End with self-check instruction
+11. **Scope Boundaries** — Define IN/OUT scope
+12. **Quality Gates** — Explicit acceptance criteria
 
-━━━  ANTI-PATTERNS TO REMOVE  ━━━
-• Remove "please", "kindly", and other filler words that add no precision.
-• Remove open-ended phrases like "etc.", "and so on", "as needed."
-• Replace subjective qualifiers ("make it good") with measurable criteria.
-• Remove redundant or repeated instructions.
-
-━━━  YOUR TASK  ━━━
-Produce a **dramatically improved** version of the prompt above. You MUST:
-• Inject deep, domain-specific context and best practices.
-• Eliminate ALL ambiguity; add precise, actionable requirements.
-• Re-structure the prompt for maximum clarity and effectiveness.
-• Specify desired output format, tone, and persona.
-• Add examples, edge-case handling, and explicit constraints.
-• Include negative constraints (what NOT to do).
-• Add a self-verification step at the end of the prompt.
+ANTI-PATTERNS TO REMOVE:
+• "please", "kindly", filler words → precise imperatives
+• "etc.", "and so on" → enumerate explicitly
+• "make it good" → measurable criteria
+• Redundancy → compress; Implicit assumptions → make explicit or remove
 
 {improvement_instructions}
 
-━━━  OUTPUT (strict JSON — no markdown fences)  ━━━
+━━━ OUTPUT (strict JSON — no markdown fences) ━━━
 {{
     "improved_prompt": "<the fully rewritten prompt>",
     "improvements_made": ["<specific change 1>", "..."],
@@ -467,64 +442,54 @@ Produce a **dramatically improved** version of the prompt above. You MUST:
         """Set up the LangChain for context-enhanced prompt improvement."""
         context_model = get_llm(temperature=0.2)
 
-        # Context-enhanced improvement prompt template
-        context_improvement_prompt = PromptTemplate.from_template("""You are an **elite prompt engineer** — one of the world's foremost experts —
-specialising in **{domain}**.
+        # Context-enhanced improvement prompt template — compact
+        context_improvement_prompt = PromptTemplate.from_template("""You are an **elite prompt engineer** specialising in **{domain}**.
 
-━━━  DOMAIN CONTEXT  ━━━
-Description : {domain_description}
-Expertise   : {expertise_areas}
+DOMAIN: {domain_description}
+EXPERTISE: {expertise_areas}
 
-━━━  ORIGINAL PROMPT  ━━━
+ORIGINAL PROMPT:
 {original_prompt}
 
-━━━  METADATA  ━━━
-Prompt type : {prompt_type}
-Key topics  : {key_topics}
+METADATA: type={prompt_type} | topics={key_topics}
 
-━━━  RAG & CONVERSATION CONTEXT  ━━━
+━━━ RAG & CONVERSATION CONTEXT ━━━
 {context_parts}
 
 RAG stats: {memories_count} memories · {knowledge_count} knowledge entries ·
            {total_context_length} chars · {conversation_turns} conversation turns
 
-━━━  STEP-BY-STEP APPROACH (Chain-of-Thought)  ━━━
-Before writing the improved prompt, work through these phases **internally**:
+━━━ CHAIN-OF-THOUGHT ━━━
 
-**Phase 1 — CONTEXT MINING:** Extract every useful signal from the RAG context:
-  • Which past interactions reveal the user's style, preferences, or pain points?
-  • Which knowledge entries contain domain conventions that should be embedded?
-  • What continuity should be maintained from recent conversation turns?
+**Phase 1 — CONTEXT MINING**: Extract useful signals from RAG context:
+• Past interactions revealing user's style, preferences, or pain points
+• Knowledge entries with domain conventions to embed
+• Conversation continuity to maintain
 
-**Phase 2 — DIAGNOSE:** Identify every flaw in the original prompt:
-  • Ambiguities, missing context, unclear constraints, absent output format.
-  • Gaps the RAG context can fill.
+**Phase 2 — DIAGNOSE**: Ambiguities, missing context, unclear constraints, absent output format. Gaps RAG can fill.
 
-**Phase 3 — PLAN & EXECUTE:** Write the improved prompt:
-  • Inject retrieved knowledge directly into the prompt (don't just reference it).
-  • Apply all prompt-engineering principles below.
-  • Structure for maximum skim-ability and precision.
+**Phase 3 — EXECUTE**: Write improved prompt:
+• Inject retrieved knowledge directly (don't just reference it)
+• Apply all prompt-engineering principles below
+• Structure for maximum skim-ability and precision
 
-**Phase 4 — SELF-CRITIQUE:** Re-read your output and verify:
-  • Every RAG insight that was relevant has been incorporated.
-  • The prompt is self-contained — no external context needed to execute.
-  • No ambiguity remains; two readers would interpret it identically.
+**Phase 4 — SELF-CRITIQUE**: Verify every relevant RAG insight incorporated, prompt is self-contained, no ambiguity remains.
 
-━━━  PROMPT-ENGINEERING PRINCIPLES (apply ALL)  ━━━
-1. **Role Anchoring** – Open with a vivid, expert persona.
-2. **Clarity & Precision** – Concrete metrics over vague qualifiers.
-3. **Structured Decomposition** – Headings, numbered steps, bullet lists.
-4. **Completeness** – All context, constraints, output format, success criteria.
-5. **Actionability** – Strong verbs, measurable deliverables.
-6. **Few-Shot Guidance** – Embed input/output examples when valuable.
-7. **Negative Constraints** – State what to AVOID explicitly.
-8. **Output Format Spec** – Define exact response structure.
-9. **Domain Best Practices** – Professional {domain} conventions.
-10. **Meta-Verification** – End prompt with a self-check instruction.
+━━━ PRINCIPLES (apply ALL) ━━━
+1. Role Anchoring — vivid expert persona
+2. Clarity — concrete metrics, no vague qualifiers
+3. Structure — ## headings, numbered steps, bullet lists
+4. Completeness — all context, constraints, output format, success criteria
+5. Actionability — strong verbs, measurable deliverables
+6. Few-Shot — input/output examples when valuable
+7. Negative Constraints — state what to AVOID
+8. Output Format — define exact response structure
+9. Domain Practices — professional {domain} conventions
+10. Meta-Verification — end with self-check instruction
 
 {improvement_instructions}
 
-━━━  OUTPUT (strict JSON — no markdown fences)  ━━━
+━━━ OUTPUT (strict JSON — no markdown fences) ━━━
 {{
     "improved_prompt": "<the fully rewritten prompt>",
     "improvements_made": ["<specific change>", "..."],

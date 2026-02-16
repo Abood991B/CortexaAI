@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import apiClient from '@/api/client';
 import type {
   PromptRequest,
-  PromptResponse,
   ComplexityResult,
 } from '@/types/api';
 
@@ -33,77 +32,13 @@ export const queryKeys = {
   templates: (domain?: string, query?: string) => ['templates', domain, query] as const,
 };
 
-// Caching layer for prompt processing
-const CACHE_KEY_PREFIX = 'prompt_cache_';
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-export const getCacheKey = (request: PromptRequest): string => {
-  const sortedRequest = Object.keys(request)
-    .sort()
-    .reduce((acc: { [key: string]: any }, key) => {
-      acc[key] = request[key as keyof PromptRequest];
-      return acc;
-    }, {});
-  return `${CACHE_KEY_PREFIX}${JSON.stringify(sortedRequest)}`;
-};
-
-// Clear cache for a specific request
-export const clearCacheForRequest = (request: PromptRequest): void => {
-  const cacheKey = getCacheKey(request);
-  localStorage.removeItem(cacheKey);
-};
-
-const getCachedResponse = (cacheKey: string): PromptResponse | null => {
-  const cachedItem = localStorage.getItem(cacheKey);
-  if (cachedItem) {
-    try {
-      const { data, timestamp } = JSON.parse(cachedItem);
-      if (Date.now() - timestamp < CACHE_TTL) {
-        return data as PromptResponse;
-      }
-      localStorage.removeItem(cacheKey);
-    } catch (error) {
-      console.error('Failed to parse cache item:', error);
-      localStorage.removeItem(cacheKey);
-    }
-  }
-  return null;
-};
-
-export const setCachedResponse = (cacheKey: string, data: PromptResponse): void => {
-  try {
-    const cacheItem = {
-      data,
-      timestamp: Date.now(),
-    };
-    localStorage.setItem(cacheKey, JSON.stringify(cacheItem));
-  } catch (error) {
-    console.error('Failed to set cache item:', error);
-  }
-};
 
 // Core API Hooks - Unified Processing with Optional Memory
 export const useProcessPrompt = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ request, signal, skipCache = false }: { request: PromptRequest & { user_id?: string }; signal?: AbortSignal; skipCache?: boolean }) => {
-      const cacheKey = getCacheKey(request);
-      
-      // Clear any existing cache for this request when skipCache is true (for retries)
-      if (skipCache) {
-        localStorage.removeItem(cacheKey);
-      }
-      
-      // Check cache only if not explicitly skipping
-      if (!skipCache) {
-        const cachedResponse = getCachedResponse(cacheKey);
-        if (cachedResponse) {
-          toast.info('Returning cached response.');
-          return cachedResponse;
-        }
-      }
-
+    mutationFn: async ({ request, signal }: { request: PromptRequest & { user_id?: string }; signal?: AbortSignal }) => {
       try {
         // Use memory-enhanced processing if user_id is provided, otherwise standard processing
         const response = request.user_id 
@@ -126,11 +61,11 @@ export const useProcessPrompt = () => {
       if (data) { 
         queryClient.invalidateQueries({ queryKey: queryKeys.stats });
         queryClient.invalidateQueries({ queryKey: queryKeys.history() });
-        toast.success('Prompt processed successfully!');
+        // Don't toast here — completion notification is handled by polling/streaming in PromptProcessor
       }
     },
     onError: (error: any) => {
-      toast.error(getApiErrorMessage(error));
+      toast.error(getApiErrorMessage(error), { id: 'process-error' });
     },
   });
 };
@@ -174,22 +109,10 @@ export const useHealth = () => {
 
 // Analytics Hooks
 
-// Legacy alias for backward compatibility - will be removed
-export const useProcessPromptWithMemory = useProcessPrompt;
-
 
 export const useCancelWorkflow = () => {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (workflowId: string) => apiClient.cancelWorkflow(workflowId),
-    onSuccess: (_, workflowId) => {
-      toast.success('Workflow cancellation requested.');
-      queryClient.invalidateQueries({ queryKey: ['workflows', workflowId] });
-    },
-    onError: (error: any) => {
-      toast.error(getApiErrorMessage(error));
-    },
   });
 };
 
@@ -227,11 +150,36 @@ export const useRenderTemplate = () => {
 export const useCreateTemplate = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { name: string; domain: string; template_text: string; description?: string; variables?: string[] }) =>
+    mutationFn: (data: { name: string; domain: string; template_text: string; description?: string; variables?: string[]; is_public?: boolean }) =>
       apiClient.createTemplate(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.templates() });
       toast.success('Template created!');
+    },
+    onError: (error: any) => toast.error(getApiErrorMessage(error)),
+  });
+};
+
+export const useUpdateTemplate = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ templateId, data }: { templateId: string; data: { name?: string; domain?: string; template_text?: string; description?: string; variables?: string[]; is_public?: boolean } }) =>
+      apiClient.updateTemplate(templateId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates() });
+      toast.success('Template updated!');
+    },
+    onError: (error: any) => toast.error(getApiErrorMessage(error)),
+  });
+};
+
+export const useDeleteTemplate = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (templateId: string) => apiClient.deleteTemplate(templateId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates() });
+      toast.success('Template deleted!');
     },
     onError: (error: any) => toast.error(getApiErrorMessage(error)),
   });
@@ -249,4 +197,12 @@ export const useDetectLanguage = () => {
   });
 };
 
-
+export const useCacheStats = () => {
+  return useQuery({
+    queryKey: ['cacheStats'] as const,
+    queryFn: () => apiClient.getCacheStats(),
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+    retry: 1,
+  });
+};

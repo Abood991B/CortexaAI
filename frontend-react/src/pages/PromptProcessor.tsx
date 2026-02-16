@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Send, Copy, Download, Trash2, Edit, Sparkles, Bot, User, Plus, Bell, ChevronDown, ChevronUp, Check, HelpCircle, Gauge, BarChart3, ArrowLeftRight, FileJson, FileText, ClipboardCopy, Keyboard } from 'lucide-react';
+import { Send, Copy, Download, Trash2, Edit, Sparkles, Bot, User, Plus, Bell, ChevronDown, ChevronUp, Check, HelpCircle, Gauge, BarChart3, ArrowLeftRight, FileJson, FileText, ClipboardCopy, Keyboard, Clock, RefreshCw } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer, Tooltip } from 'recharts';
@@ -20,7 +20,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { 
-  useProcessPromptWithMemory,
+  useProcessPrompt,
   useCancelWorkflow,
   useWorkflowStatus,
   useComplexity
@@ -520,22 +520,89 @@ function useSSEStream() {
 const STAGE_ORDER = ['started', 'classifying', 'classified', 'improving', 'improved', 'evaluating', 'evaluated', 'completed'];
 const STAGE_LABELS: Record<string, string> = {
   started: 'Starting',
-  classifying: 'Classifying',
-  classified: 'Classified',
-  improving: 'Improving',
-  improved: 'Improved',
-  evaluating: 'Evaluating',
-  evaluated: 'Evaluated',
-  iterating: 'Iterating',
+  classifying: 'Analyzing Domain',
+  classified: 'Domain Identified',
+  improving: 'Generating Improvement',
+  improved: 'Improvement Ready',
+  evaluating: 'Evaluating Quality',
+  evaluated: 'Quality Assessed',
+  iterating: 'Refining Further',
   completed: 'Complete',
 };
+
+/* Pipeline step icons for visual timeline */
+const PIPELINE_STEPS = [
+  { stage: 'classifying', label: 'Classify', icon: '1' },
+  { stage: 'improving', label: 'Improve', icon: '2' },
+  { stage: 'evaluating', label: 'Evaluate', icon: '3' },
+  { stage: 'completed', label: 'Done', icon: '4' },
+];
+
+/* Example prompts for the welcome screen */
+const EXAMPLE_PROMPTS = [
+  { text: 'Build a REST API with authentication and rate limiting', domain: 'Software Engineering' },
+  { text: 'Create a lesson plan for teaching photosynthesis to 8th graders', domain: 'Education' },
+  { text: 'Write a quarterly financial report summarizing Q3 revenue', domain: 'Report Writing' },
+  { text: 'Analyze customer churn using logistic regression on this dataset', domain: 'Data Science' },
+];
+
+/** Generate a descriptive session title from the domain and prompt text. */
+function generateSessionTitle(prompt: string, domain?: string): string {
+  // Clean up the prompt text: collapse whitespace, strip leading filler words
+  const cleaned = prompt.replace(/\s+/g, ' ').trim();
+  const short = cleaned.length > 48 ? cleaned.substring(0, 48).replace(/\s\S*$/, '') + '…' : cleaned;
+  if (domain && domain !== 'general' && domain !== 'unknown') {
+    // Capitalise first letter of domain
+    const label = domain.charAt(0).toUpperCase() + domain.slice(1);
+    return `${label}: ${short}`;
+  }
+  return short || 'New Conversation';
+}
 
 function StreamingProgress({ state }: { state: StreamingState }) {
   const currentIdx = STAGE_ORDER.indexOf(state.stage);
   const progress = state.stage === 'completed' ? 100 : Math.max(5, ((currentIdx + 1) / STAGE_ORDER.length) * 100);
 
+  /* Map stage to pipeline step index */
+  const getStepStatus = (stepStage: string) => {
+    const stepIdx = STAGE_ORDER.indexOf(stepStage);
+    if (stepIdx < 0) return 'pending';
+    if (currentIdx > stepIdx) return 'done';
+    if (currentIdx === stepIdx || currentIdx === stepIdx + 1) return 'active';
+    return 'pending';
+  };
+
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
+      {/* Step timeline */}
+      <div className="flex items-center gap-1">
+        {PIPELINE_STEPS.map((step, i) => {
+          const status = getStepStatus(step.stage);
+          return (
+            <React.Fragment key={step.stage}>
+              <div className="flex flex-col items-center gap-1">
+                <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-500 ${
+                  status === 'done' ? 'bg-green-500 text-white' :
+                  status === 'active' ? 'bg-primary text-primary-foreground ring-2 ring-primary/30 animate-pulse' :
+                  'bg-muted text-muted-foreground'
+                }`}>
+                  {status === 'done' ? '\u2713' : step.icon}
+                </div>
+                <span className={`text-[10px] font-medium ${
+                  status === 'active' ? 'text-primary' : status === 'done' ? 'text-green-600' : 'text-muted-foreground'
+                }`}>{step.label}</span>
+              </div>
+              {i < PIPELINE_STEPS.length - 1 && (
+                <div className={`flex-1 h-0.5 rounded-full mb-4 transition-colors duration-500 ${
+                  getStepStatus(PIPELINE_STEPS[i + 1].stage) !== 'pending' ? 'bg-green-500' : 'bg-muted'
+                }`} />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* Status text + progress bar */}
       <div className="flex items-center gap-2.5">
         <LoadingSpinner size="sm" />
         <div className="flex-1 space-y-1">
@@ -569,25 +636,28 @@ export function PromptProcessor() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const currentSessionIdRef = useRef<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(true);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [userId, setUserId] = useState('');
   const [workflowId, setWorkflowId] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
-  const [gracePeriodCountdown, setGracePeriodCountdown] = useState(3);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
+  const [reiteratingId, setReiteratingId] = useState<string | null>(null);
+  const [reiterateFeedback, setReiterateFeedback] = useState('');
+  const [reiterateDialogMsg, setReiterateDialogMsg] = useState<ChatMessage | null>(null);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [complexity, setComplexity] = useState<ComplexityResult | null>(null);
   const complexityTimerRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const processPromptWithMemoryMutation = useProcessPromptWithMemory();
+  const processPromptWithMemoryMutation = useProcessPrompt();
   const cancelWorkflowMutation = useCancelWorkflow();
   const complexityMutation = useComplexity();
   const { streamState, isStreaming, startStream, cancelStream } = useSSEStream();
@@ -634,9 +704,27 @@ export function PromptProcessor() {
   const isAdvancedModeRef = useRef(isAdvancedMode);
   isAdvancedModeRef.current = isAdvancedMode;
 
-  // Processor-specific keyboard shortcuts (navigation & ? handled globally in AppLayout)
+  // Keyboard shortcuts — includes global navigation (since PromptProcessor has its own layout)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const inInput = tag === 'INPUT' || tag === 'TEXTAREA';
+
+      // ? key — show shortcuts dialog (only when not typing in an input)
+      if (e.key === '?' && !inInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setIsShortcutsOpen(true);
+        return;
+      }
+
+      // Alt+1-4 — navigate pages
+      if (e.altKey && !e.ctrlKey && !e.metaKey && ['1', '2', '3', '4'].includes(e.key)) {
+        e.preventDefault();
+        const routes = ['/', '/dashboard', '/templates', '/system-health'];
+        navigate(routes[parseInt(e.key) - 1]);
+        return;
+      }
+
       // Ctrl+N / Cmd+N — new chat
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault();
@@ -665,7 +753,7 @@ export function PromptProcessor() {
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [navigate]);
 
   // Workflow status polling
   const workflowStatusQuery = useWorkflowStatus(workflowId);
@@ -746,28 +834,13 @@ export function PromptProcessor() {
 
   // Handle workflow completion
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-
-    if (isPolling && workflowId && workflowStatusQuery.data?.grace_period_active) {
-      setGracePeriodCountdown(3);
-      timer = setInterval(() => {
-        setGracePeriodCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      setGracePeriodCountdown(0);
-    }
-
     if (workflowStatusQuery.data) {
       const { status, result: workflowResult, error } = workflowStatusQuery.data;
 
       if (status === 'completed' && workflowResult) {
         // Update the loading message with the actual response
+        const pollingDomain = workflowResult.output?.domain
+          || workflowResult.analysis?.classification?.domain;
         setMessages(prev => prev.map(msg => 
           msg.isLoading && msg.id === `loading_${workflowId}` 
             ? {
@@ -779,7 +852,16 @@ export function PromptProcessor() {
             : msg
         ));
 
-        // Session will be auto-updated by the useEffect hook
+        // Update session title with domain context (use ref to avoid stale closure)
+        const sid = currentSessionIdRef.current;
+        if (sid) {
+          const originalPrompt = messages.find(m => m.role === 'user')?.content || '';
+          setSessions(prev => prev.map(s =>
+            s.id === sid
+              ? { ...s, title: generateSessionTitle(originalPrompt, pollingDomain) }
+              : s
+          ));
+        }
 
         setIsPolling(false);
         setWorkflowId(null);
@@ -797,11 +879,11 @@ export function PromptProcessor() {
           }
         });
       } else if (status === 'cancelled') {
-        // Remove loading message
+        // Remove loading message and reset all states
         setMessages(prev => prev.filter(msg => msg.id !== `loading_${workflowId}`));
         setIsPolling(false);
         setWorkflowId(null);
-        toast.info('Workflow was cancelled.');
+        toast.info('Processing cancelled.', { id: 'cancel-toast' });
       } else if (status === 'failed') {
         // Update loading message with error
         setMessages(prev => prev.map(msg => 
@@ -816,13 +898,9 @@ export function PromptProcessor() {
         ));
         setIsPolling(false);
         setWorkflowId(null);
-        toast.error(error || 'Workflow failed');
+        toast.error(error || 'Workflow failed', { id: 'workflow-error' });
       }
     }
-
-    return () => {
-      if (timer) clearInterval(timer);
-    };
   }, [workflowStatusQuery.data, isPolling, workflowId, selectedModel, messages, currentSessionId]);
 
   // Handle form submission
@@ -830,7 +908,7 @@ export function PromptProcessor() {
     e?.preventDefault();
     
     if (!currentInput.trim()) {
-      toast.error('Please enter a prompt');
+      toast.error('Please enter a prompt', { id: 'empty-prompt' });
       return;
     }
 
@@ -890,6 +968,8 @@ export function PromptProcessor() {
         const streamResult = await startStream(request);
         if (streamResult) {
           // SSE streaming completed successfully
+          const resultDomain = streamResult.output?.domain
+            || streamResult.analysis?.classification?.domain;
           setMessages(prev => prev.map(msg => 
             msg.id === loadingMessage.id 
               ? {
@@ -901,6 +981,15 @@ export function PromptProcessor() {
                 }
               : msg
           ));
+          // Update session title with domain context (use ref to avoid stale closure)
+          const sid = currentSessionIdRef.current;
+          if (sid) {
+            setSessions(prev => prev.map(s =>
+              s.id === sid
+                ? { ...s, title: generateSessionTitle(inputText, resultDomain) }
+                : s
+            ));
+          }
           addNotification({
             type: 'success',
             title: `${selectedModel === 'langgraph' ? 'LangGraph' : 'Standard'} Model Complete`,
@@ -919,7 +1008,6 @@ export function PromptProcessor() {
       // Always use memory-enhanced processing
       response = await processPromptWithMemoryMutation.mutateAsync({
         request: { ...request, user_id: userId },
-        skipCache: false
       });
       
       if (response) {
@@ -933,47 +1021,148 @@ export function PromptProcessor() {
         // Start polling for the workflow result
         setWorkflowId(response.workflow_id);
         setIsPolling(true);
-        
-        // Add start notification
-        addNotification({
-          type: 'info',
-          title: `${selectedModel === 'langgraph' ? 'LangGraph' : 'Standard'} Model Started`,
-          message: `Processing your prompt with workflow ID: ${response.workflow_id.slice(-8)}`
-        });
       }
     } catch (error: any) {
       console.error('Processing failed:', error);
       // Remove loading message on error
       setMessages(prev => prev.filter(msg => msg.id !== loadingMessage.id));
-      toast.error('Failed to process prompt');
+      toast.error('Failed to process prompt', { id: 'process-error' });
     }
   };
 
-  // Handle cancellation
+  // Handle cancellation - comprehensive state reset
   const handleCancel = () => {
+    // Cancel streaming if active
     if (isStreaming) {
       cancelStream();
-      setMessages(prev => prev.filter(msg => !msg.isLoading));
-      toast.info('Processing cancelled.');
-      return;
     }
+
+    // Cancel workflow API call if in polling mode
     if (workflowId) {
       cancelWorkflowMutation.mutate(workflowId, {
-        onSuccess: () => {
-          toast.info('Workflow cancellation requested.');
-        },
         onError: (error) => {
-          toast.error(`Failed to cancel workflow: ${error.message}`);
-          setIsPolling(false);
-          setWorkflowId(null);
+          console.error('Failed to cancel workflow:', error);
         }
       });
+    }
+
+    // Immediately reset all processing states
+    setIsPolling(false);
+    setWorkflowId(null);
+    
+    // Remove any loading messages
+    setMessages(prev => prev.filter(msg => !msg.isLoading));
+    
+    // Show cancellation toast (stable ID prevents duplicates with polling handler)
+    toast.info('Processing cancelled.', { id: 'cancel-toast' });
+  };
+
+  // ── Re-iterate: refine an already-optimized prompt ─────────────────────
+  const handleReiterate = async (message: ChatMessage, feedback?: string) => {
+    if (!message.response?.output) return;
+
+    const optimizedPrompt = message.content;
+    const domain = message.response.output.domain || 'general';
+
+    // Find the user message that preceded this assistant message
+    const msgIndex = messages.findIndex(m => m.id === message.id);
+    const userMsg = messages.slice(0, msgIndex).reverse().find(m => m.role === 'user');
+    const originalPrompt = userMsg?.content || message.response.input?.original_prompt || optimizedPrompt;
+
+    setReiteratingId(message.id);
+
+    // Add a loading assistant message for the refined version
+    const loadingMsg: ChatMessage = {
+      id: `reiterate_loading_${Date.now()}`,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      model: selectedModel,
+      isLoading: true,
+    };
+
+    setMessages(prev => [...prev, loadingMsg]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+
+    try {
+      const abortCtrl = new AbortController();
+      const resp = await fetch('/api/process-prompt/reiterate/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          original_prompt: originalPrompt,
+          optimized_prompt: optimizedPrompt,
+          domain,
+          use_langgraph: selectedModel === 'langgraph',
+          user_feedback: feedback || null,
+        }),
+        signal: abortCtrl.signal,
+      });
+
+      if (!resp.ok) throw new Error(await resp.text() || 'Re-iterate request failed');
+
+      const reader = resp.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalResult: PromptResponse | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        let currentEvent = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ') && currentEvent) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (currentEvent === 'completed' && data.result) {
+                finalResult = data.result;
+              }
+            } catch { /* skip */ }
+            currentEvent = '';
+          }
+        }
+      }
+
+      if (finalResult) {
+        setMessages(prev => prev.map(msg =>
+          msg.id === loadingMsg.id
+            ? {
+                ...msg,
+                id: `reiterate_${Date.now()}`,
+                isLoading: false,
+                content: finalResult!.output?.optimized_prompt || '',
+                response: finalResult!,
+              }
+            : msg
+        ));
+        toast.success('Prompt refined successfully!', {
+          description: `New quality score: ${(finalResult.output?.quality_score * 100).toFixed(0)}%`,
+        });
+      } else {
+        setMessages(prev => prev.filter(msg => msg.id !== loadingMsg.id));
+        toast.error('Re-iterate completed but no result was returned.');
+      }
+    } catch (err: any) {
+      setMessages(prev => prev.filter(msg => msg.id !== loadingMsg.id));
+      toast.error(`Re-iterate failed: ${err.message}`);
+    } finally {
+      setReiteratingId(null);
     }
   };
 
   // Create new session
   const createNewSession = () => {
     setCurrentSessionId(null);
+    currentSessionIdRef.current = null;
     setMessages([]);
   };
 
@@ -982,6 +1171,7 @@ export function PromptProcessor() {
     const session = sessions.find(s => s.id === sessionId);
     if (session) {
       setCurrentSessionId(sessionId);
+      currentSessionIdRef.current = sessionId;
       setMessages(session.messages);
       setSelectedModel(session.model);
     }
@@ -992,6 +1182,7 @@ export function PromptProcessor() {
     setSessions(prev => prev.filter(s => s.id !== sessionId));
     if (currentSessionId === sessionId) {
       setCurrentSessionId(null);
+      currentSessionIdRef.current = null;
       setMessages([]);
     }
     setIsDeleteDialogOpen(false);
@@ -1027,13 +1218,14 @@ export function PromptProcessor() {
       if (firstUserMessage) {
         const newSession: ChatSession = {
           id: `session_${Date.now()}`,
-          title: firstUserMessage.content.substring(0, 50) + (firstUserMessage.content.length > 50 ? '...' : ''),
+          title: generateSessionTitle(firstUserMessage.content),
           messages: messages,
           lastUpdated: new Date(),
           model: selectedModel
         };
         setSessions(prev => [newSession, ...prev]);
         setCurrentSessionId(newSession.id);
+        currentSessionIdRef.current = newSession.id;
       }
     }
   }, [messages, currentSessionId, selectedModel]);
@@ -1063,7 +1255,7 @@ export function PromptProcessor() {
   };
 
   const isLoading = processPromptWithMemoryMutation.isPending || isPolling || isStreaming;
-  const canCancel = isStreaming || (isPolling && workflowId && gracePeriodCountdown > 0);
+  const canCancel = isStreaming || isPolling;
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -1170,41 +1362,64 @@ export function PromptProcessor() {
         <div className="flex-1 overflow-y-auto px-6 py-6">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center max-w-4xl mx-auto p-8 rounded-2xl">
-                <div className="flex justify-center">
-                  <img src="/Cortexa Logo.png" alt="Cortexa Logo" className="w-40 h-40 drop-shadow-lg" />
-                </div>
-                <div className="text-center md:text-left space-y-4">
-                  <h2 className="text-3xl font-bold tracking-tight text-foreground">Welcome to Cortexa</h2>
-                  <p className="text-muted-foreground leading-relaxed">
-                    Unlock the power of AI with our advanced multi-agent system. Craft, refine, and optimize your prompts for exceptional results.
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                    <button
-                      className={`p-4 border rounded-xl text-left transition-all hover:shadow-md ${
-                        selectedModel === 'standard' ? 'border-primary/50 bg-primary/5 shadow-sm' : 'hover:border-border/80'
-                      }`}
-                      onClick={() => setSelectedModel('standard')}
-                    >
-                      <div className="flex items-center gap-2.5 mb-1.5">
-                        <Sparkles className="h-5 w-5 text-primary shrink-0" />
-                        <h3 className="font-semibold text-sm">Standard Model</h3>
-                      </div>
-                      <p className="text-xs text-muted-foreground leading-relaxed">Memory-enhanced optimization for quick, reliable results.</p>
-                    </button>
-                    <button
-                      className={`p-4 border rounded-xl text-left transition-all hover:shadow-md ${
-                        selectedModel === 'langgraph' ? 'border-primary/50 bg-primary/5 shadow-sm' : 'hover:border-border/80'
-                      }`}
-                      onClick={() => setSelectedModel('langgraph')}
-                    >
-                      <div className="flex items-center gap-2.5 mb-1.5">
-                        <Bot className="h-5 w-5 text-primary shrink-0" />
-                        <h3 className="font-semibold text-sm">LangGraph Model</h3>
-                      </div>
-                      <p className="text-xs text-muted-foreground leading-relaxed">Complex multi-agent workflow for in-depth analysis.</p>
-                    </button>
+              <div className="max-w-4xl mx-auto p-8 space-y-8">
+                {/* Hero */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+                  <div className="flex justify-center">
+                    <img src="/Cortexa Logo.png" alt="Cortexa Logo" className="w-40 h-40 drop-shadow-lg" />
                   </div>
+                  <div className="text-center md:text-left space-y-4">
+                    <h2 className="text-3xl font-bold tracking-tight text-foreground">Welcome to Cortexa</h2>
+                    <p className="text-muted-foreground leading-relaxed">
+                      Unlock the power of AI with our advanced multi-agent system. Craft, refine, and optimize your prompts for exceptional results.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                      <button
+                        className={`p-4 border rounded-xl text-left transition-all hover:shadow-md ${
+                          selectedModel === 'standard' ? 'border-primary/50 bg-primary/5 shadow-sm' : 'hover:border-border/80'
+                        }`}
+                        onClick={() => setSelectedModel('standard')}
+                      >
+                        <div className="flex items-center gap-2.5 mb-1.5">
+                          <Sparkles className="h-5 w-5 text-primary shrink-0" />
+                          <h3 className="font-semibold text-sm">Standard Model</h3>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">Memory-enhanced optimization for quick, reliable results.</p>
+                      </button>
+                      <button
+                        className={`p-4 border rounded-xl text-left transition-all hover:shadow-md ${
+                          selectedModel === 'langgraph' ? 'border-primary/50 bg-primary/5 shadow-sm' : 'hover:border-border/80'
+                        }`}
+                        onClick={() => setSelectedModel('langgraph')}
+                      >
+                        <div className="flex items-center gap-2.5 mb-1.5">
+                          <Bot className="h-5 w-5 text-primary shrink-0" />
+                          <h3 className="font-semibold text-sm">LangGraph Model</h3>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">Complex multi-agent workflow for in-depth analysis.</p>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Example prompts */}
+                <div className="space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-center">Try an example</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {EXAMPLE_PROMPTS.map((ex, i) => (
+                      <button
+                        key={i}
+                        className="group p-3.5 border rounded-xl text-left hover:border-primary/40 hover:bg-primary/5 transition-all"
+                        onClick={() => setCurrentInput(ex.text)}
+                      >
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 mb-1.5">{ex.domain}</Badge>
+                        <p className="text-sm text-muted-foreground group-hover:text-foreground transition-colors line-clamp-1">{ex.text}</p>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-center text-[11px] text-muted-foreground/60 flex items-center justify-center gap-1.5">
+                    <Keyboard className="h-3 w-3" /> Press <kbd className="px-1 py-0.5 rounded bg-muted text-[10px] font-mono">?</kbd> for shortcuts
+                  </p>
                 </div>
               </div>
             </div>
@@ -1267,14 +1482,70 @@ export function PromptProcessor() {
                             </SyntaxHighlighter>
                             
                             {message.response.output && (
-                              <div className="pt-3 mt-3 border-t border-border/40 space-y-2">
-                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                                  <span className="flex items-center gap-1">Quality: <strong>{message.response.output.quality_score?.toFixed(2)}</strong></span>
-                                  <span className="flex items-center gap-1">Domain: <strong>{message.response.output.domain}</strong></span>
-                                  <span className="flex items-center gap-1">Iterations: <strong>{message.response.output.iterations_used}</strong></span>
-                                  {message.response.processing_time_seconds && (
-                                    <span>Time: {formatDuration(message.response.processing_time_seconds)}</span>
+                              <div className="pt-3 mt-3 border-t border-border/40 space-y-3">
+                                {/* Action buttons */}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-1.5 h-7 text-xs rounded-lg"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(message.content);
+                                      toast.success('Optimized prompt copied!');
+                                    }}
+                                  >
+                                    <ClipboardCopy className="h-3 w-3" />
+                                    Copy Optimized Prompt
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-1.5 h-7 text-xs rounded-lg border-primary/40 text-primary hover:bg-primary/10"
+                                    disabled={reiteratingId !== null || isLoading}
+                                    onClick={() => {
+                                      setReiterateFeedback('');
+                                      setReiterateDialogMsg(message);
+                                    }}
+                                  >
+                                    {reiteratingId === message.id ? (
+                                      <><LoadingSpinner size="sm" /> Refining…</>
+                                    ) : (
+                                      <><RefreshCw className="h-3 w-3" /> Refine Further</>
+                                    )}
+                                  </Button>
+                                </div>
+
+                                {/* Quality score ring + metadata */}
+                                <div className="flex items-center gap-5 flex-wrap">
+                                  {message.response.output.quality_score != null && (
+                                    <div className="flex items-center gap-2">
+                                      <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ring-2 ${
+                                        message.response.output.quality_score >= 0.8
+                                          ? 'bg-green-100 text-green-700 ring-green-300 dark:bg-green-900/30 dark:text-green-400 dark:ring-green-600'
+                                          : message.response.output.quality_score >= 0.6
+                                            ? 'bg-yellow-100 text-yellow-700 ring-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:ring-yellow-600'
+                                            : 'bg-red-100 text-red-700 ring-red-300 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-600'
+                                      }`}>
+                                        {(message.response.output.quality_score * 100).toFixed(0)}
+                                      </div>
+                                      <span className="text-xs text-muted-foreground">Quality</span>
+                                    </div>
                                   )}
+                                  <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                                    {message.response.output.domain && (
+                                      <Badge variant="outline" className="text-[10px] h-5 capitalize">{message.response.output.domain}</Badge>
+                                    )}
+                                    <span className="flex items-center gap-1">Iterations: <strong>{message.response.output.iterations_used}</strong></span>
+                                    {message.response.processing_time_seconds != null && (
+                                      <span className="flex items-center gap-1">
+                                        <Clock className="h-3 w-3" />
+                                        {formatDuration(message.response.processing_time_seconds)}
+                                      </span>
+                                    )}
+                                    {(message.response as any).metadata?.cache_hit && (
+                                      <Badge className="text-[10px] h-4 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Cached</Badge>
+                                    )}
+                                  </div>
                                 </div>
                                 <EvaluationBreakdown response={message.response} />
                                 <DiffView comparison={message.response.comparison} />
@@ -1382,7 +1653,7 @@ export function PromptProcessor() {
                     onClick={handleCancel}
                     className="rounded-xl h-8"
                   >
-                    {isStreaming ? 'Cancel' : `Cancel (${gracePeriodCountdown}s)`}
+                    Cancel
                   </Button>
                 ) : (
                   <Button
@@ -1401,7 +1672,17 @@ export function PromptProcessor() {
                 <span>Enter to send &middot; Shift+Enter for new line</span>
                 <ComplexityBadge complexity={complexity} />
               </div>
-              <span>{currentInput.length} chars</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="hover:text-foreground transition-colors cursor-pointer"
+                  onClick={() => setIsShortcutsOpen(true)}
+                >
+                  <Keyboard className="h-3 w-3 inline mr-0.5" />Shortcuts
+                </button>
+                <span>&middot;</span>
+                <span>{currentInput.length} chars</span>
+              </div>
             </div>
           </form>
         </div>
@@ -1453,9 +1734,60 @@ export function PromptProcessor() {
                 Enable Advanced mode for a conversational prompt-engineering session. The AI will ask clarifying questions to deeply understand your needs before generating an improved prompt.
               </p>
             </div>
+            <div className="space-y-1.5">
+              <h4 className="font-semibold text-foreground">Refine Further</h4>
+              <p className="text-muted-foreground leading-relaxed">
+                After receiving an optimized prompt, click <b className="text-foreground">Refine Further</b> to re-iterate. You can add optional feedback to guide the refinement, or let the system automatically fix detected weaknesses.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button onClick={() => setIsUserGuideOpen(false)} className="rounded-xl">Got it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Re-iterate Feedback Dialog */}
+      <Dialog open={reiterateDialogMsg !== null} onOpenChange={(open) => { if (!open) setReiterateDialogMsg(null); }}>
+        <DialogContent className="sm:max-w-[480px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-primary" />
+              Refine Prompt Further
+            </DialogTitle>
+            <DialogDescription>
+              The system will automatically target detected weaknesses. You can optionally add guidance below to steer the refinement.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-3">
+            <Label htmlFor="reiterate-feedback" className="text-sm font-medium mb-2 block">
+              Optional feedback
+            </Label>
+            <Textarea
+              id="reiterate-feedback"
+              placeholder="e.g. Make it more concise, add error handling examples, focus on security…"
+              value={reiterateFeedback}
+              onChange={(e) => setReiterateFeedback(e.target.value)}
+              className="rounded-xl resize-none"
+              rows={3}
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" className="rounded-xl" onClick={() => setReiterateDialogMsg(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="rounded-xl gap-1.5"
+              onClick={() => {
+                if (reiterateDialogMsg) {
+                  handleReiterate(reiterateDialogMsg, reiterateFeedback.trim() || undefined);
+                  setReiterateDialogMsg(null);
+                }
+              }}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Refine
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

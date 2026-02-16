@@ -295,6 +295,42 @@ class LLMProvider:
         else:
             self._health = {p: True for p in PROVIDER_CONFIGS}
 
+    async def verify_provider(self, provider_name: str) -> Dict[str, Any]:
+        """
+        Verify a provider by making a lightweight API call.
+        Returns dict with 'available', 'latency_ms', and optional 'error'.
+        """
+        import asyncio, time as _time
+
+        config = PROVIDER_CONFIGS.get(provider_name)
+        if not config:
+            return {"available": False, "error": "Unknown provider"}
+
+        api_key = getattr(settings, config["api_key_env"], None)
+        if not api_key:
+            return {"available": False, "error": "No API key configured"}
+
+        # Use the user-configured model for the default provider
+        if provider_name == settings.default_model_provider:
+            model_name = settings.default_model_name
+        else:
+            model_name = config["default_model"]
+
+        try:
+            model = self._create_or_get(
+                provider_name, model_name, 0.0
+            )
+            start = _time.perf_counter()
+            # Use a trivial invoke to validate connectivity
+            resp = await model.ainvoke("Say OK")
+            latency = round((_time.perf_counter() - start) * 1000)
+            self._health[provider_name] = True
+            return {"available": True, "latency_ms": latency, "model": model_name}
+        except Exception as exc:
+            self._health[provider_name] = False
+            self._error_counts[provider_name] = self._error_counts.get(provider_name, 0) + 1
+            return {"available": False, "error": str(exc)[:120]}
+
 
 # Global singleton
 llm_provider = LLMProvider()

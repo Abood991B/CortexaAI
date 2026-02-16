@@ -24,10 +24,12 @@ class ApiClient {
     // Request interceptor
     this.client.interceptors.request.use(
       (config) => {
-        // Add auth token if available
-        const token = localStorage.getItem('auth_token');
+        // Add API key if available.
+        // sessionStorage is preferred over localStorage to reduce XSS exposure:
+        // the token is cleared when the browser tab closes.
+        const token = sessionStorage.getItem('api_key') || localStorage.getItem('api_key');
         if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
+          config.headers['X-API-Key'] = token;
         }
         return config;
       },
@@ -40,8 +42,8 @@ class ApiClient {
       (error) => {
         if (error.response?.status === 401) {
           // Handle unauthorized access
-          localStorage.removeItem('auth_token');
-          window.location.href = '/login';
+          sessionStorage.removeItem('api_key');
+          localStorage.removeItem('api_key');
         }
         return Promise.reject(error);
       }
@@ -124,14 +126,39 @@ class ApiClient {
     template_text: string;
     description?: string;
     variables?: string[];
+    is_public?: boolean;
   }): Promise<PromptTemplate> {
     const response = await this.client.post('/api/templates', data);
     return response.data;
   }
 
+  // ─── Template Update ────────────────────────────────────────
+  async updateTemplate(templateId: string, data: {
+    name?: string;
+    domain?: string;
+    template_text?: string;
+    description?: string;
+    variables?: string[];
+    is_public?: boolean;
+  }): Promise<PromptTemplate> {
+    const response = await this.client.put(`/api/templates/${templateId}`, data);
+    return response.data;
+  }
+
+  // ─── Template Delete ────────────────────────────────────────
+  async deleteTemplate(templateId: string): Promise<void> {
+    await this.client.delete(`/api/templates/${templateId}`);
+  }
+
   // ─── Complexity Analysis ────────────────────────────────────
   async analyzeComplexity(text: string): Promise<ComplexityResult> {
     const response = await this.client.post('/api/complexity', { text });
+    return response.data;
+  }
+
+  // ─── Cache Stats ────────────────────────────────────────────
+  async getCacheStats(): Promise<any> {
+    const response = await this.client.get('/api/cache/stats');
     return response.data;
   }
 

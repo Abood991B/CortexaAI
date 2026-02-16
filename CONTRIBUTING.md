@@ -361,7 +361,7 @@ We use Semantic Versioning (SemVer):
 - [Project Documentation](README.md)
 - [API Documentation](http://localhost:8000/docs)
 - [Frontend Application](http://localhost:5173)
-- [Deployment Guides](docs/deployment/)
+- [Architecture Guide](docs/ARCHITECTURE.md)
 - [Changelog](CHANGELOG.md)
 
 ## Recognition

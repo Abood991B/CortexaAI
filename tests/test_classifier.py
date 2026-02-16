@@ -1,4 +1,6 @@
-from agents.classifier import classifier
+from agents.classifier import DomainClassifier
+
+classifier = DomainClassifier()
 
 # Test the classifier with a simple prompt
 test_prompt = "Write a function to sort a list of numbers"

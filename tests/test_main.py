@@ -1,6 +1,6 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
-Comprehensive tests for src/main.py FastAPI application.
+Comprehensive tests for the CortexaAI FastAPI application.
 Tests cover application startup, configuration, API endpoints, error handling,
 configuration loading, and integration with the workflow system.
 """
@@ -20,14 +20,14 @@ from fastapi.testclient import TestClient
 from fastapi import HTTPException
 
 # Import the FastAPI app and related components
-from src.main import (
-    app,
+from src.main import app
+from src.deps import (
     PromptRequest,
     PromptResponse,
     SystemStats,
     classifier_instance,
     evaluator_instance,
-    coordinator
+    coordinator,
 )
 from config.config import settings, metrics
 
@@ -73,13 +73,13 @@ class TestHealthEndpoint:
         """Set up test client."""
         self.client = TestClient(app)
 
-    @patch('src.main.time.time')
-    @patch('src.main.psutil.virtual_memory')
-    @patch('src.main.psutil.cpu_percent')
-    @patch('src.main.psutil.net_connections')
-    @patch('src.main.coordinator')
-    @patch('src.main.metrics')
-    @patch('src.main.settings')
+    @patch('src.routes.system.time.time')
+    @patch('src.routes.system.psutil.virtual_memory')
+    @patch('src.routes.system.psutil.cpu_percent')
+    @patch('src.routes.system.psutil.net_connections')
+    @patch('src.routes.system.coordinator')
+    @patch('src.routes.system.metrics')
+    @patch('src.routes.system.settings')
     def test_health_endpoint_success(self, mock_settings, mock_metrics, mock_coordinator,
                                     mock_net_conn, mock_cpu, mock_memory, mock_time):
         """Test successful health check response."""
@@ -119,7 +119,7 @@ class TestHealthEndpoint:
         assert "coordinator" in health_data["components"]
         assert "system" in health_data
 
-    @patch('src.main.coordinator')
+    @patch('src.routes.system.coordinator')
     def test_health_endpoint_coordinator_failure(self, mock_coordinator):
         """Test health check when coordinator fails."""
         mock_coordinator.get_available_domains.side_effect = Exception("Coordinator error")
@@ -140,11 +140,11 @@ class TestMetricsEndpoint:
         """Set up test client."""
         self.client = TestClient(app)
 
-    @patch('src.main.metrics')
-    @patch('src.main.settings')
-    @patch('src.main.psutil.Process')
-    @patch('src.main.psutil.virtual_memory')
-    @patch('src.main.psutil.cpu_percent')
+    @patch('src.routes.system.metrics')
+    @patch('src.routes.system.settings')
+    @patch('src.routes.system.psutil.Process')
+    @patch('src.routes.system.psutil.virtual_memory')
+    @patch('src.routes.system.psutil.cpu_percent')
     def test_metrics_endpoint(self, mock_cpu, mock_memory, mock_process, mock_settings, mock_metrics):
         """Test Prometheus metrics endpoint."""
         # Setup mocks
@@ -214,7 +214,7 @@ class TestProcessPromptEndpoint:
         """Set up test client."""
         self.client = TestClient(app)
 
-    @patch('src.main.coordinator')
+    @patch('src.routes.prompts.coordinator')
     def test_process_prompt_success(self, mock_coordinator):
         """Test successful prompt processing (synchronous mode)."""
         mock_result = {
@@ -251,7 +251,7 @@ class TestProcessPromptEndpoint:
             return_comparison=True
         )
 
-    @patch('src.main.process_prompt_with_langgraph')
+    @patch('src.routes.prompts.process_prompt_with_langgraph')
     def test_process_prompt_with_langgraph(self, mock_langgraph):
         """Test prompt processing using LangGraph (synchronous mode)."""
         mock_result = {
@@ -285,7 +285,7 @@ class TestProcessPromptEndpoint:
             prompt_type="structured",
         )
 
-    @patch('src.main.coordinator')
+    @patch('src.routes.prompts.coordinator')
     def test_process_prompt_error_handling(self, mock_coordinator):
         """Test error handling in prompt processing (synchronous mode)."""
         mock_coordinator.process_prompt.side_effect = Exception("Processing failed")
@@ -309,7 +309,7 @@ class TestDomainsEndpoint:
         """Set up test client."""
         self.client = TestClient(app)
 
-    @patch('src.main.coordinator')
+    @patch('src.routes.workflows.coordinator')
     def test_get_domains_success(self, mock_coordinator):
         """Test successful domain retrieval."""
         mock_domains = [
@@ -340,7 +340,7 @@ class TestDomainsEndpoint:
         assert domains_data[0]["has_expert_agent"] is True
         assert domains_data[1]["domain"] == "data_science"
 
-    @patch('src.main.coordinator')
+    @patch('src.routes.workflows.coordinator')
     def test_get_domains_error_handling(self, mock_coordinator):
         """Test error handling in domain retrieval."""
         mock_coordinator.get_available_domains.side_effect = Exception("Domain retrieval failed")
@@ -360,7 +360,7 @@ class TestStatsEndpoint:
         """Set up test client."""
         self.client = TestClient(app)
 
-    @patch('src.main.coordinator')
+    @patch('src.routes.workflows.coordinator')
     def test_get_stats_success(self, mock_coordinator):
         """Test successful stats retrieval."""
         mock_stats = {
@@ -388,7 +388,7 @@ class TestStatsEndpoint:
         assert stats_data["average_quality_score"] == 0.87
         assert "software_engineering" in stats_data["domain_distribution"]
 
-    @patch('src.main.coordinator')
+    @patch('src.routes.workflows.coordinator')
     def test_get_stats_no_history(self, mock_coordinator):
         """Test stats retrieval when no workflow history exists."""
         mock_coordinator.get_workflow_stats.return_value = {
@@ -408,7 +408,7 @@ class TestStatsEndpoint:
         assert stats_data["average_processing_time"] == 0.0
         assert stats_data["domain_distribution"] == {}
 
-    @patch('src.main.coordinator')
+    @patch('src.routes.workflows.coordinator')
     def test_get_stats_error_handling(self, mock_coordinator):
         """Test error handling in stats retrieval."""
         mock_coordinator.get_workflow_stats.side_effect = Exception("Stats retrieval failed")
@@ -428,7 +428,7 @@ class TestHistoryEndpoint:
         """Set up test client."""
         self.client = TestClient(app)
 
-    @patch('src.main.coordinator')
+    @patch('src.routes.workflows.coordinator')
     def test_get_history_success(self, mock_coordinator):
         """Test successful history retrieval."""
         mock_history = [
@@ -459,7 +459,7 @@ class TestHistoryEndpoint:
         assert history_data[1]["workflow_id"] == "wf_002"
         mock_coordinator.get_workflow_history.assert_called_once_with(limit=10)
 
-    @patch('src.main.coordinator')
+    @patch('src.routes.workflows.coordinator')
     def test_get_history_error_handling(self, mock_coordinator):
         """Test error handling in history retrieval."""
         mock_coordinator.get_workflow_history.side_effect = Exception("History retrieval failed")
@@ -522,23 +522,11 @@ class TestErrorHandling:
 class TestConfigurationAndEnvironment:
     """Test configuration loading and environment variables."""
 
-    @patch('src.main.settings')
-    def test_configuration_access(self, mock_settings):
+    def test_configuration_access(self):
         """Test that configuration settings are accessible."""
-        # Test various settings that should be available
-        assert hasattr(mock_settings, 'host')
-        assert hasattr(mock_settings, 'port')
-        assert hasattr(mock_settings, 'log_level')
-
-    @patch('src.main.setup_langsmith')
-    def test_langsmith_setup_called(self, mock_setup_langsmith):
-        """Test that setup_langsmith is called during app initialization."""
-        # Re-import to trigger setup
-        from importlib import reload
-        import src.main
-        reload(src.main)
-
-        mock_setup_langsmith.assert_called_once()
+        assert hasattr(settings, 'host')
+        assert hasattr(settings, 'port')
+        assert hasattr(settings, 'log_level')
 
     @patch.dict(os.environ, {
         'OPENAI_API_KEY': 'test_openai_key',
@@ -547,39 +535,25 @@ class TestConfigurationAndEnvironment:
     })
     def test_environment_variables(self):
         """Test that environment variables are properly loaded."""
-        # This would normally be tested through the config module
-        # but we're testing that the app can start with env vars set
         pass
 
 
 class TestIntegrationWithWorkflowSystem:
     """Test integration with the workflow system."""
 
-    @patch('src.main.classifier_instance')
-    @patch('src.main.evaluator_instance')
-    @patch('src.main.WorkflowCoordinator')
-    def test_global_instances_creation(self, mock_coordinator_class, mock_evaluator, mock_classifier):
+    def test_global_instances_creation(self):
         """Test that global instances are created correctly."""
-        # Re-import to trigger instance creation
-        from importlib import reload
-        import src.main
-        reload(src.main)
-
-        # Verify that instances were created
-        from src.main import classifier_instance, evaluator_instance, coordinator
+        from src.deps import classifier_instance, evaluator_instance, coordinator
 
         assert classifier_instance is not None
         assert evaluator_instance is not None
         assert coordinator is not None
 
-        # Verify WorkflowCoordinator was called with correct arguments
-        mock_coordinator_class.assert_called_once_with(classifier_instance, evaluator_instance)
-
-    @patch('src.main.coordinator')
-    def test_workflow_coordinator_integration(self, mock_coordinator):
-        """Test that the app properly integrates with WorkflowCoordinator."""
-        # Test that coordinator methods are called correctly from endpoints
-        pass
+    def test_workflow_coordinator_integration(self):
+        """Test that the coordinator is a WorkflowCoordinator instance."""
+        from agents.coordinator import WorkflowCoordinator
+        from src.deps import coordinator
+        assert isinstance(coordinator, WorkflowCoordinator)
 
 
 class TestPydanticModels:

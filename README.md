@@ -12,8 +12,7 @@
   <a href="https://reactjs.org/"><img src="https://img.shields.io/badge/React-18.2+-61DAFB.svg?logo=react&logoColor=white" alt="React 18+"/></a>
   <a href="https://langchain-ai.github.io/langgraph/"><img src="https://img.shields.io/badge/LangGraph-0.6+-purple.svg" alt="LangGraph"/></a>
   <img src="https://img.shields.io/badge/LLM_Providers-6+-orange.svg" alt="6+ LLM Providers"/>
-  <img src="https://img.shields.io/badge/API_Routes-84-brightgreen.svg" alt="84 API Routes"/>
-  <a href="#docker-deployment"><img src="https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white" alt="Docker Ready"/></a>
+  <img src="https://img.shields.io/badge/API_Routes-86-brightgreen.svg" alt="86 API Routes"/>
 </p>
 
 <p align="center">
@@ -24,7 +23,7 @@
 
 ## What is CortexaAI?
 
-CortexaAI is a **production-ready, enterprise-grade multi-agent prompt optimization platform** built with LangGraph orchestration. It automatically transforms any raw prompt into a highly effective, domain-specific prompt through a pipeline of specialized AI agents, with built-in A/B testing, version control, batch processing, and 17 production feature modules.
+CortexaAI is a **production-ready, enterprise-grade multi-agent prompt optimization platform** built with LangGraph orchestration. It automatically transforms any raw prompt into a highly effective, domain-specific prompt through a pipeline of specialized AI agents, with built-in A/B testing, version control, batch processing, and 16 production feature modules.
 
 **The Problem:** Writing effective prompts for LLMs is time-consuming, inconsistent, and requires expertise. A poorly written prompt can lead to vague, incorrect, or unhelpful AI responses.
 
@@ -60,19 +59,18 @@ CortexaAI is a **production-ready, enterprise-grade multi-agent prompt optimizat
 | 📦 **Batch Processing** | Process multiple prompts concurrently with progress tracking |
 | 🧬 **Prompt Templates** | Template marketplace with sharing and versioning |
 | 🗄️ **SQLite Database** | Persistent storage for templates, API keys, and analytics |
-| 🐳 **Docker Ready** | One-command deployment with Docker Compose |
-| 📖 **84 API Routes** | Comprehensive REST API with interactive Swagger docs at `/docs` |
+|  **86 API Routes** | Comprehensive REST API with interactive Swagger docs at `/docs` |
 
 ---
 
 ## Architecture
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────┐
 │                     React Frontend (Vite + Tailwind)           │
 │  Chat Interface │ Analytics Dashboard │ Provider Management    │
 └─────────────────────────────┬──────────────────────────────────┘
-                              │ REST API (84 routes)
+                              │ REST API (86 routes)
 ┌─────────────────────────────▼──────────────────────────────────┐
 │                     FastAPI Backend                             │
 │  ┌──────────────────────────────────────────────────────────┐  │
@@ -145,14 +143,7 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:5173** — start optimizing prompts!
-
-### Docker (Alternative)
-
-```bash
-cp .env.example .env
-docker compose up --build
-```
+Open **<http://localhost:5173>** — start optimizing prompts!
 
 ---
 
@@ -162,8 +153,8 @@ CortexaAI supports **6 providers** out of the box, with a modular system for add
 
 | Provider | Free Tier | Models | Setup |
 |----------|-----------|--------|-------|
-| **Google Gemma / Gemini** ⭐ | ✅ | gemma-3-27b-it (default), gemma-3-12b-it, gemini-2.0-flash | [aistudio.google.com](https://aistudio.google.com/) |
-| **Groq** | ✅ | llama-3.3-70b, mixtral-8x7b | [console.groq.com](https://console.groq.com/) |
+| **Google Gemma / Gemini** ⭐ | ✅ | gemma-3-27b-it (default), gemma-3-12b-it, gemma-3-4b-it, gemini-2.0-flash, gemini-2.5-flash-lite | [aistudio.google.com](https://aistudio.google.com/) |
+| **Groq** | ✅ | llama-3.3-70b-versatile, mixtral-8x7b-32768, gemma2-9b-it | [console.groq.com](https://console.groq.com/) |
 | **OpenRouter** | ✅ | 100+ models (free options) | [openrouter.ai](https://openrouter.ai/) |
 | **DeepSeek** | Affordable | deepseek-chat, deepseek-reasoner | [platform.deepseek.com](https://platform.deepseek.com/) |
 | **OpenAI** | Paid | gpt-4o-mini, gpt-4o | [platform.openai.com](https://platform.openai.com/) |
@@ -204,6 +195,8 @@ CortexaAI supports **6 providers** out of the box, with a modular system for add
 | `GET` | `/api/templates` | Browse prompt template library |
 | `POST` | `/api/templates` | Create new prompt template |
 | `GET` | `/api/templates/{template_id}` | Get specific template |
+| `PUT` | `/api/templates/{template_id}` | Update existing template |
+| `DELETE` | `/api/templates/{template_id}` | Delete a template |
 | `POST` | `/api/templates/render` | Render template with variables |
 | `POST` | `/api/webhooks` | Register webhook callbacks |
 | `GET` | `/api/webhooks` | List webhook subscriptions |
@@ -220,6 +213,7 @@ CortexaAI supports **6 providers** out of the box, with a modular system for add
 | `DELETE` | `/api/auth/keys/{name}` | Delete API key |
 | `POST` | `/api/auth/verify` | Verify API key |
 | `POST` | `/api/process-prompt/stream` | Stream workflow progress via SSE |
+| `POST` | `/api/process-prompt/reiterate/stream` | Stream re-iteration progress via SSE |
 | `POST` | `/api/complexity` | Analyze prompt complexity |
 | `POST` | `/api/complexity/pipeline-config` | Get pipeline config based on complexity |
 | `POST` | `/api/language/detect` | Detect prompt language |
@@ -267,8 +261,14 @@ CortexaAI supports **6 providers** out of the box, with a modular system for add
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/providers` | LLM provider status and availability |
+| `POST` | `/api/providers/{provider_name}/reset` | Reset provider health status |
+| `GET` | `/api/cache/stats` | Cache statistics |
+| `DELETE` | `/api/cache` | Clear cache |
 | `GET` | `/api/stats` | System statistics |
 | `GET` | `/api/domains` | Available prompt domains |
+| `GET` | `/api/history` | Workflow history |
+| `GET` | `/api/workflows` | List all workflows |
+| `GET` | `/api/workflows/{workflow_id}` | Get workflow details |
 | `GET` | `/health` | Health check with component status |
 | `GET` | `/metrics` | Prometheus-compatible metrics |
 | `GET` | `/docs` | Interactive API documentation (Swagger) |
@@ -290,11 +290,17 @@ curl -X POST http://localhost:8000/api/process-prompt \
 
 ## Project Structure
 
-```
+```text
 CortexaAI/
 ├── src/                          # Application entry point
-│   ├── main.py                   #   FastAPI app, 87 routes, middleware
-│   └── workflow.py               #   LangGraph workflow orchestration
+│   ├── main.py                   #   FastAPI app, middleware, SPA serving
+│   ├── workflow.py               #   LangGraph workflow orchestration
+│   ├── deps.py                   #   Shared dependency injection
+│   └── routes/                   #   API route modules (86 routes)
+│       ├── prompts.py            #     Prompt processing endpoints
+│       ├── workflows.py          #     Workflow management endpoints
+│       ├── system.py             #     System, health, metrics endpoints
+│       └── features.py           #     Feature module endpoints
 │
 ├── agents/                       # Multi-agent system
 │   ├── classifier.py             #   Domain classification (6 domains)
@@ -327,11 +333,12 @@ CortexaAI/
 │
 ├── config/                       # Configuration
 │   ├── config.py                 #   Settings, security, caching
-│   └── llm_providers.py          #   Multi-LLM provider system
+│   ├── llm_providers.py          #   Multi-LLM provider system
+│   └── key_store.py              #   Encrypted API key storage
 │
 ├── frontend-react/               # React + TypeScript + Tailwind CSS
 │   ├── src/
-│   │   ├── pages/                #   PromptProcessor, SystemHealth
+│   │   ├── pages/                #   PromptProcessor, Dashboard, Templates
 │   │   ├── components/           #   Reusable UI components
 │   │   ├── hooks/                #   React Query hooks
 │   │   └── api/                  #   API client
@@ -342,6 +349,7 @@ CortexaAI/
 │   ├── test_agents.py
 │   ├── test_classifier.py
 │   ├── test_features.py
+│   ├── test_langgraph_studio.py
 │   ├── test_llm_providers.py
 │   ├── test_main.py
 │   ├── test_optimization.py
@@ -354,25 +362,21 @@ CortexaAI/
 │   └── run_langgraph_studio.py   #   LangGraph Studio launcher
 │
 ├── docs/                         # Documentation
+│   ├── ARCHITECTURE.md           #   System architecture documentation
 │   ├── FEATURE_ANALYSIS.md       #   Feature analysis & roadmap
+│   ├── PREFLIGHT_CHECKLIST.md    #   Pre-deployment verification
 │   └── PROMPT_SYSTEM_ENHANCEMENT.md
 │
 ├── data/                         # Runtime data (gitignored)
 │   └── .gitkeep
 │
 ├── .github/workflows/ci.yml     # CI/CD pipeline
-├── Dockerfile                    # Multi-stage production build
-├── Dockerfile.railway            # Railway-optimized Docker build
-├── docker-compose.yml            # Docker Compose config
-├── railway.json                  # Railway deployment configuration
 ├── langgraph.json                # LangGraph Studio config
 ├── pyproject.toml                # Project metadata & tool config
 ├── requirements.txt              # Python dependencies
 ├── .env.example                  # Environment variable template
-├── ARCHITECTURE.md               # System architecture documentation
 ├── CHANGELOG.md                  # Version history
 ├── CONTRIBUTING.md               # Contribution guidelines
-├── PREFLIGHT_CHECKLIST.md        # Pre-deployment verification
 └── LICENSE                       # MIT License
 ```
 
@@ -388,43 +392,8 @@ CortexaAI/
 | **Database** | SQLite with WAL mode |
 | **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, Radix UI |
 | **Data Layer** | React Query, Recharts, Framer Motion |
-| **Infrastructure** | Docker, GitHub Actions CI/CD |
-| **Deployment** | Railway (recommended), Docker Compose |
+| **Infrastructure** | GitHub Actions CI/CD |
 | **Quality** | Pytest, Ruff, mypy, Bandit |
-
----
-
-## Deployment
-
-CortexaAI deploys easily to Railway with Docker support.
-
-### 🚀 Railway (Recommended)
-**Best choice:** Generous free tier, Docker support, PostgreSQL included
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template/cortexaai)
-
-**Quick Deploy:**
-1. Go to [railway.app](https://railway.app) and create an account
-2. **Create a workspace** (required before deploying)
-3. Click the button above or manually connect your GitHub repo
-4. Set `GOOGLE_API_KEY` in Railway dashboard
-5. Deploy!
-
-**Troubleshooting:**
-- If you see `You must specify a workspaceId to create a project`, create a workspace first in Railway before deploying your project.
-- Make sure your environment variables are set in the Railway dashboard.
-- Railway will use `Dockerfile.railway` automatically for the build.
-
-### Docker (Local Development)
-
-```bash
-# Local development
-docker compose up --build
-
-# Production deploy (any Docker host)
-docker build -f Dockerfile.railway -t cortexaai .
-docker run -p 8000:8000 -e GOOGLE_API_KEY=your_key cortexaai
-```
 
 ---
 

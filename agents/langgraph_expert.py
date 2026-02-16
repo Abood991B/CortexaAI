@@ -17,9 +17,11 @@ import os
 import json
 import re
 
-# Add the parent directory to the path so we can import from config
+# Ensure project root is importable (idempotent)
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 from config.config import get_logger, settings
 from config.llm_providers import get_llm
 
@@ -95,85 +97,67 @@ class LangGraphExpert:
         logger.info(f"LangGraph Expert '{self.name}' initialized with model '{self.model_name}' (system instructions: {self.supports_system_instructions}, JSON mode: {self.supports_json_mode})")
 
     def _create_prompt_template(self) -> ChatPromptTemplate:
-        """Creates the prompt template for the expert agent."""
+        """Creates the prompt template for the expert agent.
+        
+        The prompt is optimised for quality AND speed: compact enough for fast
+        inference while containing every structural element the evaluator
+        expects (role anchor, sections, examples, negative constraints, etc.).
+        """
         system_prompt = """You are a world-class prompt engineer specialising in **{expertise}**.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- MISSION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Transform the user's prompt into a **production-ready, high-quality** prompt that
-scores ≥ 0.96 on every evaluation criterion below. You MUST substantially
-improve the original — never return it unchanged.
+MISSION: Transform the user's prompt into a **production-ready** prompt.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- EVALUATION CRITERIA (target ≥ 0.96 each)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. **Actionability** – immediately usable; strong action verbs; no ambiguity
-   about *what* to do.
-2. **Clarity** – crystal-clear language; jargon explained or replaced.
-3. **Specificity** – constraints, desired format, examples, edge-cases
-   explicitly stated.
-4. **Structure** – logical sections with headings/numbered lists; easy to scan.
-5. **Completeness** – all context needed to fulfil the task is present;
-   no implicit assumptions left unstated.
-6. **Domain Alignment** – reflects best practices of **{expertise}**.
+EVALUATION CRITERIA (target each ≥ 0.90):
+1. Clarity – unambiguous; no vague qualifiers
+2. Specificity – concrete constraints, formats, examples, edge-cases
+3. Structure – headings (##), numbered steps, grouped sections
+4. Completeness – persona, output format, success criteria, negative constraints
+5. Actionability – strong verbs, measurable deliverables
+6. Domain Alignment – {expertise} best practices, terminology, standards
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- TRANSFORMATION STEPS (follow in order)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. **Summarise** the user's intent in 1-2 sentences (→ `problem_summary`).
-2. **Reason step-by-step** about what the prompt lacks measured against every
-   criterion above (→ `reasoning_steps`).
-3. **Assess your confidence** that the rewritten prompt will score ≥ 0.96
-   (→ `confidence_score`, float 0.0 – 1.0).
-4. **Produce the final solution** — a *completely rewritten* prompt that is
-   significantly more detailed, structured, and actionable than the input
-   (→ `solution`).
+METHOD:
+1. Summarise intent (→ problem_summary).
+2. Diagnose weaknesses from 3 angles: Executor / Critic / Expert (→ reasoning_steps).
+3. Rate your confidence the rewrite scores ≥ 0.90 (→ confidence_score).
+4. Produce the improved prompt (→ solution). It MUST contain:
+   ✓ Role/persona anchor   ✓ Structured sections with headings
+   ✓ ≥1 concrete example   ✓ Negative constraints (what NOT to do)
+   ✓ Output format spec     ✓ Success criteria / verification checklist
+   ✓ Domain-specific terms  ✓ Edge-case handling
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- EXAMPLE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-**Input prompt:** "Analyze data with Python"
+QUALITY RULES:
+• The solution must be SUBSTANTIALLY different from the input.
+• Replace vague words ("good", "some", "etc.") with measurable criteria.
+• If the input is short, expand it 5-10× with context, constraints, examples.
+• End with a self-verification checklist.
+• Remove filler words (please, kindly) — use precise imperatives.
 
-**High-quality solution (score > 0.96):**
-> You are a data scientist. Perform an exploratory data analysis (EDA) on a
-> CSV dataset with columns: Date, Sales, Region, Product_Category.
->
-> **Requirements:**
-> 1. Load data with pandas; validate schema on load.
-> 2. Clean missing values (document strategy chosen).
-> 3. Compute descriptive statistics for Sales.
-> 4. Visualise sales trends over time (line plot) and by region (bar chart).
-> 5. Analyse product-category proportions (pie chart).
->
-> **Output format:** Markdown report with embedded code and labelled plots.
-> **Libraries:** pandas, matplotlib, seaborn.
-> **Constraint:** Single self-contained script; set random seed = 42.
+EXAMPLE (input → expected quality level):
+Input: "Analyze data with Python"
+Solution (excerpt):
+> You are a senior data scientist (10+ yrs Python analytics).
+> ## Task: Perform EDA on a CSV (columns: Date, Sales, Region, Category).
+> ## Requirements: 1. Load with pandas, validate schema … 5. Flag outliers (IQR).
+> ## Output: Markdown report with code blocks, labeled charts (PNG), summary table.
+> ## Do NOT: use deprecated pandas APIs, hardcode paths.
+> ## Verify: charts have titles, code runs cleanly, outliers flagged.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- OUTPUT FORMAT (strict JSON)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Return **only** a JSON object — no markdown fences, no commentary:
+OUTPUT (strict JSON, no markdown fences):
 {{
     "problem_summary": "<string>",
-    "reasoning_steps": ["<step 1>", "<step 2>", "..."],
+    "reasoning_steps": ["<step>", "..."],
     "confidence_score": <float 0.0-1.0>,
     "solution": "<the fully rewritten prompt>"
 }}
-
-⚠️ The `solution` field MUST be a **new, improved, and enhanced** version.
-   Copying the original verbatim is a failure case.
 """
         
         if self.supports_system_instructions:
-            # Use system message for models that support it
             human_prompt = "Problem: {prompt}\n\nHistory: {history}"
             return ChatPromptTemplate.from_messages([
                 ("system", system_prompt),
                 ("human", human_prompt)
             ])
         else:
-            # Merge system prompt into human message for models that don't support system instructions
             human_prompt = f"{system_prompt}\n\nProblem: {{prompt}}\n\nHistory: {{history}}"
             return ChatPromptTemplate.from_messages([
                 ("human", human_prompt)

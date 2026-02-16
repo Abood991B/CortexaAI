@@ -140,6 +140,12 @@ export interface PromptTemplate {
   variables?: string[];
   domain?: string;
   category?: string;
+  tags?: string[];
+  author?: string;
+  is_public?: boolean;
+  usage_count?: number;
+  rating?: number;
+  created_at?: string;
 }
 
 // Error Types

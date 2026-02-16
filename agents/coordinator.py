@@ -43,7 +43,22 @@ class WorkflowCoordinator:
         self.evaluator = evaluator_instance
         self.expert_agents = {}  # Cache for created expert agents
         self.workflow_history = []  # Track workflow executions
-        self.llm = get_llm(temperature=0)
+        # NOTE: self.llm was previously set here but never referenced — removed.
+        self._db_loaded = False
+
+    def _ensure_history(self):
+        """Lazily load persisted workflows from the database on first access."""
+        if self._db_loaded:
+            return
+        self._db_loaded = True
+        try:
+            from core.database import db
+            persisted = db.get_workflows(limit=100)
+            if persisted:
+                self.workflow_history = persisted
+                logger.info(f"Loaded {len(persisted)} workflows from database")
+        except Exception as e:
+            logger.warning(f"Could not load persisted workflows: {e}")
 
         self._setup_langsmith()
     def _setup_langsmith(self):
@@ -68,6 +83,7 @@ class WorkflowCoordinator:
         Returns:
             Dict containing the final optimized prompt and workflow metadata
         """
+        self._ensure_history()
         start_time = datetime.now()
         workflow_id = f"workflow_{int(start_time.timestamp())}"
 
@@ -115,14 +131,24 @@ class WorkflowCoordinator:
         })
 
         try:
-            # Step 1: Determine prompt type if set to auto
+            # ── Fast path: check workflow-level cache ────────────────────
+            if perf_config.enable_caching:
+                workflow_cache_key = generate_prompt_cache_key(prompt, prefix="workflow")
+                cached_workflow = cache_manager.get(workflow_cache_key)
+                if cached_workflow:
+                    logger.info(f"Workflow cache hit for {workflow_id}")
+                    cached_workflow["workflow_id"] = workflow_id
+                    cached_workflow["metadata"] = cached_workflow.get("metadata", {})
+                    cached_workflow["metadata"]["cache_hit"] = True
+                    cached_workflow["metadata"]["processing_time_seconds"] = 0.0
+                    self._record_workflow(cached_workflow)
+                    return cached_workflow
+
+            # Step 1 + 2: Classify domain & auto-detect prompt type (pure heuristics, instant)
+            classification_result = await self.classifier.classify_prompt(prompt)
             if prompt_type == "auto":
                 prompt_type = await self.classifier.classify_prompt_type(prompt)
                 logger.info(f"Auto-detected prompt type: {prompt_type}")
-
-            # Step 2: Classify domain
-            logger.info("Step 1: Classifying domain...")
-            classification_result = await self.classifier.classify_prompt(prompt)
             domain = classification_result["domain"]
 
             # Step 3: Get or create expert agent
@@ -171,8 +197,10 @@ class WorkflowCoordinator:
                 start_time=start_time
             )
 
-            # Step 7: Record workflow
+            # Step 7: Record workflow & cache result
             self._record_workflow(workflow_result)
+            if perf_config.enable_caching:
+                cache_manager.set(workflow_cache_key, workflow_result, perf_config.cache_ttl)
 
             logger.info(f"Workflow {workflow_id} completed successfully")
             return workflow_result
@@ -382,14 +410,24 @@ refinement session.
         })
 
         try:
-            # Step 1: Determine prompt type if set to auto
+            # ── Fast path: check workflow-level cache ────────────────────
+            if perf_config.enable_caching:
+                workflow_cache_key = generate_prompt_cache_key(prompt, prefix="mem_workflow")
+                cached_workflow = cache_manager.get(workflow_cache_key)
+                if cached_workflow:
+                    logger.info(f"Workflow cache hit for {workflow_id}")
+                    cached_workflow["workflow_id"] = workflow_id
+                    cached_workflow["metadata"] = cached_workflow.get("metadata", {})
+                    cached_workflow["metadata"]["cache_hit"] = True
+                    cached_workflow["metadata"]["processing_time_seconds"] = 0.0
+                    self._record_workflow(cached_workflow)
+                    return cached_workflow
+
+            # Step 1 + 2: Classify domain & auto-detect prompt type (pure heuristics, instant)
+            classification_result = await self.classifier.classify_prompt(prompt)
             if prompt_type == "auto":
                 prompt_type = await self.classifier.classify_prompt_type(prompt)
                 logger.info(f"Auto-detected prompt type: {prompt_type}")
-
-            # Step 2: Classify domain
-            logger.info("Step 1: Classifying domain...")
-            classification_result = await self.classifier.classify_prompt(prompt)
             domain = classification_result["domain"]
 
             # Step 3: Get or create expert agent
@@ -453,8 +491,10 @@ refinement session.
                 start_time=start_time
             )
 
-            # Step 8: Record workflow
+            # Step 8: Record workflow & cache result
             self._record_workflow(workflow_result)
+            if perf_config.enable_caching:
+                cache_manager.set(workflow_cache_key, workflow_result, perf_config.cache_ttl)
 
             logger.info(f"Memory-enhanced workflow {workflow_id} completed successfully")
             return workflow_result
@@ -698,11 +738,19 @@ refinement session.
 
     def _record_workflow(self, workflow_result: Dict[str, Any]):
         """Record the workflow result in history and update domain learning."""
+        self._ensure_history()
         self.workflow_history.append(workflow_result)
 
         # Keep only the last 100 workflows to prevent memory issues
         if len(self.workflow_history) > 100:
             self.workflow_history = self.workflow_history[-100:]
+
+        # Persist to database
+        try:
+            from core.database import db
+            db.save_workflow(workflow_result)
+        except Exception as e:
+            logger.warning(f"Failed to persist workflow to database: {e}")
         
         # Extract domain information for self-learning
         domain = workflow_result.get("output", {}).get("domain")
@@ -711,10 +759,12 @@ refinement session.
 
     def get_workflow_history(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Get recent workflow history."""
+        self._ensure_history()
         return self.workflow_history[-limit:] if limit > 0 else self.workflow_history
 
     def get_workflow_stats(self) -> Dict[str, Any]:
         """Get statistics about completed workflows."""
+        self._ensure_history()
         if not self.workflow_history:
             return {"error": "No workflow history available"}
 
@@ -978,5 +1028,14 @@ def get_coordinator_instance():
         _coordinator_instance = create_coordinator()
     return _coordinator_instance
 
-# For backward compatibility, provide a coordinator instance
-coordinator = create_coordinator()
+# Lazy coordinator — avoids calling get_llm() at import time.
+_coordinator_lazy = None
+
+
+def __getattr__(name):
+    global _coordinator_lazy
+    if name == "coordinator":
+        if _coordinator_lazy is None:
+            _coordinator_lazy = create_coordinator()
+        return _coordinator_lazy
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **17 Core Feature Modules** — full production feature suite in `core/`:
+- **16 Core Feature Modules** — full production feature suite in `core/`:
   - `auth.py` — API key authentication with CRUD management
   - `batch.py` — concurrent batch prompt processing with progress tracking
   - `complexity.py` — prompt complexity analysis and scoring
@@ -25,9 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `streaming.py` — SSE streaming for real-time workflow progress
   - `templates.py` — prompt template management and versioning
   - `webhooks.py` — event-driven webhook notifications
-- **87 API Routes** — comprehensive REST API covering all features
+- **86 API Routes** — comprehensive REST API covering all features
 - **SQLite Database** — persistent storage for templates, API keys, analytics, and batch jobs
-- **DEPLOYMENT.md** — Complete step-by-step Render.com deployment guide with rollback procedures
 - **ARCHITECTURE.md** — System overview diagrams, component descriptions, data flow, and agent interaction maps
 - **PREFLIGHT_CHECKLIST.md** — Pre-deployment validation checklist covering docs, security, deps, and config
 - **.env.example** — Comprehensive environment variable template with all providers and settings documented
@@ -54,13 +53,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CONTRIBUTING.md** — updated to reflect current architecture and tooling
 - **CHANGELOG.md** — consolidated all versions, documented as v3.0.0 production-ready
 - **LICENSE** — updated copyright to 2025-2026 Abdulrahman Baidaq
-- **render.yaml** — verified and confirmed as primary deployment configuration
 - **Agent documentation** — updated header comments on all agent files
 - **`pyproject.toml`** — updated to v3.0.0 with Production/Stable status
 - **`.gitignore`** — reorganized with clear section headers and comprehensive coverage
 - **Repository structure** — reorganized for professional layout:
   - `tools/` → `scripts/` (clearer naming convention)
-  - Deployment guides consolidated to `DEPLOYMENT.md`
   - Development reports moved to `docs/`
   - Runtime data cleaned from version control
 
@@ -68,8 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Dockerfile.hf** — Removed unused Hugging Face Spaces Dockerfile
 - **.koyeb.yaml** — Removed unused Koyeb deployment configuration
-- **docs/deployment/koyeb.md** — Removed Koyeb deployment guide (consolidated to Render)
-- **docs/deployment/huggingface.md** — Removed Hugging Face deployment guide (consolidated to Render)
+- **docs/deployment/koyeb.md** — Removed Koyeb deployment guide
+- **docs/deployment/huggingface.md** — Removed Hugging Face deployment guide
 
 ### Fixed
 
@@ -77,7 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pydantic deprecation warnings from v1 compatibility imports
 - Missing key handling in `evaluate_node` causing KeyError on certain agent outputs
 - License copyright holder updated from generic to project author
-- All deployment documentation consolidated to single recommended platform (Render.com)
 
 ---
 
@@ -91,8 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Version Control** — full prompt version history with lineage tracking and rollback
 - **Optimization Analytics** — run metrics, domain breakdown, improvement trends, and dashboard data
 - **API Endpoints** — `/api/providers`, `/api/optimization/dashboard`, `/api/optimization/analytics`, `/api/optimization/ab-tests`, `/api/optimization/versions`
-- **CI/CD Pipeline** — GitHub Actions workflow with lint, test, security scan, and Docker build stages
-- **Deployment Configs** — Render.com (`render.yaml`), Hugging Face Spaces (`Dockerfile.hf`), Docker multi-stage build
+- **CI/CD Pipeline** — GitHub Actions workflow with lint, test, and security scan stages
 - **Project Metadata** — `pyproject.toml` with Ruff, pytest, coverage, mypy, and bandit configurations
 - **Comprehensive Test Suite** — tests for LLM providers, optimization engine, A/B testing, version control, analytics
 - **Shared Test Fixtures** — `conftest.py` with mock agents, sample data, and environment isolation
@@ -120,5 +115,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Memory/RAG system for conversation context
 - Security layer (PII detection, injection prevention, rate limiting)
 - Caching, circuit breakers, dead letter queues
-- Docker containerization
 - Basic test suite

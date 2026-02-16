@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Bot, BarChart3, Layers, Activity, Menu, ChevronLeft, Keyboard } from 'lucide-react';
+import { Bot, BarChart3, Layers, Menu, ChevronLeft, Keyboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils';
 
@@ -12,9 +12,8 @@ interface SidebarProps {
 
 const navItems = [
   { to: '/', icon: Bot, label: 'Prompt Processor', matchPaths: ['/', '/processor'], shortcut: 'Alt+1' },
-  { to: '/dashboard', icon: BarChart3, label: 'Overview', matchPaths: ['/dashboard'], shortcut: 'Alt+2' },
+  { to: '/dashboard', icon: BarChart3, label: 'Dashboard', matchPaths: ['/dashboard'], shortcut: 'Alt+2' },
   { to: '/templates', icon: Layers, label: 'Templates', matchPaths: ['/templates'], shortcut: 'Alt+3' },
-  { to: '/system-health', icon: Activity, label: 'System Health', matchPaths: ['/system-health'], shortcut: 'Alt+4' },
 ];
 
 export function Sidebar({ collapsed, onToggle, children, bottomContent }: SidebarProps) {

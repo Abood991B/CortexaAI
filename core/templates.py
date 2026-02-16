@@ -38,7 +38,8 @@ class TemplateEngine:
         return {**data, "id": template_id}
 
     def create(self, name: str, domain: str, template_text: str,
-               description: str = "", variables: Optional[List[str]] = None) -> Dict[str, Any]:
+               description: str = "", variables: Optional[List[str]] = None,
+               is_public: bool = True) -> Dict[str, Any]:
         """Convenience: create a template from keyword args."""
         data = {
             "name": name,
@@ -47,8 +48,35 @@ class TemplateEngine:
             "description": description,
             "variables": variables or re.findall(r"\{\{(\w+)\}\}", template_text),
             "tags": [domain],
+            "author": "user",
+            "is_public": is_public,
         }
         return self.create_template(data)
+
+    def update_template(self, template_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update an existing user-created template."""
+        existing = db.get_template(template_id)
+        if not existing:
+            return None
+        if existing.get("author", "system") == "system":
+            return {"error": "Cannot edit system templates"}
+
+        updated = db.update_template(template_id, data)
+        if updated:
+            logger.info(f"Updated template {template_id}")
+        return updated
+
+    def delete_template(self, template_id: str) -> bool:
+        """Delete a user-created template. System templates cannot be deleted."""
+        existing = db.get_template(template_id)
+        if not existing:
+            return False
+        if existing.get("author", "system") == "system":
+            return False
+
+        db.delete_template(template_id)
+        logger.info(f"Deleted template {template_id}")
+        return True
 
     def get_templates(self, domain: str = None, limit: int = 200) -> List[Dict[str, Any]]:
         """Retrieve templates, optionally filtered by domain."""
@@ -108,20 +136,21 @@ class TemplateEngine:
     # ------------------------------------------------------------------
 
     def _seed_defaults(self):
-        """Seed built-in templates, replacing all old templates with Claude Library ones."""
+        """Seed built-in templates. Only manages system templates — never touches user templates."""
         existing = db.get_templates(limit=500)
         existing_names = {t["name"] for t in existing}
 
         defaults = self._get_default_templates()
         default_names = {t["name"] for t in defaults}
 
-        # Remove any templates not in the new defaults (cleanup old ones)
+        # Only remove OLD system templates that are no longer in defaults.
+        # NEVER delete user-created templates (author != 'system').
         with db.connection() as conn:
             for tpl in existing:
-                if tpl["name"] not in default_names:
+                if tpl.get("author", "system") == "system" and tpl["name"] not in default_names:
                     try:
                         conn.execute(
-                            "DELETE FROM templates WHERE id = ?",
+                            "DELETE FROM templates WHERE id = ? AND author = 'system'",
                             (tpl["id"],),
                         )
                     except Exception:

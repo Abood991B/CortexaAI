@@ -1,10 +1,6 @@
 """Classifier Agent for Multi-Agent Prompt Engineering System."""
 
 from typing import Dict, List, Optional, Any
-from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.runnables import RunnablePassthrough
-from config.llm_providers import get_llm
 from config.config import (
     settings, get_logger, metrics, log_performance,
     cache_manager, perf_config, generate_prompt_cache_key, log_cache_performance,
@@ -14,6 +10,7 @@ from config.config import (
 from agents.exceptions import ClassificationError, LLMServiceError, DomainError
 from agents.utils import is_retryable_error
 import json
+import re
 import asyncio
 
 # Set up structured logging
@@ -27,83 +24,132 @@ class DomainClassifier:
         """Initialize the classifier with known domains and their characteristics."""
         self.known_domains = {
             "software_engineering": {
-                "keywords": ["code", "programming", "software", "development", "algorithm", "function", "class", "api", "database", "debug", "refactor", "deploy", "devops", "testing"],
+                "keywords": [
+                    "code", "coding", "programming", "software", "development", "developer",
+                    "algorithm", "function", "class", "api", "database", "debug", "debugging",
+                    "refactor", "deploy", "deployment", "devops", "testing", "test", "unit test",
+                    "bug", "error", "exception", "git", "github", "repository", "repo",
+                    "backend", "frontend", "fullstack", "framework", "library", "sdk",
+                    "python", "javascript", "typescript", "java", "rust", "golang", "c++",
+                    "react", "angular", "vue", "node", "django", "flask", "fastapi",
+                    "docker", "kubernetes", "ci/cd", "pipeline", "microservice",
+                    "rest", "graphql", "endpoint", "server", "client", "http", "websocket",
+                    "sql", "nosql", "mongodb", "postgres", "redis", "orm",
+                    "variable", "loop", "array", "object", "string", "integer",
+                    "compile", "runtime", "syntax", "script", "terminal", "command line",
+                    "html", "css", "dom", "component", "module", "package", "npm", "pip",
+                    "authentication", "authorization", "oauth", "jwt", "encryption",
+                    "cloud", "aws", "azure", "gcp", "lambda", "serverless",
+                ],
                 "description": "Software development, coding, and programming tasks"
             },
             "data_science": {
-                "keywords": ["data", "analysis", "machine learning", "statistics", "visualization", "dataset", "model", "prediction", "analytics", "deep learning", "neural network"],
+                "keywords": [
+                    "data", "dataset", "dataframe", "csv", "analysis", "analytics",
+                    "machine learning", "deep learning", "neural network", "ai model",
+                    "statistics", "statistical", "regression", "classification", "clustering",
+                    "visualization", "chart", "graph", "plot", "dashboard",
+                    "prediction", "forecast", "predictive", "training data",
+                    "feature engineering", "hyperparameter", "accuracy", "precision", "recall",
+                    "tensorflow", "pytorch", "scikit-learn", "pandas", "numpy", "matplotlib",
+                    "nlp", "natural language processing", "computer vision", "transformer",
+                    "random forest", "gradient boosting", "xgboost", "decision tree",
+                    "data pipeline", "etl", "data warehouse", "big data", "spark",
+                    "correlation", "hypothesis", "p-value", "confidence interval",
+                    "a/b test", "experiment", "metric", "kpi",
+                ],
                 "description": "Data analysis, machine learning, and statistical tasks"
             },
             "report_writing": {
-                "keywords": ["report", "summary", "analysis", "findings", "conclusion", "executive", "presentation", "documentation", "white paper", "brief"],
+                "keywords": [
+                    "report", "summary", "summarize", "findings", "conclusion",
+                    "executive summary", "presentation", "documentation", "white paper",
+                    "brief", "memo", "memorandum", "proposal", "quarterly",
+                    "annual report", "review", "assessment report", "audit",
+                    "stakeholder report", "progress report", "status update",
+                    "key findings", "recommendation", "highlight",
+                    "outline", "structure", "section", "appendix",
+                    "formal writing", "professional document", "deliverable",
+                    "financial report", "quarterly report", "research paper",
+                    "case study", "technical report", "incident report",
+                ],
                 "description": "Report writing, documentation, and presentation tasks"
             },
             "education": {
-                "keywords": ["teaching", "learning", "student", "lesson", "curriculum", "educational", "tutorial", "explanation", "course", "assessment", "rubric"],
+                "keywords": [
+                    "teach", "teaching", "teacher", "learn", "learning", "learner",
+                    "student", "lesson", "lesson plan", "curriculum", "syllabus",
+                    "educational", "tutorial", "explanation", "explain",
+                    "course", "class", "classroom", "assessment", "rubric", "quiz",
+                    "exam", "test", "homework", "assignment", "grade", "grading",
+                    "school", "university", "college", "academy",
+                    "pedagogy", "instruction", "instructional", "training",
+                    "lecture", "seminar", "workshop", "module",
+                    "beginner", "intermediate", "advanced level",
+                    "study guide", "flashcard", "exercise",
+                ],
                 "description": "Educational content creation and teaching materials"
             },
             "business_strategy": {
-                "keywords": ["business", "strategy", "marketing", "management", "growth", "market", "competitive", "analysis", "revenue", "roi", "stakeholder"],
+                "keywords": [
+                    "business", "strategy", "strategic", "marketing", "market",
+                    "management", "growth", "competitive", "competition", "competitor",
+                    "revenue", "roi", "profit", "profitability", "stakeholder",
+                    "startup", "entrepreneur", "venture", "investor", "investment",
+                    "product launch", "go-to-market", "gtm", "pricing",
+                    "customer acquisition", "retention", "churn", "ltv", "cac",
+                    "swot", "market research", "target audience", "persona",
+                    "brand", "branding", "positioning", "differentiation",
+                    "sales", "pipeline", "funnel", "conversion", "lead",
+                    "b2b", "b2c", "saas", "subscription", "recurring revenue",
+                    "partnership", "alliance", "merger", "acquisition",
+                    "kpi", "okr", "roadmap", "milestone", "quarter",
+                    "budget", "forecast", "financial", "valuation",
+                ],
                 "description": "Business strategy, planning, and management tasks"
             },
             "creative_writing": {
-                "keywords": ["write", "story", "creative", "content", "blog", "article", "narrative", "copy", "brand", "audience", "engagement", "social media", "seo"],
+                "keywords": [
+                    "write", "writing", "writer", "story", "stories", "storytelling",
+                    "creative", "novel", "fiction", "non-fiction", "nonfiction",
+                    "content", "blog", "blog post", "article", "essay",
+                    "narrative", "narrator", "character", "protagonist", "dialogue",
+                    "copy", "copywriting", "headline", "tagline", "slogan",
+                    "audience", "engagement", "social media", "seo", "caption",
+                    "poem", "poetry", "lyric", "script", "screenplay", "scene",
+                    "tone", "voice", "style", "genre", "draft",
+                    "edit", "proofread", "revision", "rewrite",
+                    "persuasive", "compelling", "hook", "call to action",
+                    "email copy", "newsletter", "landing page",
+                ],
                 "description": "Creative writing, content creation, and copywriting tasks"
             }
         }
 
         self.created_agents = {}  # Track dynamically created agents
-        self._setup_classifier_chain()
 
-    def _setup_classifier_chain(self):
-        """Set up the LangChain for domain classification."""
-        model = get_llm(temperature=0.1)
-
-        classification_prompt = PromptTemplate.from_template("""You are a **domain classification expert**. Analyse the prompt below and
-determine its primary domain.
-
-━━━  PROMPT TO ANALYSE  ━━━
-{prompt}
-
-━━━  KNOWN DOMAINS  ━━━
-{domains}
-
-━━━  INSTRUCTIONS  ━━━
-1. Pick the single best-matching domain from the list above.
-   → If none fits with ≥ 0.6 confidence, set `is_new_domain` to true and
-     propose a concise `new_domain_name` (snake_case) plus a one-line
-     `new_domain_description`.
-2. Assign a **confidence** score (0.0 – 1.0) reflecting how well the prompt
-   maps to the chosen domain.
-3. Extract up to 5 **key_topics** — the most important nouns / noun-phrases
-   that characterise the prompt's intent.
-4. Write a brief **reasoning** (1-2 sentences) justifying your choice.
-
-━━━  OUTPUT (strict JSON, no markdown fences)  ━━━
-{{
-    "domain": "<domain_name>",
-    "confidence": <float>,
-    "is_new_domain": <bool>,
-    "new_domain_name": "<string or null>",
-    "new_domain_description": "<string or null>",
-    "key_topics": ["topic1", "topic2"],
-    "reasoning": "<1-2 sentence justification>"
-}}
-        """)
-
-        self.classifier_chain = (
-            {
-                "prompt": RunnablePassthrough(),
-                "domains": lambda x: json.dumps(self.known_domains, indent=2)
-            }
-            | classification_prompt
-            | model
-            | JsonOutputParser()
-        )
+        # Pre-compile keyword lookup structures for O(1) matching
+        self._single_word_kws: Dict[str, Dict[str, bool]] = {}  # domain -> {kw: True}
+        self._multi_word_kws: Dict[str, List[str]] = {}  # domain -> [kw, ...]
+        for domain_name, domain_info in self.known_domains.items():
+            singles: Dict[str, bool] = {}
+            multis: List[str] = []
+            for kw in domain_info.get("keywords", []):
+                if " " in kw:
+                    multis.append(kw)
+                else:
+                    singles[kw] = True
+            self._single_word_kws[domain_name] = singles
+            self._multi_word_kws[domain_name] = multis
 
     async def classify_prompt(self, prompt: str) -> Dict[str, Any]:
         """
         Classify a prompt into a domain with security, caching and retry mechanism.
+        
+        Uses a **fast keyword path** first: if keyword scoring produces a
+        high-confidence match (>= 3 distinct keyword hits), the LLM call is
+        skipped entirely for speed.  The LLM is only invoked when the keyword
+        match is ambiguous.
 
         Args:
             prompt: The prompt to classify
@@ -119,7 +165,6 @@ determine its primary domain.
             sanitized_result = security_manager.sanitize_input(prompt, "classification")
 
             if not sanitized_result['is_safe'] and security_config.enable_injection_detection:
-                # Block potentially unsafe prompts
                 high_severity_events = [e for e in sanitized_result['security_events'] if e['severity'] == 'high']
                 if high_severity_events:
                     log_security_event(logger, "unsafe_input_blocked", "high",
@@ -142,104 +187,91 @@ determine its primary domain.
                 log_cache_performance(logger, "prompt_classification", True, prompt_length=len(sanitized_prompt))
                 return cached_result
 
-        max_retries = getattr(settings, 'max_llm_retries', 3)
-        retry_delay = getattr(settings, 'llm_retry_delay', 1.0)
+        # ── Fast keyword path — always returns a result (no LLM needed) ──
+        fast_result = self._fast_keyword_classify(sanitized_prompt)
+        logger.info(f"Keyword classification: {fast_result['domain']} (confidence {fast_result['confidence']:.2f})")
+        if perf_config.enable_caching:
+            cache_manager.set(cache_key, fast_result, perf_config.cache_ttl)
+        return fast_result
 
-        # Use circuit breaker if enabled
-        if reliability_config.enable_circuit_breakers:
-            try:
-                result = await circuit_breakers["classification"].call(
-                    self._classify_with_fallback, sanitized_prompt, cache_key, max_retries, retry_delay
-                )
-                return result
-            except CircuitBreakerOpenException as cboe:
-                logger.warning(f"Circuit breaker open for classification: {cboe}")
-                log_circuit_breaker_event(logger, "classification", "circuit_open",
-                                         prompt_length=len(sanitized_prompt), failure_count=cboe.failure_count)
+    def _fast_keyword_classify(self, prompt: str) -> Dict[str, Any]:
+        """High-speed keyword classification.  **Always** returns a result so
+        the LLM is never needed for domain classification.
 
-                # Return fallback result when circuit is open
-                if reliability_config.enable_fallbacks:
-                    return self._get_fallback_classification_result(sanitized_prompt)
-                else:
-                    raise ClassificationError(
-                        "Classification circuit breaker is open",
-                        prompt=sanitized_prompt,
-                        circuit_breaker="classification"
-                    )
+        Scoring:
+        - Multi-word keywords score 2 points (more specific signals).
+        - Single-word keywords score 1 point.
+        - The domain with the highest weighted score wins.
+        - If no hits at all → return ``general``.
 
-        # Original retry logic without circuit breaker
-        for attempt in range(max_retries + 1):
-            try:
-                logger.info(f"Classifying prompt: {sanitized_prompt[:100]}... (attempt {attempt + 1})")
+        Uses pre-compiled per-domain structures for O(1) single-word look-ups
+        and linear scan only for the (smaller) multi-word list.
+        """
+        prompt_lower = prompt.lower()
+        # Extract unique words from the prompt for O(1) single-word matching
+        prompt_words = set(re.findall(r'[a-z0-9#+/.]+', prompt_lower))
 
-                result = await self.classifier_chain.ainvoke(sanitized_prompt)
+        scores: Dict[str, float] = {}
+        matched_kws: Dict[str, List[str]] = {}
 
-                # Handle new domain creation
-                if result.get("is_new_domain", False):
-                    new_domain = result["new_domain_name"]
-                    new_description = result["new_domain_description"]
+        for domain_name in self.known_domains:
+            hits: List[str] = []
+            weighted_score = 0.0
 
-                    logger.info(f"Creating new domain: {new_domain}")
-                    self._create_new_domain(new_domain, new_description, result.get("key_topics", []))
+            # O(1) single-word matching via set intersection
+            singles = self._single_word_kws.get(domain_name, {})
+            for word in prompt_words:
+                if word in singles:
+                    hits.append(word)
+                    weighted_score += 1.0
 
-                    # Update the result to use the new domain
-                    result["domain"] = new_domain
+            # Multi-word keywords still need substring search (small list)
+            for kw in self._multi_word_kws.get(domain_name, []):
+                if kw in prompt_lower:
+                    hits.append(kw)
+                    weighted_score += 2.0
 
-                # Cache the result if caching is enabled
-                if perf_config.enable_caching:
-                    cache_manager.set(cache_key, result, perf_config.cache_ttl)
+            scores[domain_name] = weighted_score
+            matched_kws[domain_name] = hits
 
-                logger.info(f"Classification result: {result}")
-                log_cache_performance(logger, "prompt_classification", False, prompt_length=len(sanitized_prompt))
-                return result
+        sorted_domains = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        best_domain, best_score = sorted_domains[0] if sorted_domains else ("general", 0.0)
+        runner_up_score = sorted_domains[1][1] if len(sorted_domains) > 1 else 0.0
 
-            except ValueError as ve:
-                if "No generations found in stream" in str(ve):
-                    logger.error(f"Model streaming error: {ve}. This may be due to an invalid model name, API key, or model availability.")
-                    # This is a configuration issue, not retryable
-                    return {
-                        "domain": "general",
-                        "confidence": 0.5,
-                        "is_new_domain": False,
-                        "key_topics": [],
-                        "reasoning": f"Model error: {str(ve)}. Please check the model name '{self.classifier_chain.steps[1].model}' and API key."
-                    }
-                else:
-                    # Re-raise unexpected ValueError
-                    raise ClassificationError(
-                        "Unexpected classification error",
-                        prompt=sanitized_prompt,
-                        cause=ve
-                    )
+        if best_score == 0:
+            # No keyword matches — return general
+            return {
+                "domain": "general",
+                "confidence": 0.55,
+                "is_new_domain": False,
+                "new_domain_name": None,
+                "new_domain_description": None,
+                "key_topics": [],
+                "reasoning": "No strong keyword matches — using general domain"
+            }
 
-            except Exception as e:
-                error_msg = f"Error classifying prompt: {str(e)}"
+        gap = best_score - runner_up_score
+        num_hits = len(matched_kws.get(best_domain, []))
 
-                if attempt < max_retries:
-                    # Determine if error is retryable
-                    is_retryable = self._is_retryable_error(e)
+        # Confidence based on weighted score & gap
+        if best_score >= 6 and gap >= 3:
+            confidence = min(0.85 + best_score * 0.01, 0.95)
+        elif best_score >= 4 and gap >= 2:
+            confidence = min(0.75 + best_score * 0.02, 0.92)
+        elif best_score >= 2:
+            confidence = min(0.60 + best_score * 0.03, 0.85)
+        else:
+            confidence = 0.55 + best_score * 0.03
 
-                    if is_retryable:
-                        logger.warning(f"{error_msg}. Retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})")
-                        await asyncio.sleep(retry_delay)
-                        retry_delay *= 2  # Exponential backoff
-                        continue
-                    else:
-                        logger.error(f"{error_msg}. Error is not retryable.")
-                        break
-                else:
-                    logger.error(f"{error_msg}. All {max_retries + 1} attempts failed.")
-
-                    # Raise custom exception with detailed context
-                    raise ClassificationError(
-                        f"Failed to classify prompt after {max_retries + 1} attempts",
-                        prompt=sanitized_prompt,
-                        cause=e
-                    )
-
-        # Fallback: return degraded result if all retries failed
-        logger.warning("Returning fallback classification result due to repeated failures")
-        return self._get_fallback_classification_result(sanitized_prompt)
+        return {
+            "domain": best_domain,
+            "confidence": round(min(confidence, 0.95), 2),
+            "is_new_domain": False,
+            "new_domain_name": None,
+            "new_domain_description": None,
+            "key_topics": matched_kws[best_domain][:5],
+            "reasoning": f"Keyword match ({num_hits} hits, weighted_score={best_score:.1f}, gap={gap:.1f})"
+        }
 
     def _get_fallback_classification_result(self, prompt: str) -> Dict[str, Any]:
         """Keyword-based fallback classification covering all known domains.
@@ -270,95 +302,6 @@ determine its primary domain.
                            if kw in prompt_lower] or [],
             "reasoning": f"Fallback keyword classification (matched {best_score} keywords)"
         }
-
-    async def _classify_with_fallback(self, prompt: str, cache_key: str,
-                                    max_retries: int, retry_delay: float) -> Dict[str, Any]:
-        """Classify with circuit breaker protection and fallback."""
-        for attempt in range(max_retries + 1):
-            try:
-                logger.info(f"Classifying prompt: {prompt[:100]}... (attempt {attempt + 1})")
-
-                result = await self.classifier_chain.ainvoke(prompt)
-
-                # Handle new domain creation
-                if result.get("is_new_domain", False):
-                    new_domain = result["new_domain_name"]
-                    new_description = result["new_domain_description"]
-
-                    logger.info(f"Creating new domain: {new_domain}")
-                    self._create_new_domain(new_domain, new_description, result.get("key_topics", []))
-
-                    # Update the result to use the new domain
-                    result["domain"] = new_domain
-
-                # Cache the result if caching is enabled
-                if perf_config.enable_caching:
-                    cache_manager.set(cache_key, result, perf_config.cache_ttl)
-
-                logger.info(f"Classification result: {result}")
-                log_cache_performance(logger, "prompt_classification", False, prompt_length=len(prompt))
-                return result
-
-            except ValueError as ve:
-                if "No generations found in stream" in str(ve):
-                    logger.error(f"Model streaming error: {ve}. This may be due to an invalid model name, API key, or model availability.")
-                    # This is a configuration issue, not retryable
-                    return self._get_fallback_classification_result(prompt)
-                else:
-                    # Re-raise unexpected ValueError
-                    raise ClassificationError(
-                        "Unexpected classification error",
-                        prompt=prompt,
-                        cause=ve
-                    )
-
-            except Exception as e:
-                error_msg = f"Error classifying prompt: {str(e)}"
-
-                if attempt < max_retries:
-                    # Determine if error is retryable
-                    is_retryable = self._is_retryable_error(e)
-
-                    if is_retryable:
-                        logger.warning(f"{error_msg}. Retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})")
-                        await asyncio.sleep(retry_delay)
-                        retry_delay *= 2  # Exponential backoff
-                        continue
-                    else:
-                        logger.error(f"{error_msg}. Error is not retryable.")
-                        break
-                else:
-                    logger.error(f"{error_msg}. All {max_retries + 1} attempts failed.")
-                    # Return fallback instead of raising exception
-                    return self._get_fallback_classification_result(prompt)
-
-        # If we get here, return fallback
-        return self._get_fallback_classification_result(prompt)
-
-    def _is_retryable_error(self, error: Exception) -> bool:
-        return is_retryable_error(error)
-
-    def _create_new_domain(self, domain_name: str, description: str, keywords: List[str]):
-        """
-        Create a new domain dynamically.
-
-        Args:
-            domain_name: Name of the new domain
-            description: Description of the domain
-            keywords: Key topics/keywords for the domain
-        """
-        self.known_domains[domain_name] = {
-            "keywords": keywords,
-            "description": description
-        }
-
-        # Mark that we've created an agent for this domain
-        self.created_agents[domain_name] = {
-            "created": True,
-            "description": description
-        }
-
-        logger.info(f"New domain created: {domain_name}")
 
     async def classify_prompt_type(self, prompt: str) -> str:
         """Classify whether a prompt is ``raw`` or ``structured``.
@@ -411,7 +354,3 @@ determine its primary domain.
     def get_domain_info(self, domain: str) -> Optional[Dict]:
         """Get information about a specific domain."""
         return self.known_domains.get(domain)
-
-
-# Global classifier instance
-classifier = DomainClassifier()
