@@ -966,7 +966,8 @@ export function PromptProcessor() {
       return_comparison: true,
       use_langgraph: selectedModel === 'langgraph',
       chat_history: chatHistory,
-      advanced_mode: isConversationMode
+      advanced_mode: isConversationMode,
+      user_id: userId,
     };
 
     try {
@@ -1157,6 +1158,7 @@ export function PromptProcessor() {
           domain,
           use_langgraph: selectedModel === 'langgraph',
           user_feedback: feedback || null,
+          user_id: userId,
         }),
         signal: abortCtrl.signal,
       });

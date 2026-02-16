@@ -442,6 +442,7 @@ async def process_prompt_stream(request: PromptRequest):
             use_langgraph=request.use_langgraph,
             coordinator=coordinator,
             langgraph_fn=process_prompt_with_langgraph if request.use_langgraph else None,
+            user_id=request.user_id,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -459,6 +460,7 @@ class ReiterateRequest(BaseModel):
     domain: str = "general"
     use_langgraph: bool = False
     user_feedback: Optional[str] = None
+    user_id: Optional[str] = None
 
 
 @router.post("/api/process-prompt/reiterate/stream")
@@ -474,6 +476,7 @@ async def reiterate_stream(request: ReiterateRequest):
             use_langgraph=request.use_langgraph,
             user_feedback=request.user_feedback,
             coordinator=coordinator,
+            user_id=request.user_id,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

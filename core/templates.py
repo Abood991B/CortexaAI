@@ -39,7 +39,7 @@ class TemplateEngine:
 
     def create(self, name: str, domain: str, template_text: str,
                description: str = "", variables: Optional[List[str]] = None,
-               is_public: bool = True) -> Dict[str, Any]:
+               is_public: bool = True, owner_id: Optional[str] = None) -> Dict[str, Any]:
         """Convenience: create a template from keyword args."""
         data = {
             "name": name,
@@ -49,38 +49,47 @@ class TemplateEngine:
             "variables": variables or re.findall(r"\{\{(\w+)\}\}", template_text),
             "tags": [domain],
             "author": "user",
+            "owner_id": owner_id,
             "is_public": is_public,
         }
         return self.create_template(data)
 
-    def update_template(self, template_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Update an existing user-created template."""
+    def update_template(self, template_id: str, data: Dict[str, Any], user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Update an existing user-created template. Only the owner can edit."""
         existing = db.get_template(template_id)
         if not existing:
             return None
         if existing.get("author", "system") == "system":
             return {"error": "Cannot edit system templates"}
+        # Ownership check: only the owner can edit
+        owner = existing.get("owner_id")
+        if owner and user_id and owner != user_id:
+            return {"error": "You do not have permission to edit this template"}
 
         updated = db.update_template(template_id, data)
         if updated:
             logger.info(f"Updated template {template_id}")
         return updated
 
-    def delete_template(self, template_id: str) -> bool:
-        """Delete a user-created template. System templates cannot be deleted."""
+    def delete_template(self, template_id: str, user_id: Optional[str] = None) -> dict:
+        """Delete a user-created template. System templates cannot be deleted. Returns status dict."""
         existing = db.get_template(template_id)
         if not existing:
-            return False
+            return {"error": "not_found"}
         if existing.get("author", "system") == "system":
-            return False
+            return {"error": "Cannot delete system templates"}
+        # Ownership check: only the owner can delete
+        owner = existing.get("owner_id")
+        if owner and user_id and owner != user_id:
+            return {"error": "You do not have permission to delete this template"}
 
         db.delete_template(template_id)
         logger.info(f"Deleted template {template_id}")
-        return True
+        return {"status": "deleted"}
 
-    def get_templates(self, domain: str = None, limit: int = 200) -> List[Dict[str, Any]]:
+    def get_templates(self, domain: str = None, limit: int = 200, user_id: str = None) -> List[Dict[str, Any]]:
         """Retrieve templates, optionally filtered by domain."""
-        return db.get_templates(domain=domain, limit=limit)
+        return db.get_templates(domain=domain, limit=limit, user_id=user_id)
 
     # Aliases used by the API layer
     list_all = get_templates
@@ -117,9 +126,9 @@ class TemplateEngine:
     # Alias
     render = render_template
 
-    def search_templates(self, query: str, domain: str = None) -> List[Dict[str, Any]]:
+    def search_templates(self, query: str, domain: str = None, user_id: str = None) -> List[Dict[str, Any]]:
         """Search templates by keyword in name/description/tags."""
-        all_templates = db.get_templates(domain=domain, limit=200)
+        all_templates = db.get_templates(domain=domain, limit=200, user_id=user_id)
         q = query.lower()
         results = []
         for tpl in all_templates:

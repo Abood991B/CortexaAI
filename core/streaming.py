@@ -31,6 +31,7 @@ async def stream_workflow(
     use_langgraph: bool = False,
     coordinator=None,
     langgraph_fn=None,
+    user_id: str = None,
 ) -> AsyncGenerator[str, None]:
     """
     Async generator that yields SSE events as a workflow progresses.
@@ -72,6 +73,9 @@ async def stream_workflow(
                 cached_copy["workflow_id"] = f"sse_cached_{int(time.time())}"
                 cached_copy["metadata"] = cached_copy.get("metadata", {})
                 cached_copy["metadata"]["is_cache_hit"] = True
+                cached_copy["metadata"]["user_id"] = user_id
+                if "input" in cached_copy:
+                    cached_copy["input"]["user_id"] = user_id
                 try:
                     coordinator._record_workflow(cached_copy)
                 except Exception:
@@ -148,6 +152,7 @@ async def stream_workflow(
             "input": {
                 "original_prompt": prompt,
                 "prompt_type": prompt_type,
+                "user_id": user_id,
             },
             "output": {
                 "optimized_prompt": improved_prompt,
@@ -170,6 +175,7 @@ async def stream_workflow(
             },
             "metadata": {
                 "framework": "langgraph" if use_langgraph else "standard",
+                "user_id": user_id,
             },
         }
 
@@ -211,6 +217,7 @@ async def stream_reiterate(
     use_langgraph: bool = False,
     user_feedback: str | None = None,
     coordinator=None,
+    user_id: str = None,
 ) -> AsyncGenerator[str, None]:
     """SSE generator that takes an *already-optimized* prompt and refines it
     further.  Steps:
@@ -330,6 +337,7 @@ async def stream_reiterate(
                 "original_prompt": original_prompt,
                 "previous_prompt": current_prompt,
                 "prompt_type": "structured",
+                "user_id": user_id,
             },
             "output": {
                 "optimized_prompt": improved_prompt,
@@ -354,6 +362,7 @@ async def stream_reiterate(
             "metadata": {
                 "framework": "langgraph" if use_langgraph else "standard",
                 "is_reiteration": True,
+                "user_id": user_id,
             },
         }
 

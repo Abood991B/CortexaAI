@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/badge/FastAPI-0.116+-009688?logo=fastapi&logoColor=white" alt="FastAPI">
     <img src="https://img.shields.io/badge/LangGraph-0.6+-purple" alt="LangGraph">
     <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white" alt="React 18">
-    <img src="https://img.shields.io/badge/Version-3.0.1-green" alt="Version 3.0.1">
+    <img src="https://img.shields.io/badge/Version-3.0.2-green" alt="Version 3.0.2">
   </p>
 </p>
 
@@ -79,8 +79,8 @@ CortexaAI is an advanced multi-agent system that automatically classifies, optim
 
 ### Additional Features
 
-- **Prompt Templates Library** — Curated, domain-specific templates with variable substitution (sourced from Anthropic's official Prompt Library)
-- **Prompt Marketplace** — Publish, search, download, and rate community prompt templates
+- **Prompt Templates Library** — Curated, domain-specific templates with variable substitution, real-time collaborative editing, and privacy controls (public/private templates)
+- **Prompt Marketplace** — Publish, search, download, and rate community prompt templates with complete user isolation and live updates across all active sessions
 - **Visual Prompt Builder** — Composable block-based assembly (Role → Context → Task → Constraints → Output Format → Examples)
 - **Plugin Architecture** — Extend experts, evaluators, or add custom pipeline steps
 - **Regression Testing** — Define test suites, run against baselines, detect prompt quality regressions
@@ -90,10 +90,10 @@ CortexaAI is an advanced multi-agent system that automatically classifies, optim
 - **API Key Authentication** — SHA-256 hashed keys with scoped permissions (read/write/admin) and rate limiting
 - **Webhook Notifications** — HTTP POST callbacks on workflow events with retry and exponential backoff
 - **Memory Context** — Optional conversation memory for user-specific prompt processing
-- **Error Recovery** — Structured error taxonomy, workflow-level retry with exponential backoff, circuit breakers, and error analytics
+- **Error Recovery** — Structured error taxonomy, workflow-level retry with exponential backoff, circuit breakers, error analytics, and graceful audio notification handling
 - **SQLite Persistence** — Workflows, templates, marketplace items, and user data stored with WAL journaling
 - **LangSmith Integration** — Optional tracing and observability
-- **Security** — Input sanitization, injection detection, rate limiting, and content safety checks
+- **Security** — Input sanitization, injection detection, rate limiting, content safety checks, complete user data isolation, and privacy-first template management
 
 ## 🛠️ Technology Stack
 
@@ -472,6 +472,7 @@ All configuration is managed via environment variables (loaded from `.env`):
 | `HOST` | `0.0.0.0` | Server bind host |
 | `PORT` | `8000` | Server bind port |
 | `LOG_LEVEL` | `INFO` | Logging level |
+| `PRODUCTION_MODE` | `true` | Enable production logging (suppress third-party noise) |
 | `EVALUATION_THRESHOLD` | `0.82` | Minimum quality score to pass |
 | `MAX_EVALUATION_ITERATIONS` | `1` | Max improve/evaluate loops |
 | `MAX_LLM_RETRIES` | `1` | LLM call retry count |

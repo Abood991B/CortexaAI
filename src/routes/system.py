@@ -2,7 +2,7 @@
 
 import time
 import asyncio
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from fastapi import APIRouter, HTTPException
 import psutil
@@ -306,10 +306,10 @@ async def get_recent_errors(limit: int = 20):
 # ---------------------------------------------------------------------------
 
 @router.get("/api/dashboard")
-async def get_dashboard():
-    """Aggregated dashboard."""
+async def get_dashboard(user_id: Optional[str] = None):
+    """Aggregated dashboard with optional user filtering."""
     return {
-        "database": db.get_dashboard_stats(),
+        "database": db.get_dashboard_stats(user_id=user_id),
         "cache": {"stats": metrics.get_metrics()},
         "optimization": optimization_engine.get_dashboard_data(),
         "plugins": plugin_manager.list_plugins(),

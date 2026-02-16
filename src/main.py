@@ -160,12 +160,16 @@ def main():
     logger.info(f"API Docs: http://{settings.host}:{settings.port}/docs")
     logger.info(f"Providers: {', '.join(llm_provider.get_available_providers()) or 'None (check .env)'}")
 
+    # Determine if running in development mode
+    is_development = os.getenv("CORTEXAAI_ENV", "development").lower() == "development"
+    
     uvicorn.run(
         "src.main:app",
         host=settings.host,
         port=settings.port,
-        reload=os.getenv("CORTEXAAI_ENV", "development").lower() == "development",
+        reload=is_development,
         log_level=settings.log_level.lower(),
+        access_log=not settings.production_mode,  # Disable access logs in production
     )
 
 

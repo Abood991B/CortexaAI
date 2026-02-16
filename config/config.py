@@ -42,6 +42,7 @@ class Settings(BaseSettings):
 
     # System Configuration
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
+    production_mode: bool = Field(default=True, env="PRODUCTION_MODE")
     max_evaluation_iterations: int = Field(default=1, env="MAX_EVALUATION_ITERATIONS")
     evaluation_threshold: float = Field(default=0.82, env="EVALUATION_THRESHOLD")
     
@@ -241,10 +242,36 @@ def setup_structured_logging():
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
-    # Create component-specific loggers
+    # Suppress noisy third-party libraries in production mode
+    if settings.production_mode:
+        noisy_loggers = [
+            'watchfiles.main',          # File change detection spam
+            'watchfiles',               # General watchfiles logging
+            'httpx',                   # HTTP request logging
+            'httpcore',                # HTTP core logging  
+            'google.ai.generativelanguage',  # Google AI API
+            'google.generativeai',     # Google GenerativeAI SDK
+            'google_genai',           # Alternative google AI logger
+            'uvicorn.error',          # Uvicorn error logging
+            'uvicorn.access',         # Uvicorn access logging (can be noisy)
+            'asyncio',                # Async event loop warnings
+            'urllib3.connectionpool', # HTTP connection pool
+            'requests.packages.urllib3', # Requests urllib3 warnings
+            'aiosqlite',              # SQLite async warnings
+            'fastapi',                # FastAPI framework noise
+        ]
+        
+        for logger_name in noisy_loggers:
+            logger = logging.getLogger(logger_name)
+            logger.setLevel(logging.WARNING)
+            
+        # Set INFO level for core uvicorn logger (keep startup/shutdown messages)
+        logging.getLogger('uvicorn').setLevel(logging.INFO)
+    
+    # Create component-specific loggers for our application
     component_loggers = [
         'agents.coordinator',
-        'agents.classifier',
+        'agents.classifier', 
         'agents.base_expert',
         'agents.evaluator',
         'src.main',

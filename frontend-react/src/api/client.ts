@@ -61,13 +61,19 @@ class ApiClient {
 
 
   // System Information
-  async getStats(signal?: AbortSignal): Promise<SystemStats> {
-    const response = await this.client.get('/api/stats', { signal });
+  async getStats(userId?: string, signal?: AbortSignal): Promise<SystemStats> {
+    const params = userId ? `?user_id=${userId}` : '';
+    const response = await this.client.get(`/api/stats${params}`, { signal });
     return response.data;
   }
 
-  async getHistory(limit: number = 10, signal?: AbortSignal): Promise<WorkflowHistory[]> {
-    const response = await this.client.get(`/api/history?limit=${limit}`, { signal });
+  async getHistory(limit: number = 10, userId?: string, signal?: AbortSignal): Promise<WorkflowHistory[]> {
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    if (userId) {
+      params.append('user_id', userId);
+    }
+    const response = await this.client.get(`/api/history?${params.toString()}`, { signal });
     return response.data;
   }
 
@@ -105,10 +111,11 @@ class ApiClient {
   }
 
   // ─── Templates ──────────────────────────────────────────────
-  async getTemplates(domain?: string, query?: string): Promise<any> {
+  async getTemplates(domain?: string, query?: string, userId?: string): Promise<any> {
     const params = new URLSearchParams();
     if (domain) params.set('domain', domain);
     if (query) params.set('query', query);
+    if (userId) params.set('user_id', userId);
     const qs = params.toString();
     const response = await this.client.get(`/api/templates${qs ? '?' + qs : ''}`);
     return response.data;
@@ -127,6 +134,7 @@ class ApiClient {
     description?: string;
     variables?: string[];
     is_public?: boolean;
+    user_id?: string;
   }): Promise<PromptTemplate> {
     const response = await this.client.post('/api/templates', data);
     return response.data;
@@ -140,14 +148,16 @@ class ApiClient {
     description?: string;
     variables?: string[];
     is_public?: boolean;
+    user_id?: string;
   }): Promise<PromptTemplate> {
     const response = await this.client.put(`/api/templates/${templateId}`, data);
     return response.data;
   }
 
   // ─── Template Delete ────────────────────────────────────────
-  async deleteTemplate(templateId: string): Promise<void> {
-    await this.client.delete(`/api/templates/${templateId}`);
+  async deleteTemplate(templateId: string, userId?: string): Promise<void> {
+    const params = userId ? `?user_id=${userId}` : '';
+    await this.client.delete(`/api/templates/${templateId}${params}`);
   }
 
   // ─── Complexity Analysis ────────────────────────────────────

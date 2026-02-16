@@ -100,6 +100,26 @@ type SortOption = 'favorites' | 'name-asc' | 'name-desc' | 'domain';
 
 export function Templates() {
   const navigate = useNavigate();
+
+  // Get userId from localStorage (consistent with Dashboard/PromptProcessor)
+  const [userId] = useState(() => {
+    // Check the canonical key first, then legacy key for backward compat
+    let id = localStorage.getItem('cortexa_userId') || sessionStorage.getItem('cortexa_userId');
+    if (!id) {
+      const legacyId = localStorage.getItem('userId');
+      if (legacyId) {
+        id = legacyId;
+        localStorage.setItem('cortexa_userId', id);
+        sessionStorage.setItem('cortexa_userId', id);
+      } else {
+        id = `user_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+        localStorage.setItem('cortexa_userId', id);
+        sessionStorage.setItem('cortexa_userId', id);
+      }
+    }
+    return id;
+  });
+
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedSource, setSelectedSource] = useState<TemplateSource | ''>('');
@@ -140,7 +160,7 @@ export function Templates() {
     });
   }, []);
 
-  const { data: templates, isLoading: tplLoading, refetch: refetchTemplates } = useTemplates();
+  const { data: templates, isLoading: tplLoading, refetch: refetchTemplates } = useTemplates(undefined, undefined, userId);
   const renderMut = useRenderTemplate();
   const createMut = useCreateTemplate();
   const updateMut = useUpdateTemplate();
@@ -557,7 +577,7 @@ export function Templates() {
                           <><Copy className="h-3 w-3" /> Copy</>
                         )}
                       </Button>
-                      {source === 'custom' && (
+                      {source === 'custom' && tpl.owner_id === userId && (
                         <>
                           <Button
                             size="sm"
@@ -707,7 +727,7 @@ export function Templates() {
                         >
                           {copiedTemplate === tpl.name ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
                         </Button>
-                        {source === 'custom' && (
+                        {source === 'custom' && tpl.owner_id === userId && (
                           <>
                             <Button
                               size="sm"
@@ -916,10 +936,13 @@ export function Templates() {
                     description: newTemplate.description.trim() || undefined,
                     variables: variables.length > 0 ? variables : undefined,
                     is_public: newTemplate.is_public,
+                    user_id: userId,
                   }, {
                     onSuccess: () => {
                       setIsCreateOpen(false);
                       setNewTemplate({ name: '', domain: '', template_text: '', description: '', variableInput: '', is_public: true });
+                      // Explicitly refetch templates to ensure UI refresh
+                      refetchTemplates();
                     }
                   });
                 }}
@@ -1020,9 +1043,14 @@ export function Templates() {
                       description: editTemplate.description.trim() || undefined,
                       variables: variables.length > 0 ? variables : undefined,
                       is_public: editTemplate.is_public,
+                      user_id: userId,
                     },
                   }, {
-                    onSuccess: () => setEditTemplate(null),
+                    onSuccess: () => {
+                      setEditTemplate(null);
+                      // Explicitly refetch templates to ensure UI refresh
+                      refetchTemplates();
+                    },
                   });
                 }}
                 disabled={updateMut.isPending || !editTemplate?.name.trim() || (editTemplate?.name.trim().length ?? 0) < 3 || !editTemplate?.domain || !editTemplate?.template_text.trim() || (editTemplate?.template_text.trim().length ?? 0) < 10}
@@ -1052,8 +1080,12 @@ export function Templates() {
                 variant="destructive"
                 onClick={() => {
                   if (!deleteTarget) return;
-                  deleteMut.mutate(deleteTarget.id, {
-                    onSuccess: () => setDeleteTarget(null),
+                  deleteMut.mutate({ templateId: deleteTarget.id, userId }, {
+                    onSuccess: () => {
+                      setDeleteTarget(null);
+                      // Explicitly refetch templates to ensure UI refresh
+                      refetchTemplates();
+                    },
                   });
                 }}
                 disabled={deleteMut.isPending}

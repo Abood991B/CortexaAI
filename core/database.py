@@ -73,6 +73,7 @@ class Database:
                     processing_time REAL DEFAULT 0,
                     prompt_type TEXT DEFAULT 'auto',
                     result_json TEXT,
+                    user_id TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -125,6 +126,7 @@ class Database:
                     usage_count INTEGER DEFAULT 0,
                     rating REAL DEFAULT 0,
                     author TEXT DEFAULT 'system',
+                    owner_id TEXT,
                     is_public INTEGER DEFAULT 1,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -212,6 +214,36 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_marketplace_domain ON marketplace_items(domain);
             """)
 
+            # Migrations: add columns to existing tables if they don't exist
+            self._run_migrations(conn)
+
+    def _run_migrations(self, conn):
+        """Run schema migrations for existing databases."""
+        # --- workflows.user_id ---
+        try:
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(workflows)").fetchall()]
+            if "user_id" not in cols:
+                conn.execute("ALTER TABLE workflows ADD COLUMN user_id TEXT")
+                logger.info("Migration: added user_id column to workflows")
+        except Exception as e:
+            logger.warning(f"Migration workflows.user_id: {e}")
+
+        # --- templates.owner_id ---
+        try:
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(templates)").fetchall()]
+            if "owner_id" not in cols:
+                conn.execute("ALTER TABLE templates ADD COLUMN owner_id TEXT")
+                logger.info("Migration: added owner_id column to templates")
+        except Exception as e:
+            logger.warning(f"Migration templates.owner_id: {e}")
+
+        # Now create indexes that depend on migrated columns
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_workflows_user_id ON workflows(user_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_templates_owner_id ON templates(owner_id)")
+        except Exception as e:
+            logger.warning(f"Migration index creation: {e}")
+
     # ======================================================================
     # Generic SQL Utilities (used by feature modules)
     # ======================================================================
@@ -245,8 +277,8 @@ class Database:
                 """INSERT OR REPLACE INTO workflows
                    (id, status, domain, original_prompt, optimized_prompt,
                     quality_score, iterations_used, processing_time, prompt_type,
-                    result_json, created_at, updated_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    result_json, user_id, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     wid,
                     data.get("status", "completed"),
@@ -258,6 +290,9 @@ class Database:
                     data.get("processing_time_seconds", data.get("processing_time", 0)),
                     data.get("input", {}).get("prompt_type", data.get("prompt_type", "auto")),
                     json.dumps(data, default=str),
+                    data.get("metadata", {}).get("user_id",
+                        data.get("input", {}).get("user_id",
+                            data.get("user_id"))),
                     data.get("timestamp", data.get("created_at", now)),
                     now,
                 ),
@@ -273,7 +308,7 @@ class Database:
                 return result
         return None
 
-    def get_workflows(self, limit: int = 50, offset: int = 0, status: str = None, domain: str = None) -> List[Dict[str, Any]]:
+    def get_workflows(self, limit: int = 50, offset: int = 0, status: str = None, domain: str = None, user_id: str = None) -> List[Dict[str, Any]]:
         with self.connection() as conn:
             query = "SELECT * FROM workflows WHERE 1=1"
             params: list = []
@@ -283,6 +318,9 @@ class Database:
             if domain:
                 query += " AND domain=?"
                 params.append(domain)
+            if user_id:
+                query += " AND user_id=?"
+                params.append(user_id)
             query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
             params.extend([limit, offset])
             rows = conn.execute(query, params).fetchall()
@@ -381,8 +419,8 @@ class Database:
             conn.execute(
                 """INSERT OR REPLACE INTO templates
                    (id, name, domain, description, template_text, variables_json,
-                    tags_json, usage_count, rating, author, is_public, created_at, updated_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    tags_json, usage_count, rating, author, owner_id, is_public, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     tid,
                     data.get("name", "Untitled"),
@@ -394,6 +432,7 @@ class Database:
                     data.get("usage_count", 0),
                     data.get("rating", 0),
                     data.get("author", "system"),
+                    data.get("owner_id"),
                     1 if data.get("is_public", True) else 0,
                     data.get("created_at", now),
                     now,
@@ -401,10 +440,17 @@ class Database:
             )
         return tid
 
-    def get_templates(self, domain: str = None, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_templates(self, domain: str = None, limit: int = 50, user_id: str = None) -> List[Dict[str, Any]]:
         with self.connection() as conn:
             query = "SELECT * FROM templates WHERE 1=1"
             params: list = []
+            # Privacy filtering: show public templates + user's own private templates
+            if user_id:
+                query += " AND (is_public = 1 OR owner_id = ?)"
+                params.append(user_id)
+            else:
+                # No user_id provided — only show public templates
+                query += " AND is_public = 1"
             if domain:
                 query += " AND domain=?"
                 params.append(domain)
@@ -423,6 +469,7 @@ class Database:
                     "usage_count": r["usage_count"],
                     "rating": r["rating"],
                     "author": r["author"],
+                    "owner_id": r["owner_id"] if "owner_id" in r.keys() else None,
                     "is_public": bool(r["is_public"]),
                     "created_at": r["created_at"],
                 }
@@ -444,6 +491,7 @@ class Database:
                     "usage_count": r["usage_count"],
                     "rating": r["rating"],
                     "author": r["author"],
+                    "owner_id": r["owner_id"] if "owner_id" in r.keys() else None,
                     "created_at": r["created_at"],
                 }
         return None
@@ -809,14 +857,18 @@ class Database:
     # Utility
     # ======================================================================
 
-    def get_dashboard_stats(self) -> Dict[str, Any]:
+    def get_dashboard_stats(self, user_id: Optional[str] = None) -> Dict[str, Any]:
         with self.connection() as conn:
-            total = conn.execute("SELECT COUNT(*) as cnt FROM workflows").fetchone()["cnt"]
-            completed = conn.execute("SELECT COUNT(*) as cnt FROM workflows WHERE status='completed'").fetchone()["cnt"]
-            errors = conn.execute("SELECT COUNT(*) as cnt FROM workflows WHERE status='error'").fetchone()["cnt"]
-            avg_score = conn.execute("SELECT AVG(quality_score) as avg FROM workflows WHERE status='completed' AND quality_score > 0").fetchone()["avg"] or 0
-            avg_time = conn.execute("SELECT AVG(processing_time) as avg FROM workflows WHERE status='completed'").fetchone()["avg"] or 0
-            domains = conn.execute("SELECT domain, COUNT(*) as cnt FROM workflows WHERE domain IS NOT NULL GROUP BY domain ORDER BY cnt DESC").fetchall()
+            # Build WHERE clause for user filtering
+            user_filter = "WHERE user_id = ?" if user_id else ""
+            user_params = (user_id,) if user_id else ()
+            
+            total = conn.execute(f"SELECT COUNT(*) as cnt FROM workflows {user_filter}", user_params).fetchone()["cnt"]
+            completed = conn.execute(f"SELECT COUNT(*) as cnt FROM workflows {user_filter} {'AND' if user_id else 'WHERE'} status='completed'", user_params).fetchone()["cnt"]
+            errors = conn.execute(f"SELECT COUNT(*) as cnt FROM workflows {user_filter} {'AND' if user_id else 'WHERE'} status='error'", user_params).fetchone()["cnt"]
+            avg_score = conn.execute(f"SELECT AVG(quality_score) as avg FROM workflows {user_filter} {'AND' if user_id else 'WHERE'} status='completed' AND quality_score > 0", user_params).fetchone()["avg"] or 0
+            avg_time = conn.execute(f"SELECT AVG(processing_time) as avg FROM workflows {user_filter} {'AND' if user_id else 'WHERE'} status='completed'", user_params).fetchone()["avg"] or 0
+            domains = conn.execute(f"SELECT domain, COUNT(*) as cnt FROM workflows {user_filter} {'AND' if user_id else 'WHERE'} domain IS NOT NULL GROUP BY domain ORDER BY cnt DESC", user_params).fetchall()
             templates_count = conn.execute("SELECT COUNT(*) as cnt FROM templates").fetchone()["cnt"]
             marketplace_count = conn.execute("SELECT COUNT(*) as cnt FROM marketplace_items").fetchone()["cnt"]
             return {

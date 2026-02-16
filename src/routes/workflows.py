@@ -92,12 +92,23 @@ async def get_workflow_status(workflow_id: str):
 # ---------------------------------------------------------------------------
 
 @router.get("/api/stats", response_model=SystemStats)
-async def get_system_stats():
-    """Get system statistics from persistent storage + in-memory."""
+async def get_system_stats(user_id: Optional[str] = None):
+    """Get system statistics from persistent storage + in-memory with optional user filtering."""
     try:
-        db_stats = db.get_dashboard_stats()
+        db_stats = db.get_dashboard_stats(user_id=user_id)
         if db_stats and db_stats.get("total_workflows", 0) > 0:
             return SystemStats(**db_stats)
+        # If filtering by user_id, return empty stats instead of global fallback
+        if user_id:
+            return SystemStats(
+                total_workflows=0,
+                completed_workflows=0,
+                error_workflows=0,
+                success_rate=0.0,
+                average_quality_score=0.0,
+                average_processing_time=0.0,
+                domain_distribution={},
+            )
         stats = coordinator.get_workflow_stats()
         if "error" in stats:
             return SystemStats(
@@ -120,14 +131,17 @@ async def get_system_stats():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/history", response_model=List[Dict[str, Any]])
-async def get_workflow_history(limit: int = 10):
-    """Get recent workflow history from persistent storage."""
+async def get_workflow_history(limit: int = 10, user_id: Optional[str] = None):
+    """Get recent workflow history from persistent storage with optional user filtering."""
     if limit < 1 or limit > 500:
         raise HTTPException(status_code=400, detail="Limit must be between 1 and 500")
     try:
-        db_workflows = db.get_workflows(limit=limit)
+        db_workflows = db.get_workflows(limit=limit, user_id=user_id)
         if db_workflows:
             return _normalise_history(db_workflows)
+        # If filtering by user_id, return empty list instead of global fallback
+        if user_id:
+            return []
         history = coordinator.get_workflow_history(limit=limit)
         return _normalise_history(history)
     except Exception as e:

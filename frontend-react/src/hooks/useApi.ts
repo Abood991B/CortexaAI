@@ -26,10 +26,10 @@ const getApiErrorMessage = (error: any): string => {
 
 // Query Keys
 export const queryKeys = {
-  stats: ['stats'] as const,
-  history: (limit?: number) => ['history', limit] as const,
+  stats: (userId?: string) => ['stats', userId] as const,
+  history: (limit?: number, userId?: string) => ['history', limit, userId] as const,
   health: ['health'] as const,
-  templates: (domain?: string, query?: string) => ['templates', domain, query] as const,
+  templates: (domain?: string, query?: string, userId?: string) => ['templates', domain, query, userId] as const,
 };
 
 
@@ -59,8 +59,9 @@ export const useProcessPrompt = () => {
     },
     onSuccess: (data) => {
       if (data) { 
-        queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-        queryClient.invalidateQueries({ queryKey: queryKeys.history() });
+        // Invalidate all stats and history queries (regardless of userId)
+        queryClient.invalidateQueries({ queryKey: ['stats'] });
+        queryClient.invalidateQueries({ queryKey: ['history'] });
         // Don't toast here — completion notification is handled by polling/streaming in PromptProcessor
       }
     },
@@ -71,10 +72,10 @@ export const useProcessPrompt = () => {
 };
 
 
-export const useStats = () => {
+export const useStats = (userId?: string) => {
   return useQuery({
-    queryKey: queryKeys.stats,
-    queryFn: () => apiClient.getStats(),
+    queryKey: queryKeys.stats(userId),
+    queryFn: () => apiClient.getStats(userId),
     staleTime: 60 * 1000,
     refetchInterval: 60 * 1000,
     retry: 1,
@@ -82,10 +83,10 @@ export const useStats = () => {
   });
 };
 
-export const useHistory = (limit?: number) => {
+export const useHistory = (limit?: number, userId?: string) => {
   return useQuery({
-    queryKey: queryKeys.history(limit),
-    queryFn: () => apiClient.getHistory(limit),
+    queryKey: queryKeys.history(limit, userId),
+    queryFn: () => apiClient.getHistory(limit, userId),
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
     retry: 1,
@@ -130,11 +131,14 @@ export const useWorkflowStatus = (workflowId: string | null) => {
 
 // ─── Template & Render Hooks ──────────────────────────────────
 
-export const useTemplates = (domain?: string, query?: string) => {
+export const useTemplates = (domain?: string, query?: string, userId?: string) => {
   return useQuery({
-    queryKey: queryKeys.templates(domain, query),
-    queryFn: () => apiClient.getTemplates(domain, query),
-    staleTime: 5 * 60 * 1000,
+    queryKey: queryKeys.templates(domain, query, userId),
+    queryFn: () => apiClient.getTemplates(domain, query, userId),
+    staleTime: 30 * 1000, // 30 seconds for templates (more dynamic)
+    refetchInterval: 60 * 1000, // Poll every minute for live updates
+    refetchOnWindowFocus: true, // Refresh when user returns to tab
+    refetchIntervalInBackground: false, // Stop polling when tab is inactive
     retry: 1,
   });
 };
@@ -150,10 +154,10 @@ export const useRenderTemplate = () => {
 export const useCreateTemplate = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { name: string; domain: string; template_text: string; description?: string; variables?: string[]; is_public?: boolean }) =>
+    mutationFn: (data: { name: string; domain: string; template_text: string; description?: string; variables?: string[]; is_public?: boolean; user_id?: string }) =>
       apiClient.createTemplate(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.templates() });
+      queryClient.invalidateQueries({ queryKey: ['templates'] });
       toast.success('Template created!');
     },
     onError: (error: any) => toast.error(getApiErrorMessage(error)),
@@ -163,10 +167,10 @@ export const useCreateTemplate = () => {
 export const useUpdateTemplate = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ templateId, data }: { templateId: string; data: { name?: string; domain?: string; template_text?: string; description?: string; variables?: string[]; is_public?: boolean } }) =>
+    mutationFn: ({ templateId, data }: { templateId: string; data: { name?: string; domain?: string; template_text?: string; description?: string; variables?: string[]; is_public?: boolean; user_id?: string } }) =>
       apiClient.updateTemplate(templateId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.templates() });
+      queryClient.invalidateQueries({ queryKey: ['templates'] });
       toast.success('Template updated!');
     },
     onError: (error: any) => toast.error(getApiErrorMessage(error)),
@@ -176,9 +180,9 @@ export const useUpdateTemplate = () => {
 export const useDeleteTemplate = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (templateId: string) => apiClient.deleteTemplate(templateId),
+    mutationFn: ({ templateId, userId }: { templateId: string; userId?: string }) => apiClient.deleteTemplate(templateId, userId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.templates() });
+      queryClient.invalidateQueries({ queryKey: ['templates'] });
       toast.success('Template deleted!');
     },
     onError: (error: any) => toast.error(getApiErrorMessage(error)),

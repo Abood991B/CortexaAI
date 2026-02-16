@@ -99,9 +99,29 @@ function CustomPieTooltip({ active, payload }: any) {
 
 // ─── Main Dashboard Component ────────────────────────────────
 export function Dashboard() {
-  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useStats();
+  // Get userId from localStorage (consistent with PromptProcessor)
+  const [userId] = useState(() => {
+    // Check the canonical key first, then legacy key for backward compat
+    let id = localStorage.getItem('cortexa_userId') || sessionStorage.getItem('cortexa_userId');
+    if (!id) {
+      // Migrate from legacy key if it exists
+      const legacyId = localStorage.getItem('userId');
+      if (legacyId) {
+        id = legacyId;
+        localStorage.setItem('cortexa_userId', id);
+        sessionStorage.setItem('cortexa_userId', id);
+      } else {
+        id = `user_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+        localStorage.setItem('cortexa_userId', id);
+        sessionStorage.setItem('cortexa_userId', id);
+      }
+    }
+    return id;
+  });
+
+  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useStats(userId);
   const { data: health, isLoading: healthLoading, refetch: refetchHealth, isFetching } = useHealth();
-  const { data: history, refetch: refetchHistory } = useHistory(10);
+  const { data: history, refetch: refetchHistory } = useHistory(10, userId);
   const { data: cacheStats, refetch: refetchCache } = useCacheStats();
 
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());

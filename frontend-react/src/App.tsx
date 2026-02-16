@@ -4,18 +4,36 @@ import { Toaster } from 'sonner';
 import { PromptProcessor } from '@/pages/PromptProcessor';
 import { Dashboard } from '@/pages/Dashboard';
 import { Templates } from '@/pages/Templates';
+import { useEffect } from 'react';
+
+// Global error handler for audio play() interruptions
+const handleAudioErrors = () => {
+  // Suppress common audio autoplay errors
+  window.addEventListener('unhandledrejection', (event) => {
+    if (event.reason?.name === 'AbortError' && 
+        event.reason?.message?.includes('play()')) {
+      event.preventDefault();
+      console.debug('Audio notification blocked by browser policy');
+    }
+  });
+};
 
 // Create a client
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000, // 5 minutes (default)
+      refetchOnWindowFocus: true, // Refresh when returning to app
       retry: 1,
     },
   },
 });
 
 function App() {
+  useEffect(() => {
+    handleAudioErrors();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <Router

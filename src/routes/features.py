@@ -93,6 +93,7 @@ class TemplateCreateRequest(BaseModel):
     description: str = Field(default="", max_length=2000)
     variables: Optional[List[str]] = None
     is_public: bool = True
+    user_id: Optional[str] = None
 
 
 class TemplateUpdateRequest(BaseModel):
@@ -102,6 +103,7 @@ class TemplateUpdateRequest(BaseModel):
     description: Optional[str] = None
     variables: Optional[List[str]] = None
     is_public: Optional[bool] = None
+    user_id: Optional[str] = None
 
 
 class TemplateRenderRequest(BaseModel):
@@ -110,10 +112,10 @@ class TemplateRenderRequest(BaseModel):
 
 
 @router.get("/api/templates")
-async def list_templates(domain: Optional[str] = None, query: Optional[str] = None):
+async def list_templates(domain: Optional[str] = None, query: Optional[str] = None, user_id: Optional[str] = None):
     if query:
-        return template_engine.search(query)
-    return template_engine.list_all(domain)
+        return template_engine.search(query, user_id=user_id)
+    return template_engine.list_all(domain, user_id=user_id)
 
 
 @router.post("/api/templates")
@@ -125,6 +127,7 @@ async def create_template(req: TemplateCreateRequest):
         description=req.description,
         variables=req.variables,
         is_public=req.is_public,
+        owner_id=req.user_id,
     )
 
 
@@ -138,10 +141,10 @@ async def get_template(template_id: str):
 
 @router.put("/api/templates/{template_id}")
 async def update_template(template_id: str, req: TemplateUpdateRequest):
-    data = {k: v for k, v in req.model_dump().items() if v is not None}
+    data = {k: v for k, v in req.model_dump().items() if v is not None and k != "user_id"}
     if "template_text" in data:
         data["template"] = data.pop("template_text")
-    result = template_engine.update_template(template_id, data)
+    result = template_engine.update_template(template_id, data, user_id=req.user_id)
     if result is None:
         raise HTTPException(404, "Template not found")
     if "error" in result:
@@ -150,10 +153,12 @@ async def update_template(template_id: str, req: TemplateUpdateRequest):
 
 
 @router.delete("/api/templates/{template_id}")
-async def delete_template(template_id: str):
-    success = template_engine.delete_template(template_id)
-    if not success:
-        raise HTTPException(404, "Template not found or is a system template")
+async def delete_template(template_id: str, user_id: Optional[str] = None):
+    result = template_engine.delete_template(template_id, user_id=user_id)
+    if isinstance(result, dict) and "error" in result:
+        if result["error"] == "not_found":
+            raise HTTPException(404, "Template not found")
+        raise HTTPException(403, result["error"])
     return {"status": "deleted", "id": template_id}
 
 
