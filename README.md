@@ -1,5 +1,7 @@
 <p align="center">
-  <h1 align="center">🧠 CortexaAI</h1>
+  <img src="frontend-react/public/Cortexa Logo.png" alt="CortexaAI Logo" width="180"/>
+</p>
+  <h1 align="center">CortexaAI</h1>
   <p align="center">
     <strong>Production-Ready Multi-Agent Prompt Engineering Platform</strong>
   </p>
