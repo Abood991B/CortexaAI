@@ -261,7 +261,7 @@ Score < 0.40: Essentially a one-liner or so vague as to be unusable.
                     "improvements_made": improvements_made or []
                 }
 
-                self._ensure_chain()
+                await self._ensure_chain()
                 result = await self.evaluation_chain.ainvoke(evaluation_data)
 
                 # ── Recompute overall_score from criteria_scores ──────────
@@ -380,8 +380,10 @@ Score < 0.40: Essentially a one-liner or so vague as to be unusable.
 
         # ── Clarity ──────────────────────────────────────────────────
         vague_hits = len(self._VAGUE_RE.findall(txt))
+        # Penalize vague words less harshly in longer prompts (they're expected in detailed specs)
         vague_ratio = vague_hits / max(word_count, 1)
-        clarity = max(0.45, min(1.0, 0.92 - vague_ratio * 3.0))
+        clarity_penalty = vague_ratio * (2.5 if word_count > 200 else 3.0)
+        clarity = max(0.45, min(1.0, 0.95 - clarity_penalty))
 
         # ── Specificity ─────────────────────────────────────────────
         has_example = bool(self._EXAMPLE_RE.search(txt))
@@ -411,13 +413,14 @@ Score < 0.40: Essentially a one-liner or so vague as to be unusable.
         has_persona = bool(self._PERSONA_RE.search(txt))
         has_format = bool(self._FORMAT_RE.search(txt))
         has_verify = bool(self._VERIFY_RE.search(txt))
-        comp_score = 0.45
+        comp_score = 0.48
         if has_persona:  comp_score += 0.12
         if has_format:   comp_score += 0.10
         if has_negative: comp_score += 0.08
         if has_example:  comp_score += 0.08
         if has_verify:   comp_score += 0.08
-        if word_count > 80: comp_score += 0.05
+        if word_count > 80: comp_score += 0.03
+        if word_count > 200: comp_score += 0.03  # Bonus for comprehensive prompts
         completeness = min(1.0, comp_score)
 
         # ── Actionability ───────────────────────────────────────────
@@ -434,11 +437,12 @@ Score < 0.40: Essentially a one-liner or so vague as to be unusable.
         # Give a reasonable default; real domain alignment is hard to
         # check without a keyword dictionary per domain.
         expansion_ratio = length / max(len(original_prompt), 1)
-        domain_score = 0.60
+        domain_score = 0.65
         if expansion_ratio > 2.0: domain_score += 0.10
-        if expansion_ratio > 4.0: domain_score += 0.08
-        if has_persona: domain_score += 0.05
+        if expansion_ratio > 4.0: domain_score += 0.10
+        if has_persona: domain_score += 0.06
         if headings >= 2: domain_score += 0.05
+        if headings >= 4: domain_score += 0.04  # Bonus for well-organized prompts
         domain_alignment = min(1.0, domain_score)
 
         # ── Overall (weighted average matching LLM evaluator weights) ─

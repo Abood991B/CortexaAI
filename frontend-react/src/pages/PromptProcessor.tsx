@@ -358,7 +358,7 @@ const SHORTCUTS = [
   { keys: ['Enter'], description: 'Send message' },
   { keys: ['Shift', 'Enter'], description: 'New line' },
   { keys: ['Ctrl', 'N'], description: 'New chat' },
-  { keys: ['Ctrl', '/'], description: 'Toggle Single-shot/Conversation' },
+  { keys: ['Ctrl', '/'], description: 'Toggle Conversation mode' },
   { keys: ['Ctrl', 'Shift', 'E'], description: 'Download conversation' },
   { keys: ['Alt', '1-4'], description: 'Navigate pages' },
   { keys: ['?'], description: 'Show this dialog' },
@@ -640,13 +640,20 @@ export function PromptProcessor() {
   const [showSidebar, setShowSidebar] = useState(true);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
-  const [userId, setUserId] = useState('');
+  const [userId, setUserId] = useState(() => {
+    // Generate a unique user ID for conversation memory
+    const stored = localStorage.getItem('cortexai_user_id');
+    if (stored) return stored;
+    const newId = `user_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    localStorage.setItem('cortexai_user_id', newId);
+    return newId;
+  });
   const [workflowId, setWorkflowId] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
-  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  const [isConversationMode, setIsConversationMode] = useState(false);
   const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
   const [reiteratingId, setReiteratingId] = useState<string | null>(null);
   const [reiterateFeedback, setReiterateFeedback] = useState('');
@@ -701,8 +708,8 @@ export function PromptProcessor() {
   // Stable refs for keyboard shortcut callbacks
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
-  const isAdvancedModeRef = useRef(isAdvancedMode);
-  isAdvancedModeRef.current = isAdvancedMode;
+  const isConversationModeRef = useRef(isConversationMode);
+  isConversationModeRef.current = isConversationMode;
 
   // Keyboard shortcuts — includes global navigation (since PromptProcessor has its own layout)
   useEffect(() => {
@@ -732,12 +739,12 @@ export function PromptProcessor() {
         return;
       }
 
-      // Ctrl+/ / Cmd+/ — toggle advanced mode
+      // Ctrl+/ / Cmd+/ — toggle conversation mode
       if ((e.ctrlKey || e.metaKey) && e.key === '/') {
         e.preventDefault();
-        setIsAdvancedMode(prev => {
+        setIsConversationMode(prev => {
           const next = !prev;
-          toast.info(next ? 'Single-shot mode (no memory)' : 'Conversation mode (with memory)');
+          toast.info(next ? 'Conversation mode enabled' : 'Single-shot mode enabled');
           return next;
         });
         return;
@@ -959,29 +966,82 @@ export function PromptProcessor() {
       return_comparison: true,
       use_langgraph: selectedModel === 'langgraph',
       chat_history: chatHistory,
-      advanced_mode: isAdvancedMode
+      advanced_mode: isConversationMode
     };
 
     try {
-      // Try SSE streaming first for real-time progress, fall back to polling
-      try {
-        const streamResult = await startStream(request);
-        if (streamResult) {
-          // SSE streaming completed successfully
-          const resultDomain = streamResult.output?.domain
-            || streamResult.analysis?.classification?.domain;
-          setMessages(prev => prev.map(msg => 
-            msg.id === loadingMessage.id 
+      // In conversation mode, skip SSE and use the memory endpoint directly
+      // SSE streaming only supports single-shot optimization
+      if (!isConversationMode) {
+        try {
+          const streamResult = await startStream(request);
+          if (streamResult) {
+            // SSE streaming completed successfully
+            const resultDomain = streamResult.output?.domain
+              || streamResult.analysis?.classification?.domain;
+            setMessages(prev => prev.map(msg => 
+              msg.id === loadingMessage.id 
+                ? {
+                    ...msg,
+                    id: `result_${Date.now()}`,
+                    isLoading: false,
+                    content: streamResult.output?.optimized_prompt || '',
+                    response: streamResult
+                  }
+                : msg
+            ));
+            // Update session title with domain context (use ref to avoid stale closure)
+            const sid = currentSessionIdRef.current;
+            if (sid) {
+              setSessions(prev => prev.map(s =>
+                s.id === sid
+                  ? { ...s, title: generateSessionTitle(inputText, resultDomain) }
+                  : s
+              ));
+            }
+            addNotification({
+              type: 'success',
+              title: `${selectedModel === 'langgraph' ? 'LangGraph' : 'Standard'} Model Complete`,
+              message: `Quality score: ${streamResult.output?.quality_score?.toFixed(2) || 'N/A'}`,
+              action: { label: 'View Results', onClick: () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }
+            });
+            return;
+          }
+        } catch {
+          // SSE failed — fall back to standard polling approach
+          console.log('SSE streaming unavailable, falling back to polling');
+        }
+      }
+
+      let response: PromptResponse | undefined;
+      
+      // Conversation mode: use synchronous memory-enhanced processing with chat history
+      // Single-shot mode: standard async processing without memory
+      if (isConversationMode) {
+        // Conversation mode: synchronous with memory and context
+        // Synchronous so we get the result directly without polling
+        response = await processPromptWithMemoryMutation.mutateAsync({
+          request: { ...request, user_id: userId, synchronous: true },
+        });
+
+        if (response) {
+          const isConversational = response.output?.domain === 'conversational' && response.output?.quality_score === 0;
+          const resultDomain = response.output?.domain || response.analysis?.classification?.domain;
+
+          // Update the loading message with the result directly (no polling needed)
+          setMessages(prev => prev.map(msg =>
+            msg.id === loadingMessage.id
               ? {
                   ...msg,
                   id: `result_${Date.now()}`,
                   isLoading: false,
-                  content: streamResult.output?.optimized_prompt || '',
-                  response: streamResult
+                  content: response!.output?.optimized_prompt || '',
+                  response: response!
                 }
               : msg
           ));
-          // Update session title with domain context (use ref to avoid stale closure)
+
+          // Update session title
           const sid = currentSessionIdRef.current;
           if (sid) {
             setSessions(prev => prev.map(s =>
@@ -990,46 +1050,39 @@ export function PromptProcessor() {
                 : s
             ));
           }
-          addNotification({
-            type: 'success',
-            title: `${selectedModel === 'langgraph' ? 'LangGraph' : 'Standard'} Model Complete`,
-            message: `Quality score: ${streamResult.output?.quality_score?.toFixed(2) || 'N/A'}`,
-            action: { label: 'View Results', onClick: () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }
-          });
-          return;
-        }
-      } catch {
-        // SSE failed — fall back to standard polling approach
-        console.log('SSE streaming unavailable, falling back to polling');
-      }
 
-      let response: PromptResponse | undefined;
-      
-      // Use memory-enhanced processing for conversation mode (advanced OFF)
-      // Use standard processing for single-shot optimization (advanced ON)
-      if (isAdvancedMode) {
-        // Advanced mode: single-shot optimization without memory
+          if (isConversational) {
+            // Conversational reply — AI is still asking clarifying questions
+            toast.success('AI is gathering more details to craft your prompt', { id: 'conversation-reply' });
+          } else {
+            // AI decided it has enough info and produced an optimized prompt
+            addNotification({
+              type: 'success',
+              title: 'Prompt Optimized',
+              message: `The AI gathered enough context and optimized your prompt. Quality score: ${response.output?.quality_score?.toFixed(2) || 'N/A'}`,
+              action: { label: 'View Results', onClick: () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }
+            });
+          }
+        }
+      } else {
+        // Single-shot mode: optimization without memory
         response = await processPromptWithMemoryMutation.mutateAsync({
           request: request, // No user_id, uses standard endpoint
         });
-      } else {
-        // Standard mode: conversation with memory
-        response = await processPromptWithMemoryMutation.mutateAsync({
-          request: { ...request, user_id: userId },
-        });
-      }
       
-      if (response) {
-        // Update loading message ID to match workflow
-        setMessages(prev => prev.map(msg => 
-          msg.id === loadingMessage.id 
-            ? { ...msg, id: `loading_${response.workflow_id}` }
-            : msg
-        ));
-        
-        // Start polling for the workflow result
-        setWorkflowId(response.workflow_id);
-        setIsPolling(true);
+        if (response) {
+          // Update loading message ID to match workflow
+          const wfId = response.workflow_id;
+          setMessages(prev => prev.map(msg => 
+            msg.id === loadingMessage.id 
+              ? { ...msg, id: `loading_${wfId}` }
+              : msg
+          ));
+          
+          // Start polling for the workflow result
+          setWorkflowId(response.workflow_id);
+          setIsPolling(true);
+        }
       }
     } catch (error: any) {
       console.error('Processing failed:', error);
@@ -1393,7 +1446,7 @@ export function PromptProcessor() {
                           <Sparkles className="h-5 w-5 text-primary shrink-0" />
                           <h3 className="font-semibold text-sm">Standard Model</h3>
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">Memory-enhanced optimization for quick, reliable results.</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">Fast, reliable prompt optimization.</p>
                       </button>
                       <button
                         className={`p-4 border rounded-xl text-left transition-all hover:shadow-md ${
@@ -1459,7 +1512,7 @@ export function PromptProcessor() {
                             : 'bg-card border border-border/60 shadow-sm rounded-tl-md'
                       }`}>
                         {message.isLoading ? (
-                          streamState && isStreaming ? (
+                          streamState && isStreaming && !isConversationMode ? (
                             <StreamingProgress state={streamState} />
                           ) : (
                             <div className="flex items-center space-x-2">
@@ -1627,7 +1680,7 @@ export function PromptProcessor() {
                       >
                         <div>
                           <h4 className="text-sm font-semibold">Standard</h4>
-                          <p className="text-xs text-muted-foreground">Memory-enhanced optimization.</p>
+                          <p className="text-xs text-muted-foreground">Fast optimization.</p>
                         </div>
                         {selectedModel === 'standard' && <Check className="h-4 w-4 text-primary shrink-0" />}
                       </div>
@@ -1646,13 +1699,12 @@ export function PromptProcessor() {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Switch
-                    id="advanced-mode"
-                    checked={isAdvancedMode}
-                    onCheckedChange={setIsAdvancedMode}
-                    title={isAdvancedMode ? "Single-shot optimization mode (no conversation memory)" : "Conversation mode (with memory)"}
+                    id="conversation-mode"
+                    checked={isConversationMode}
+                    onCheckedChange={setIsConversationMode}
                   />
-                  <Label htmlFor="advanced-mode" className="text-xs cursor-pointer" title={isAdvancedMode ? "Single-shot optimization mode (no conversation memory)" : "Conversation mode (with memory)"}>
-                    {isAdvancedMode ? "Single-shot" : "Conversation"}
+                  <Label htmlFor="conversation-mode" className="text-xs cursor-pointer">
+                    Conversation
                   </Label>
                 </div>
               </div>
@@ -1736,14 +1788,14 @@ export function PromptProcessor() {
             <div className="space-y-2">
               <h4 className="font-semibold text-foreground">Choosing a Model</h4>
               <ul className="space-y-1.5 text-muted-foreground">
-                <li className="flex gap-2"><span className="text-primary font-bold">&bull;</span><span><b className="text-foreground">Standard</b> &mdash; Quick, reliable prompt optimization enhanced with memory.</span></li>
+                <li className="flex gap-2"><span className="text-primary font-bold">&bull;</span><span><b className="text-foreground">Standard</b> &mdash; Fast, reliable prompt optimization.</span></li>
                 <li className="flex gap-2"><span className="text-primary font-bold">&bull;</span><span><b className="text-foreground">LangGraph</b> &mdash; Multi-agent workflow for in-depth analysis.</span></li>
               </ul>
             </div>
             <div className="space-y-1.5">
-              <h4 className="font-semibold text-foreground">Advanced Mode</h4>
+              <h4 className="font-semibold text-foreground">Conversation Mode</h4>
               <p className="text-muted-foreground leading-relaxed">
-                Enable Advanced mode for a conversational prompt-engineering session. The AI will ask clarifying questions to deeply understand your needs before generating an improved prompt.
+                Toggle <b className="text-foreground">Conversation</b> mode to maintain context across multiple prompts. The AI will remember your conversation history and provide context-aware improvements. Turn it off for single-shot, independent optimizations.
               </p>
             </div>
             <div className="space-y-1.5">

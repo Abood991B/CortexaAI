@@ -235,16 +235,17 @@ async def stream_reiterate(
             yield await _sse_event("error", {"message": "No coordinator available"})
             return
 
-        # ── Step 1: Evaluate the current optimized prompt ────────────────
+        # ── Step 1: Fast heuristic evaluation (no LLM, instant) ──────────
+        # Skip slow LLM-based pre-evaluation since user already sees the score
         yield await _sse_event("evaluating", {
-            "message": "Evaluating current prompt to find areas for improvement…",
+            "message": "Analyzing current prompt for improvement areas…",
         })
 
-        pre_eval = await coordinator.evaluator.evaluate_prompt(
+        # Use fast heuristic evaluation instead of slow LLM evaluation
+        pre_eval = coordinator.evaluator.heuristic_evaluate(
             original_prompt=original_prompt,
             improved_prompt=current_prompt,
             domain=domain,
-            prompt_type="structured",
         )
 
         weaknesses = pre_eval.get("weaknesses", [])

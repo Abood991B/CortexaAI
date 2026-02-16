@@ -235,7 +235,7 @@ class WorkflowCoordinator:
         parser = JsonOutputParser(pydantic_object=AdvancedModeOutput)
 
         prompt_template = ChatPromptTemplate.from_messages([
-            ("system", """You are a senior AI prompt-engineering assistant running an interactive
+            ("human", """You are a senior AI prompt-engineering assistant running an interactive
 refinement session.
 
 **Workflow:**
@@ -250,8 +250,12 @@ refinement session.
 **Output (strict JSON, no markdown fences):**
 {{"status": "needs_more_info" | "ready_to_improve", "content": "<questions or synthesised prompt>"}}
 
-{format_instructions}"""),
-            ("human", "Chat History:\n{chat_history}\n\nUser Prompt: {prompt}"),
+{format_instructions}
+
+Chat History:
+{chat_history}
+
+User Prompt: {prompt}"""),
         ])
 
         # Create LLM with timeout configuration

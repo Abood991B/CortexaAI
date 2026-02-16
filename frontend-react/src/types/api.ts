@@ -7,6 +7,8 @@ export interface PromptRequest {
   use_langgraph: boolean;
   chat_history?: Array<{ role: 'user' | 'assistant'; content: string }>;
   advanced_mode?: boolean;
+  synchronous?: boolean;
+  user_id?: string;
 }
 
 export interface CriteriaScores {

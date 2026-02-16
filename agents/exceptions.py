@@ -229,9 +229,8 @@ class WorkflowError(AgenticSystemError):
 
     def __init__(self, message: str, workflow_id: Optional[str] = None,
                  current_step: Optional[str] = None, completed_steps: Optional[list] = None,
-                 cause: Optional[Exception] = None):
+                 cause: Optional[Exception] = None, error_code: str = "WORKFLOW_ERROR"):
         """Initialize workflow error with workflow context."""
-        error_code = "WORKFLOW_ERROR"
         details = {
             "workflow_id": workflow_id,
             "current_step": current_step,

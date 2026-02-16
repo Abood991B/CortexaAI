@@ -22,12 +22,14 @@ CortexaAI is an advanced multi-agent system that automatically classifies, optim
 ## ✨ Key Features
 
 ### Multi-Agent Architecture
+
 - **Domain Classifier** — Automatically detects the domain of any prompt (software engineering, data science, education, business strategy, creative writing, report writing) using keyword heuristics + LLM reasoning
 - **Expert Agents** — Dynamically spawned, domain-specialized prompt engineers with structured output and multi-angle reasoning (Executor / Critic / Expert perspectives)
 - **Evaluator** — Rigorous 6-criteria scoring engine (clarity, specificity, structure, completeness, actionability, domain alignment) with calibration anchors and evidence-based assessment
 - **Coordinator** — Orchestrates the full classify → improve → evaluate loop with security, caching, rate limiting, and memory context support
 
 ### LangGraph Workflow
+
 - **7-node StateGraph pipeline**: `classify → create_expert → improve → evaluate → check_threshold → finalize → END`
 - Cancellable nodes with `asyncio.Event` signaling
 - Per-node wall-clock timing metrics
@@ -36,6 +38,7 @@ CortexaAI is an advanced multi-agent system that automatically classifies, optim
 - Graceful error handling with best-effort fallback at every node
 
 ### 6 LLM Providers
+
 | Provider | Default Model | Free Tier | Notes |
 |----------|--------------|-----------|-------|
 | **Google** | `gemma-3-27b-it` | ✅ | Gemini & Gemma models |
@@ -51,20 +54,31 @@ CortexaAI is an advanced multi-agent system that automatically classifies, optim
 - Smart routing based on task complexity
 
 ### Advanced Processing
+
 - **Iterative refinement** with quality convergence detection and adaptive early-stopping
 - **Performance analytics** — Track processing times, domain distributions, and quality scores
 - **Real-time monitoring** — System metrics via `/api/metrics` and `/api/dashboard` endpoints
 
 ### Real-Time Streaming
+
 - Server-Sent Events (SSE) for live progress updates
 - Stage-by-stage events: `started → classifying → classified → improving → improved → evaluating → evaluated → completed`
 
+### Conversation Mode
+
+- **Interactive refinement** — AI asks clarifying questions before optimizing your prompt
+- **Context retention** — Maintains chat history across conversation turns
+- **Seamless transition** — Automatically switches to full optimization when enough context is gathered
+- **Synchronous responses** — Instant replies without polling delays
+
 ### Batch Processing
+
 - Process multiple prompts in a single API call
 - Configurable concurrency (1–10 parallel workers)
 - Progress tracking and result aggregation
 
 ### Additional Features
+
 - **Prompt Templates Library** — Curated, domain-specific templates with variable substitution (sourced from Anthropic's official Prompt Library)
 - **Prompt Marketplace** — Publish, search, download, and rate community prompt templates
 - **Visual Prompt Builder** — Composable block-based assembly (Role → Context → Task → Constraints → Output Format → Examples)
@@ -81,10 +95,10 @@ CortexaAI is an advanced multi-agent system that automatically classifies, optim
 - **LangSmith Integration** — Optional tracing and observability
 - **Security** — Input sanitization, injection detection, rate limiting, and content safety checks
 
-
-## �🛠️ Technology Stack
+## 🛠️ Technology Stack
 
 ### Backend
+
 - **Python 3.10+** — Core language
 - **FastAPI** — High-performance async web framework
 - **LangChain** / **LangChain Core** — LLM orchestration and prompt management
@@ -98,6 +112,7 @@ CortexaAI is an advanced multi-agent system that automatically classifies, optim
 - **orjson** — Fast JSON serialization
 
 ### Frontend
+
 - **React 18** with **TypeScript**
 - **Vite** — Build tool and dev server
 - **TailwindCSS** — Utility-first CSS framework
@@ -111,6 +126,7 @@ CortexaAI is an advanced multi-agent system that automatically classifies, optim
 - **Zod** — Schema validation
 
 ### Development & Quality
+
 - **Ruff** — Linter and formatter (replaces flake8, isort, black)
 - **pytest** + **pytest-asyncio** — Async-first testing
 - **pytest-cov** — Coverage reporting (60% minimum threshold)
@@ -204,6 +220,7 @@ python src/main.py
 ```
 
 The server starts at `http://localhost:8000`:
+
 - **Web UI**: `http://localhost:8000` (serves the built React SPA)
 - **API Docs (Swagger)**: `http://localhost:8000/docs`
 - **API Docs (ReDoc)**: `http://localhost:8000/redoc`
@@ -300,6 +317,7 @@ This launches the LangGraph Studio UI connected to the `prompt_engineering` grap
 Interactive API docs are available at `/docs` (Swagger UI) and `/redoc` when the server is running. Below is a summary of all endpoint groups:
 
 ### Core Prompt Processing
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/process-prompt` | Process a prompt (sync or async) |
@@ -308,6 +326,7 @@ Interactive API docs are available at `/docs` (Swagger UI) and `/redoc` when the
 | `POST` | `/api/process-prompt/reiterate/stream` | Re-iterate and stream |
 
 ### Workflow Management
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/domains` | List available domains |
@@ -319,6 +338,7 @@ Interactive API docs are available at `/docs` (Swagger UI) and `/redoc` when the
 | `GET` | `/api/history` | Workflow history |
 
 ### System & Monitoring
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health check with provider verification |
@@ -332,12 +352,14 @@ Interactive API docs are available at `/docs` (Swagger UI) and `/redoc` when the
 | `GET` | `/api/errors/recent` | Recent errors |
 
 ### Analytics & Monitoring
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/optimization/dashboard` | Processing analytics overview |
 | `GET` | `/api/optimization/analytics` | Detailed performance analytics |
 
 ### Templates
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/templates` | List/search templates |
@@ -348,6 +370,7 @@ Interactive API docs are available at `/docs` (Swagger UI) and `/redoc` when the
 | `POST` | `/api/templates/render` | Render with variables |
 
 ### Batch Processing
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/batch` | Create batch job |
@@ -356,6 +379,7 @@ Interactive API docs are available at `/docs` (Swagger UI) and `/redoc` when the
 | `GET` | `/api/batches` | List all batches |
 
 ### Marketplace
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/marketplace` | Search marketplace |
@@ -366,6 +390,7 @@ Interactive API docs are available at `/docs` (Swagger UI) and `/redoc` when the
 | `GET` | `/api/marketplace/featured/list` | Featured items |
 
 ### Visual Prompt Builder
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/builder/sessions` | Create builder session |
@@ -379,6 +404,7 @@ Interactive API docs are available at `/docs` (Swagger UI) and `/redoc` when the
 | `GET` | `/api/builder/presets/{domain}` | Domain presets |
 
 ### Plugins
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/plugins` | List plugins |
@@ -389,6 +415,7 @@ Interactive API docs are available at `/docs` (Swagger UI) and `/redoc` when the
 | `POST` | `/api/plugins/{name}/disable` | Disable plugin |
 
 ### Regression Testing
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/regression/suites` | List test suites |
@@ -400,6 +427,7 @@ Interactive API docs are available at `/docs` (Swagger UI) and `/redoc` when the
 | `POST` | `/api/regression/suites/{id}/baseline` | Save baseline |
 
 ### Similarity Search
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/similarity/search` | Search similar prompts |
@@ -409,6 +437,7 @@ Interactive API docs are available at `/docs` (Swagger UI) and `/redoc` when the
 | `GET` | `/api/similarity/stats` | Index statistics |
 
 ### Other Endpoints
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/complexity` | Analyze prompt complexity |
@@ -453,7 +482,7 @@ All configuration is managed via environment variables (loaded from `.env`):
 
 ## 📁 Project Structure
 
-```
+```text
 CortexaAI/
 ├── src/                          # FastAPI application
 │   ├── main.py                   # App creation, lifespan, CORS, SPA serving
@@ -617,7 +646,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 
 ## 👤 Author
 
-**Abdulrahman Baidaq**
+### Abdulrahman Baidaq
 
 - GitHub: [@Abood991B](https://github.com/Abood991B)
 - Email: abdulrahman16baidaq@gmail.com
