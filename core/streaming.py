@@ -7,6 +7,7 @@ as it completes.
 """
 
 import asyncio
+import copy
 import json
 import time
 from typing import Any, AsyncGenerator, Dict, Optional
@@ -67,15 +68,16 @@ async def stream_workflow(
             wf_cache_key = generate_prompt_cache_key(prompt, prefix="workflow")
             cached = cache_manager.get(wf_cache_key)
             if cached:
-                cached["workflow_id"] = f"sse_cached_{int(time.time())}"
-                cached["metadata"] = cached.get("metadata", {})
-                cached["metadata"]["cache_hit"] = True
+                cached_copy = copy.deepcopy(cached)
+                cached_copy["workflow_id"] = f"sse_cached_{int(time.time())}"
+                cached_copy["metadata"] = cached_copy.get("metadata", {})
+                cached_copy["metadata"]["is_cache_hit"] = True
                 try:
-                    coordinator._record_workflow(cached)
+                    coordinator._record_workflow(cached_copy)
                 except Exception:
                     pass
                 yield await _sse_event("completed", {
-                    "result": cached,
+                    "result": cached_copy,
                     "processing_time": 0.0,
                 })
                 return
@@ -238,10 +240,11 @@ async def stream_reiterate(
             "message": "Evaluating current prompt to find areas for improvement…",
         })
 
-        pre_eval = coordinator.evaluator.heuristic_evaluate(
+        pre_eval = await coordinator.evaluator.evaluate_prompt(
             original_prompt=original_prompt,
             improved_prompt=current_prompt,
             domain=domain,
+            prompt_type="structured",
         )
 
         weaknesses = pre_eval.get("weaknesses", [])
@@ -302,10 +305,11 @@ async def stream_reiterate(
         # ── Step 3: Post-improvement evaluation ──────────────────────────
         yield await _sse_event("evaluating", {"message": "Re-evaluating refined prompt…"})
 
-        post_eval = coordinator.evaluator.heuristic_evaluate(
+        post_eval = await coordinator.evaluator.evaluate_prompt(
             original_prompt=original_prompt,
             improved_prompt=improved_prompt,
             domain=domain,
+            prompt_type="structured",
         )
 
         yield await _sse_event("evaluated", {

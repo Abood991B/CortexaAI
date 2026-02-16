@@ -6,7 +6,7 @@ Complete this checklist before deploying to production.
 
 - [x] README.md has clear project description, quick start, and usage examples
 - [x] ARCHITECTURE.md has system diagrams and component descriptions
-- [x] CHANGELOG.md documents all versions through v3.0.0
+- [x] CHANGELOG.md documents all versions through v3.0.1
 - [x] CONTRIBUTING.md has contribution guidelines
 - [x] LICENSE file present (MIT)
 
@@ -18,7 +18,7 @@ Complete this checklist before deploying to production.
 - [x] PII detection enabled in security config
 - [x] Input sanitization enabled
 - [x] Rate limiting configured
-- [x] API key authentication available (optional via `REQUIRE_API_KEY`)
+- [x] API key authentication available (optional via `require_api_key` dependency)
 
 ## Dependencies
 
@@ -77,4 +77,4 @@ Complete this checklist before deploying to production.
 
 **Status: READY FOR DEPLOYMENT** ✓
 
-*Last verified: 2026-02-14 — v3.0.0*
+*Last verified: 2026-02-15 — v3.0.1*

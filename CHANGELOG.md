@@ -5,6 +5,32 @@ All notable changes to CortexaAI are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] — 2026-02-15 (Cleanup & Simplification)
+
+### Changed
+
+- **API key management** — removed encrypted key store (`config/key_store.py`) in favor of standard `.env`-only configuration
+- **Configuration** — `.env` is now the single source of truth for all API keys and settings
+- **requirements.txt** — removed `cryptography` dependency (no longer needed)
+- **`.env.example`** — updated to match current configuration structure
+
+### Removed
+
+- **`config/key_store.py`** — encrypted key store module (replaced by direct `.env` usage)
+- **`data/keys.enc`** — encrypted keys data file
+- **`CORTEXAAI_KEY_PASSWORD`** — environment variable no longer used
+- **Startup warnings** — removed `REQUIRE_API_KEY` and `CORTEXAAI_KEY_PASSWORD` warnings from server boot
+
+### Fixed
+
+- **`NameError: name 'threading' is not defined`** in `src/workflow.py` — added missing `import threading`
+- **Auth attribute bug** — `core/auth.py` referenced `REQUIRE_API_KEY` (uppercase) but Settings uses `require_api_key` (lowercase)
+- **Config validator** — removed `_overlay_encrypted_keys()` Pydantic validator that errored without password
+- **Classifier docstring** — fixed swapped summary/description in `DomainClassifier`
+- **Workflow DB** — fixed missing `db_branch` parameter on workflow creation
+
+---
+
 ## [3.0.0] — 2026-02-14 (Production-Ready V3.0 Release)
 
 ### Added

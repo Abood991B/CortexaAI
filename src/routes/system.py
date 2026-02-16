@@ -231,8 +231,12 @@ async def reset_provider_health(provider_name: str):
     """Reset health status for a provider."""
     if provider_name not in PROVIDER_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_name}")
-    llm_provider.reset_health(provider_name)
-    return {"status": "ok", "message": f"Health reset for provider: {provider_name}"}
+    try:
+        llm_provider.reset_health(provider_name)
+        return {"status": "ok", "message": f"Health reset for provider: {provider_name}"}
+    except Exception as e:
+        logger.error(f"Failed to reset provider {provider_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset provider: {str(e)}")
 
 
 # ---------------------------------------------------------------------------
@@ -246,8 +250,12 @@ async def get_cache_stats():
 
 @router.delete("/api/cache")
 async def clear_cache():
-    cache_manager.clear()
-    return {"status": "ok", "message": "Cache cleared"}
+    try:
+        cache_manager.clear()
+        return {"status": "ok", "message": "Cache cleared"}
+    except Exception as e:
+        logger.error(f"Failed to clear cache: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
 
 
 # ---------------------------------------------------------------------------
@@ -288,6 +296,8 @@ async def get_error_analytics():
 
 @router.get("/api/errors/recent")
 async def get_recent_errors(limit: int = 20):
+    if limit < 1 or limit > 500:
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 500")
     return error_analytics.get_recent(limit)
 
 

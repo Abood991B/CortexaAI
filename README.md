@@ -332,9 +332,8 @@ CortexaAI/
 │   └── webhooks.py               #   Webhook notifications
 │
 ├── config/                       # Configuration
-│   ├── config.py                 #   Settings, security, caching
-│   ├── llm_providers.py          #   Multi-LLM provider system
-│   └── key_store.py              #   Encrypted API key storage
+│   ├── config.py                 #   Settings & environment config
+│   └── llm_providers.py          #   Multi-LLM provider system
 │
 ├── frontend-react/               # React + TypeScript + Tailwind CSS
 │   ├── src/

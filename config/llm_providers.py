@@ -300,7 +300,7 @@ class LLMProvider:
         Verify a provider by making a lightweight API call.
         Returns dict with 'available', 'latency_ms', and optional 'error'.
         """
-        import asyncio, time as _time
+        import time as _time
 
         config = PROVIDER_CONFIGS.get(provider_name)
         if not config:

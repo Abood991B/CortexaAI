@@ -1,8 +1,9 @@
 """Shared dependencies, state, Pydantic models, and helper utilities used across route modules."""
 
-import uuid
 import asyncio
 import logging
+import threading
+import hashlib
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
@@ -80,6 +81,7 @@ def __getattr__(name):
 
 # In-memory storage for active workflows with cancellation tokens
 active_workflows: Dict[str, Dict[str, Any]] = {}
+_workflows_lock = threading.Lock()
 
 # Maximum prompt length (characters) to prevent abuse
 MAX_PROMPT_LENGTH = 50_000
@@ -142,7 +144,8 @@ def clear_workflow_caches(prompt: str, prompt_type: str = None):
     # Clear caches for all known domains (dynamically obtained)
     try:
         common_domains = list(classifier_instance.get_available_domains().keys())
-    except Exception:
+    except (AttributeError, TypeError) as e:
+        logger.warning(f"Could not fetch domains from classifier: {e}")
         common_domains = ["software_engineering", "data_science", "report_writing",
                           "education", "business_strategy", "creative_writing", "general"]
     for domain in common_domains:
@@ -152,7 +155,9 @@ def clear_workflow_caches(prompt: str, prompt_type: str = None):
             cache_key_improvement_context = generate_prompt_cache_key(prompt, domain, f"{pt}_context")
             cache_manager.delete(cache_key_improvement_context)
 
-    logger.info(f"Cleared all cache entries for prompt: {prompt[:50]}...")
+    # Log using non-reversible hash to avoid PII exposure
+    prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()[:12]
+    logger.info(f"Cleared cache entries for prompt hash={prompt_hash} length={len(prompt)}")
 
 
 # ---------------------------------------------------------------------------

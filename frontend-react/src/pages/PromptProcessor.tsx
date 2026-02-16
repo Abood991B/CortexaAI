@@ -1145,7 +1145,7 @@ export function PromptProcessor() {
             : msg
         ));
         toast.success('Prompt refined successfully!', {
-          description: `New quality score: ${(finalResult.output?.quality_score * 100).toFixed(0)}%`,
+          description: `New quality score: ${(Number(finalResult.output?.quality_score ?? 0) * 100).toFixed(0)}%`,
         });
       } else {
         setMessages(prev => prev.filter(msg => msg.id !== loadingMsg.id));

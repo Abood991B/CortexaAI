@@ -94,12 +94,7 @@ class AuthManager:
         if not row[4]:  # is_active
             return None
 
-        # Update last_used
-        db.execute(
-            "UPDATE api_keys SET last_used_at = ? WHERE key_hash = ?",
-            (time.time(), key_hash),
-        )
-
+        # Defer timestamp update to avoid mixing concerns
         return {
             "key_hash": row[0],
             "name": row[1],
@@ -107,6 +102,14 @@ class AuthManager:
             "rate_limit_rpm": row[3],
             "is_active": True,
         }
+
+    def update_last_used(self, key_hash: str):
+        """Update last_used_at timestamp for a key."""
+        db = self._get_db()
+        db.execute(
+            "UPDATE api_keys SET last_used_at = ? WHERE key_hash = ?",
+            (time.time(), key_hash),
+        )
 
     def check_rate_limit(self, key_hash: str, rpm_limit: int) -> bool:
         """Check if key is within rate limit. Returns True if allowed."""
@@ -180,7 +183,7 @@ async def require_api_key(request) -> Optional[Dict[str, Any]]:
     from config.config import settings
 
     # If auth is not enforced, return None (allow)
-    if not getattr(settings, "REQUIRE_API_KEY", False):
+    if not getattr(settings, "require_api_key", False):
         return None
 
     api_key = request.headers.get("X-API-Key", "")

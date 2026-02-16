@@ -460,7 +460,7 @@ class Database:
             if not existing:
                 return None
 
-            conn.execute(
+            cursor = conn.execute(
                 """UPDATE templates
                    SET name=?, domain=?, description=?, template_text=?,
                        variables_json=?, tags_json=?, is_public=?, updated_at=?
@@ -477,6 +477,8 @@ class Database:
                     template_id,
                 ),
             )
+            if cursor.rowcount == 0:
+                return None
         return self.get_template(template_id)
 
     def delete_template(self, template_id: str) -> bool:

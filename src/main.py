@@ -70,12 +70,6 @@ async def lifespan(app: FastAPI):
     if plugins_dir.exists():
         plugin_manager.load_from_directory(str(plugins_dir))
 
-    if not getattr(settings, "REQUIRE_API_KEY", False):
-        logger.warning(
-            "API key authentication is DISABLED. All endpoints are unprotected. "
-            "Set REQUIRE_API_KEY=true in .env for production."
-        )
-
     yield  # Server is running
 
     # Graceful shutdown: cancel active workflows

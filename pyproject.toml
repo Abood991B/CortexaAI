@@ -4,7 +4,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "cortexaai"
-version = "3.0.0"
+version = "3.0.1"
 description = "Production-ready multi-agent prompt engineering platform with 6 LLM providers, A/B testing, and 86 API routes"
 readme = "README.md"
 license = {text = "MIT"}

@@ -16,14 +16,9 @@ load_dotenv()
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables.
-    
-    API keys are resolved in priority order:
-      1. Encrypted key store (data/keys.enc)
-      2. Environment variables / .env file
-    """
+    """Application settings loaded from environment variables (.env file)."""
 
-    # API Keys - Multiple LLM Providers
+    # API Keys - Multiple LLM Providers (set in .env)
     openai_api_key: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
     anthropic_api_key: Optional[str] = Field(default=None, env="ANTHROPIC_API_KEY")
     google_api_key: Optional[str] = Field(default=None, env="GOOGLE_API_KEY")
@@ -35,33 +30,6 @@ class Settings(BaseSettings):
     langsmith_api_key: Optional[str] = Field(default=None, env="LANGSMITH_API_KEY")
     langsmith_project: str = Field(default="cortexaai", env="LANGSMITH_PROJECT")
     langsmith_endpoint: str = Field(default="https://api.smith.langchain.com", env="LANGSMITH_ENDPOINT")
-
-    @model_validator(mode="after")
-    def _overlay_encrypted_keys(self) -> "Settings":
-        """Layer encrypted key store values over env-based values.
-        
-        For each API key field, if the encrypted store has a value,
-        use it — even if the env var was empty or missing.
-        """
-        try:
-            from config.key_store import key_store
-        except Exception:
-            return self  # cryptography not installed or import error — skip
-
-        _field_to_env = {
-            "openai_api_key": "OPENAI_API_KEY",
-            "anthropic_api_key": "ANTHROPIC_API_KEY",
-            "google_api_key": "GOOGLE_API_KEY",
-            "groq_api_key": "GROQ_API_KEY",
-            "deepseek_api_key": "DEEPSEEK_API_KEY",
-            "openrouter_api_key": "OPENROUTER_API_KEY",
-            "langsmith_api_key": "LANGSMITH_API_KEY",
-        }
-        for field_name, env_name in _field_to_env.items():
-            stored = key_store.get_key(env_name)
-            if stored:
-                object.__setattr__(self, field_name, stored)
-        return self
 
     # Model Configuration
     default_model_provider: str = Field(default="google", env="DEFAULT_MODEL_PROVIDER")
@@ -506,8 +474,8 @@ class PerformanceConfig:
     early_exit_min_iterations = getattr(settings, 'early_exit_min_iterations', 1)
 
     # LLM optimization settings
-    max_llm_retries = getattr(settings, 'max_llm_retries', 3)
-    llm_retry_delay = getattr(settings, 'llm_retry_delay', 1.0)
+    max_llm_retries = getattr(settings, 'max_llm_retries', 1)
+    llm_retry_delay = getattr(settings, 'llm_retry_delay', 0.5)
 
     # Cache warming settings
     enable_cache_warming = getattr(settings, 'enable_cache_warming', False)

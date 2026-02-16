@@ -163,6 +163,8 @@ async def render_template(req: TemplateRenderRequest):
     result = template_engine.render(req.template_id, req.variables)
     if not result:
         raise HTTPException(404, "Template not found")
+    if "error" in result:
+        raise HTTPException(400, result["error"])
     return result
 
 
@@ -171,7 +173,7 @@ async def render_template(req: TemplateRenderRequest):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class ComplexityRequest(BaseModel):
-    text: str
+    text: str = Field(..., max_length=100000)
 
 
 @router.post("/api/complexity")
@@ -189,7 +191,7 @@ async def get_pipeline_config(req: ComplexityRequest):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class LanguageRequest(BaseModel):
-    text: str
+    text: str = Field(..., max_length=100000)
 
 
 @router.post("/api/language/detect")
@@ -214,6 +216,9 @@ class APIKeyCreateRequest(BaseModel):
 
 @router.post("/api/auth/keys")
 async def create_api_key(req: APIKeyCreateRequest, _admin=Depends(_require_admin)):
+    # Enforce auth strictly - even if auth is disabled, creating keys requires intent
+    if _admin is None:
+        raise HTTPException(403, "API key management requires authentication to be enabled")
     return auth_manager.create_key(req.name, req.scopes, req.rate_limit_rpm)
 
 
@@ -267,7 +272,7 @@ async def marketplace_search(
 
 
 @router.post("/api/marketplace")
-async def marketplace_publish(req: MarketplacePublishRequest):
+async def marketplace_publish(req: MarketplacePublishRequest, _admin=Depends(_require_admin)):
     return marketplace.publish(
         title=req.title,
         description=req.description,
@@ -550,6 +555,11 @@ async def add_regression_case(suite_id: str, req: RegressionCaseRequest):
 
 @router.post("/api/regression/suites/{suite_id}/run")
 async def run_regression_suite(suite_id: str):
+    # Validate suite_id format
+    suite = regression_runner.get_suite(suite_id)
+    if not suite:
+        raise HTTPException(404, "Suite not found")
+
     async def _processor(prompt_text):
         result = await coordinator.process_prompt(prompt=prompt_text, prompt_type="auto")
         return {
@@ -571,15 +581,15 @@ async def save_regression_baseline(suite_id: str, run_results: Dict[str, Any]):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class SimilaritySearchRequest(BaseModel):
-    query: str
+    query: str = Field(..., max_length=50000)
     top_k: int = Field(default=5, ge=1, le=50)
     domain: Optional[str] = None
     min_score: float = 0.0
 
 
 class SimilarityIndexRequest(BaseModel):
-    doc_id: str
-    text: str
+    doc_id: str = Field(..., max_length=200)
+    text: str = Field(..., max_length=100000)
     domain: str = ""
     metadata: Optional[Dict[str, Any]] = None
 
@@ -622,7 +632,7 @@ class WebhookSubscribeRequest(BaseModel):
 
 
 @router.post("/api/webhooks")
-async def subscribe_webhook(req: WebhookSubscribeRequest):
+async def subscribe_webhook(req: WebhookSubscribeRequest, _admin=Depends(_require_admin)):
     return webhook_manager.subscribe(req.url, req.events, req.secret, req.name)
 
 
@@ -632,7 +642,7 @@ async def list_webhooks():
 
 
 @router.delete("/api/webhooks/{sub_id}")
-async def unsubscribe_webhook(sub_id: str):
+async def unsubscribe_webhook(sub_id: str, _admin=Depends(_require_admin)):
     if not webhook_manager.unsubscribe(sub_id):
         raise HTTPException(404, "Subscription not found")
     return {"status": "removed"}

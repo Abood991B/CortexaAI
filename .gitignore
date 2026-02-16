@@ -82,7 +82,6 @@ data/cache/
 data/logs/
 data/memories/
 data/vectors/
-data/keys.enc
 *.db
 *.db-shm
 *.db-wal
@@ -141,7 +140,9 @@ temp/
 *.bak
 *.orig
 
-# ─── Deployment (removed from repo) ─────────────────────────
+# ─── Deployment (intentionally excluded - see DEPLOYMENT.md) ───
+# Deployment manifests are excluded because they contain environment-specific
+# configuration and secrets. Template/example files are provided instead.
 Dockerfile
 Dockerfile.*
 docker-compose*.yml

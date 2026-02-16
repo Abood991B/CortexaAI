@@ -145,11 +145,12 @@ class DomainClassifier:
     async def classify_prompt(self, prompt: str) -> Dict[str, Any]:
         """
         Classify a prompt into a domain with security, caching and retry mechanism.
-        
-        Uses a **fast keyword path** first: if keyword scoring produces a
-        high-confidence match (>= 3 distinct keyword hits), the LLM call is
-        skipped entirely for speed.  The LLM is only invoked when the keyword
-        match is ambiguous.
+
+        Delegates to :meth:`_fast_keyword_classify`, which uses pre-compiled
+        keyword lookups (O(1) single-word matching via dict, plus substring
+        search for multi-word keywords).  The best-scoring domain is returned
+        when any keyword hit exists (``best_score > 0``); otherwise the
+        ``"general"`` domain is returned as a fallback.  No LLM call is made.
 
         Args:
             prompt: The prompt to classify
@@ -195,17 +196,21 @@ class DomainClassifier:
         return fast_result
 
     def _fast_keyword_classify(self, prompt: str) -> Dict[str, Any]:
-        """High-speed keyword classification.  **Always** returns a result so
-        the LLM is never needed for domain classification.
+        """High-speed keyword classification using pre-compiled lookups.
 
-        Scoring:
-        - Multi-word keywords score 2 points (more specific signals).
-        - Single-word keywords score 1 point.
-        - The domain with the highest weighted score wins.
-        - If no hits at all → return ``general``.
+        **Always** returns a result so the LLM is never needed for domain
+        classification.
 
-        Uses pre-compiled per-domain structures for O(1) single-word look-ups
-        and linear scan only for the (smaller) multi-word list.
+        Algorithm:
+        1. Extract unique words from the prompt.
+        2. For each known domain, compute a weighted score:
+           - Single-word keywords matched via O(1) dict look-up → **1 point** each.
+           - Multi-word keywords matched via substring search → **2 points** each.
+        3. The domain with the highest weighted score wins.
+        4. If ``best_score > 0`` the winning domain is returned with a
+           confidence derived from the score and the gap to the runner-up.
+        5. If ``best_score == 0`` (no keyword hits at all) the ``"general"``
+           domain is returned with a low confidence (0.55).
         """
         prompt_lower = prompt.lower()
         # Extract unique words from the prompt for O(1) single-word matching

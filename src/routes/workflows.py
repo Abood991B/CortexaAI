@@ -60,6 +60,19 @@ async def cancel_workflow(workflow_id: str):
 async def get_workflow_status(workflow_id: str):
     """Get the status of a running or completed workflow."""
     if workflow_id not in active_workflows:
+        # Check DB for completed workflows
+        db_workflow = db.get_workflow(workflow_id)
+        if db_workflow:
+            status = db_workflow.get("status", "completed")
+            resp: Dict[str, Any] = {
+                "workflow_id": workflow_id,
+                "status": status,
+            }
+            if status == "completed":
+                resp["result"] = db_workflow.get("result", db_workflow.get("output"))
+            elif status == "failed":
+                resp["error"] = db_workflow.get("error")
+            return resp
         raise HTTPException(status_code=404, detail="Workflow not found")
 
     workflow = active_workflows[workflow_id]
@@ -109,6 +122,8 @@ async def get_system_stats():
 @router.get("/api/history", response_model=List[Dict[str, Any]])
 async def get_workflow_history(limit: int = 10):
     """Get recent workflow history from persistent storage."""
+    if limit < 1 or limit > 500:
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 500")
     try:
         db_workflows = db.get_workflows(limit=limit)
         if db_workflows:
@@ -149,6 +164,10 @@ async def get_workflows(
     domain: Optional[str] = None,
 ):
     """Get paginated list of workflows using DB-level filtering."""
+    if page < 1:
+        raise HTTPException(status_code=400, detail="Page must be >= 1")
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
     try:
         offset = (page - 1) * limit
         db_workflows = db.get_workflows(limit=limit, offset=offset, status=status, domain=domain)
@@ -207,23 +226,6 @@ async def get_workflow_details(workflow_id: str):
             "quality_score": workflow.get("output", {}).get("quality_score", 0),
             "iterations_used": workflow.get("output", {}).get("iterations_used", 1),
             "processing_time": workflow.get("processing_time_seconds", 0),
-            "agent_steps": [
-                {
-                    "agent_type": "Classifier",
-                    "processing_time": workflow.get("processing_time_seconds", 0) * 0.2,
-                    "output": f"Classified as {workflow.get('output', {}).get('domain', 'unknown')} domain",
-                },
-                {
-                    "agent_type": "Expert",
-                    "processing_time": workflow.get("processing_time_seconds", 0) * 0.6,
-                    "output": "Generated optimized prompt with domain-specific improvements",
-                },
-                {
-                    "agent_type": "Evaluator",
-                    "processing_time": workflow.get("processing_time_seconds", 0) * 0.2,
-                    "output": f"Quality score: {workflow.get('output', {}).get('quality_score', 0):.2f}/10",
-                },
-            ],
             "analysis": workflow.get("analysis", {}),
             "metadata": workflow.get("metadata", {}),
         }

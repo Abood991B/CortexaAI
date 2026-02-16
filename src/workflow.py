@@ -27,6 +27,7 @@ from langchain_core.runnables import RunnableConfig
 import logging
 import time
 import asyncio
+import threading
 from datetime import datetime
 from functools import wraps
 
@@ -44,17 +45,21 @@ logger = logging.getLogger(__name__)
 # the classifier / evaluator that ``src.deps`` already creates.
 _classifier: "DomainClassifier | None" = None
 _evaluator: "PromptEvaluator | None" = None
+_classifier_lock = threading.Lock()
+_evaluator_lock = threading.Lock()
 
 
 def _get_classifier() -> DomainClassifier:
     """Return the shared DomainClassifier (created once on first call)."""
     global _classifier
     if _classifier is None:
-        try:
-            from src.deps import classifier_instance
-            _classifier = classifier_instance
-        except ImportError:
-            _classifier = DomainClassifier()
+        with _classifier_lock:
+            if _classifier is None:  # Double-check inside lock
+                try:
+                    from src.deps import classifier_instance
+                    _classifier = classifier_instance
+                except ImportError:
+                    _classifier = DomainClassifier()
     return _classifier
 
 
@@ -62,11 +67,13 @@ def _get_evaluator() -> PromptEvaluator:
     """Return the shared PromptEvaluator (created once on first call)."""
     global _evaluator
     if _evaluator is None:
-        try:
-            from src.deps import evaluator_instance
-            _evaluator = evaluator_instance
-        except ImportError:
-            _evaluator = PromptEvaluator()
+        with _evaluator_lock:
+            if _evaluator is None:  # Double-check inside lock
+                try:
+                    from src.deps import evaluator_instance
+                    _evaluator = evaluator_instance
+                except ImportError:
+                    _evaluator = PromptEvaluator()
     return _evaluator
 
 

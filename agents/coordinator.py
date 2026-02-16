@@ -45,6 +45,7 @@ class WorkflowCoordinator:
         self.workflow_history = []  # Track workflow executions
         # NOTE: self.llm was previously set here but never referenced — removed.
         self._db_loaded = False
+        self._setup_langsmith()
 
     def _ensure_history(self):
         """Lazily load persisted workflows from the database on first access."""
@@ -60,7 +61,6 @@ class WorkflowCoordinator:
         except Exception as e:
             logger.warning(f"Could not load persisted workflows: {e}")
 
-        self._setup_langsmith()
     def _setup_langsmith(self):
         """Set up LangSmith tracing if available."""
         if settings.langsmith_api_key:
@@ -132,17 +132,20 @@ class WorkflowCoordinator:
 
         try:
             # ── Fast path: check workflow-level cache ────────────────────
+            workflow_cache_key = None
             if perf_config.enable_caching:
                 workflow_cache_key = generate_prompt_cache_key(prompt, prefix="workflow")
                 cached_workflow = cache_manager.get(workflow_cache_key)
                 if cached_workflow:
                     logger.info(f"Workflow cache hit for {workflow_id}")
-                    cached_workflow["workflow_id"] = workflow_id
-                    cached_workflow["metadata"] = cached_workflow.get("metadata", {})
-                    cached_workflow["metadata"]["cache_hit"] = True
-                    cached_workflow["metadata"]["processing_time_seconds"] = 0.0
-                    self._record_workflow(cached_workflow)
-                    return cached_workflow
+                    import copy
+                    cached_copy = copy.deepcopy(cached_workflow)
+                    cached_copy["workflow_id"] = workflow_id
+                    cached_copy["metadata"] = cached_copy.get("metadata", {})
+                    cached_copy["metadata"]["cache_hit"] = True
+                    cached_copy["metadata"]["processing_time_seconds"] = 0.0
+                    self._record_workflow(cached_copy)
+                    return cached_copy
 
             # Step 1 + 2: Classify domain & auto-detect prompt type (pure heuristics, instant)
             classification_result = await self.classifier.classify_prompt(prompt)
@@ -199,7 +202,7 @@ class WorkflowCoordinator:
 
             # Step 7: Record workflow & cache result
             self._record_workflow(workflow_result)
-            if perf_config.enable_caching:
+            if perf_config.enable_caching and workflow_cache_key is not None:
                 cache_manager.set(workflow_cache_key, workflow_result, perf_config.cache_ttl)
 
             logger.info(f"Workflow {workflow_id} completed successfully")
@@ -411,17 +414,20 @@ refinement session.
 
         try:
             # ── Fast path: check workflow-level cache ────────────────────
+            workflow_cache_key = None
             if perf_config.enable_caching:
                 workflow_cache_key = generate_prompt_cache_key(prompt, prefix="mem_workflow")
                 cached_workflow = cache_manager.get(workflow_cache_key)
                 if cached_workflow:
                     logger.info(f"Workflow cache hit for {workflow_id}")
-                    cached_workflow["workflow_id"] = workflow_id
-                    cached_workflow["metadata"] = cached_workflow.get("metadata", {})
-                    cached_workflow["metadata"]["cache_hit"] = True
-                    cached_workflow["metadata"]["processing_time_seconds"] = 0.0
-                    self._record_workflow(cached_workflow)
-                    return cached_workflow
+                    import copy
+                    cached_copy = copy.deepcopy(cached_workflow)
+                    cached_copy["workflow_id"] = workflow_id
+                    cached_copy["metadata"] = cached_copy.get("metadata", {})
+                    cached_copy["metadata"]["cache_hit"] = True
+                    cached_copy["metadata"]["processing_time_seconds"] = 0.0
+                    self._record_workflow(cached_copy)
+                    return cached_copy
 
             # Step 1 + 2: Classify domain & auto-detect prompt type (pure heuristics, instant)
             classification_result = await self.classifier.classify_prompt(prompt)

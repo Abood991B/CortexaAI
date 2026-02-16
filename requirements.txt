@@ -38,9 +38,6 @@ sqlite-vec>=0.1.6
 httpx>=0.28.1
 sse-starlette>=2.0.0              # Server-Sent Events for streaming
 
-# ─── Security ───────────────────────────────────────────────────
-cryptography>=44.0.0              # Encrypted API key storage
-
 # ─── Caching (optional) ─────────────────────────────────────────
 # redis>=5.0.0                    # Uncomment for Redis cache backend
 

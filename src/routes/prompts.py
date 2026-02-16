@@ -27,6 +27,7 @@ from src.deps import (
     stream_workflow,
     process_prompt_with_langgraph,
 )
+import hashlib
 
 router = APIRouter()
 
@@ -110,7 +111,8 @@ async def process_prompt(request: PromptRequest, background_tasks: BackgroundTas
 
     # Synchronous mode: run inline and return final
     if request.synchronous:
-        logger.info(f"Processing prompt synchronously: {request.prompt[:100]}...")
+        prompt_hash = hashlib.sha256(request.prompt.encode()).hexdigest()[:12]
+        logger.info(f"Processing prompt synchronously (hash={prompt_hash})...")
         if request.use_langgraph:
             result = await process_prompt_with_langgraph(
                 prompt=request.prompt,
@@ -148,7 +150,8 @@ async def process_prompt(request: PromptRequest, background_tasks: BackgroundTas
         cache_key = generate_prompt_cache_key(request.prompt, "langgraph_workflow")
         cached_result = cache_manager.get(cache_key)
         if cached_result:
-            logger.info(f"Returning cached result for LangGraph workflow: {request.prompt[:100]}...")
+            prompt_hash = hashlib.sha256(request.prompt.encode()).hexdigest()[:12]
+            logger.info(f"Returning cached result for LangGraph workflow (hash={prompt_hash})...")
             return PromptResponse(**cached_result)
 
     workflow_id = f"workflow_{uuid.uuid4().hex[:8]}"
@@ -161,7 +164,8 @@ async def process_prompt(request: PromptRequest, background_tasks: BackgroundTas
     }
 
     try:
-        logger.info(f"Starting workflow {workflow_id} for prompt: {request.prompt[:100]}...")
+        prompt_hash = hashlib.sha256(request.prompt.encode()).hexdigest()[:12]
+        logger.info(f"Starting workflow {workflow_id} (hash={prompt_hash})...")
 
         async def _execute():
             if request.use_langgraph:
@@ -255,7 +259,8 @@ async def process_prompt_with_memory(request: PromptRequest, background_tasks: B
 
     # Synchronous mode
     if request.synchronous:
-        logger.info(f"Processing memory workflow synchronously for user {request.user_id}: {request.prompt[:100]}...")
+        prompt_hash = hashlib.sha256(request.prompt.encode()).hexdigest()[:12]
+        logger.info(f"Processing memory workflow synchronously for user {request.user_id} (hash={prompt_hash})...")
         context_prompt = _build_context_prompt(request.prompt, request.chat_history)
 
         if request.advanced_mode:
@@ -333,7 +338,8 @@ async def process_prompt_with_memory(request: PromptRequest, background_tasks: B
     }
 
     try:
-        logger.info(f"Starting memory workflow {workflow_id} for user {request.user_id}: {request.prompt[:100]}...")
+        prompt_hash = hashlib.sha256(request.prompt.encode()).hexdigest()[:12]
+        logger.info(f"Starting memory workflow {workflow_id} for user {request.user_id} (hash={prompt_hash})...")
 
         async def _execute():
             context_prompt = _build_context_prompt(request.prompt, request.chat_history)

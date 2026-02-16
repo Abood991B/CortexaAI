@@ -90,7 +90,7 @@ function CustomPieTooltip({ active, payload }: any) {
   return (
     <div className="rounded-lg border bg-popover px-3 py-2 text-sm shadow-md">
       <p className="font-medium capitalize">{name}</p>
-      <p className="text-muted-foreground">{value} prompts ({(percent * 100).toFixed(0)}%)</p>
+      <p className="text-muted-foreground">{value} prompts ({(Number(percent ?? 0) * 100).toFixed(0)}%)</p>
     </div>
   );
 }
@@ -166,7 +166,7 @@ export function Dashboard() {
     return [...recentHistory]
       .reverse()
       .filter(h => h.quality_score != null)
-      .map((h, i) => ({ idx: i + 1, score: +(h.quality_score * 100).toFixed(0) }));
+      .map((h, i) => ({ idx: i + 1, score: +(Number(h.quality_score ?? 0) * 100).toFixed(0) }));
   }, [recentHistory]);
 
   // ── Helpers ─────────────────────────────────────────────────

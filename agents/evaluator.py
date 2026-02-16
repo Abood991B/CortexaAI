@@ -24,19 +24,33 @@ logger = get_logger(__name__)
 class PromptEvaluator:
     """Agent responsible for evaluating prompt quality and providing improvement feedback."""
 
+    # Class-level criteria weights — single source of truth for both evaluate_prompt and heuristic_evaluate
+    _CRITERIA_WEIGHTS = {
+        "clarity": 0.18,
+        "specificity": 0.20,
+        "structure": 0.15,
+        "completeness": 0.18,
+        "actionability": 0.17,
+        "domain_alignment": 0.12,
+    }
+
     def __init__(self):
         """Initialize the evaluator agent."""
+        import asyncio
         self.evaluation_threshold = settings.evaluation_threshold
         self.max_iterations = settings.max_evaluation_iterations
         # Defer LLM / chain setup until first use so that importing this module
         # does not require a configured API key (important for tests).
         self._chain_ready = False
+        self._chain_lock = asyncio.Lock()
 
-    def _ensure_chain(self):
-        """Lazily initialise the evaluation chain on first use."""
+    async def _ensure_chain(self):
+        """Lazily initialise the evaluation chain on first use (thread-safe)."""
         if not self._chain_ready:
-            self._setup_evaluation_chain()
-            self._chain_ready = True
+            async with self._chain_lock:
+                if not self._chain_ready:  # Double-check inside lock
+                    self._setup_evaluation_chain()
+                    self._chain_ready = True
 
     def _setup_evaluation_chain(self):
         """Set up the LangChain for prompt evaluation."""
@@ -254,18 +268,10 @@ Score < 0.40: Essentially a one-liner or so vague as to be unusable.
                 # Never trust the LLM's self-reported overall_score — derive
                 # it from the per-criterion scores so the metric is dynamic.
                 criteria = result.get("criteria_scores", {})
-                _CRITERIA_WEIGHTS = {
-                    "clarity": 0.18,
-                    "specificity": 0.20,
-                    "structure": 0.15,
-                    "completeness": 0.18,
-                    "actionability": 0.17,
-                    "domain_alignment": 0.12,
-                }
                 if criteria and isinstance(criteria, dict):
                     weighted_sum = 0.0
                     total_weight = 0.0
-                    for crit, weight in _CRITERIA_WEIGHTS.items():
+                    for crit, weight in self._CRITERIA_WEIGHTS.items():
                         raw = criteria.get(crit)
                         if raw is not None:
                             # Clamp individual scores to [0, 1]
